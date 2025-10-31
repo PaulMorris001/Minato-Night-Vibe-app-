@@ -1,12 +1,13 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
+import { useRouter, useLocalSearchParams } from "expo-router";
 
 export default function Home() {
   const router = useRouter();
+  const { name } = useLocalSearchParams();
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🎉 Welcome to the Home Page!</Text>
+      <Text style={styles.title}>🎉 Welcome to the Home Page!, {name}</Text>
 
       <TouchableOpacity
         style={styles.button}
