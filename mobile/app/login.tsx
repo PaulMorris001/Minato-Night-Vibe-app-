@@ -1,22 +1,29 @@
 import React, {useState} from 'react';
 import { Link, useRouter } from 'expo-router';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
+import axios from 'axios'
+import { BACKEND_URL } from '@/constants/constants';
 
 export default function Login() {
     const router = useRouter();
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState("");
 
-    const handleLogin = () => {
-        if (email && password) {
-            router.push("/");
-        } else {
-            alert("Please fill both fields")
+    const handleLogin = async () => {
+        try {
+          const res = await axios.post(`${BACKEND_URL}/api/login`, {
+            email, password,
+          });
+          const user = res.data.user
+          router.push({pathname: "/home", params: {name: user.username}})
+        } catch (error) {
+          console.error(error.response?.data || error.message)
         }
     };
 
     return (
       <View style={styles.container}>
+        <Text style={styles.title}>NightVibe</Text>
         <Text style={styles.title}>Welcome Back</Text>
 
         <TextInput
@@ -33,6 +40,7 @@ export default function Login() {
           value={password}
           onChangeText={setPassword}
           autoCapitalize="none"
+          secureTextEntry
         />
 
         <TouchableOpacity style={styles.button} onPress={handleLogin}>

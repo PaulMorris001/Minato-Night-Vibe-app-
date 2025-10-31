@@ -8,7 +8,13 @@ import authRoutes from './routes/auth.route.js'
 dotenv.config();
 const app = express();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: "*", // allow all origins (safe for development)
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 app.use(express.json());
 connectDB();
 

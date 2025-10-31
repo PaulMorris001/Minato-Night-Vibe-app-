@@ -7,23 +7,42 @@ import {
   TouchableOpacity,
   StyleSheet,
 } from "react-native";
+import axios from "axios";
+import { BACKEND_URL } from "@/constants/constants";
+
 
 export default function Signup() {
   const router = useRouter();
   const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSignup = () => {
-    if (email && password) {
+  const handleSignup = async () => {
+    try {
+      const res = await axios.post(`${BACKEND_URL}/api/register`, {
+        username,
+        email,
+        password,
+      });
       router.push("/login");
-    } else {
-      alert("Please fill in all fields");
+    } catch (error) {
+      console.error(error.response?.data || error.message);
     }
   };
 
   return (
     <View style={styles.container}>
+      <Text style={styles.title}>NightVibe</Text>
+
       <Text style={styles.title}>Create an Account 📝</Text>
+
+      <TextInput
+        placeholder="Username"
+        style={styles.input}
+        value={username}
+        onChangeText={setUsername}
+        autoCapitalize="none"
+      />
 
       <TextInput
         placeholder="Email"
