@@ -25,7 +25,7 @@ export default function Signup() {
         password,
       });
       router.push("/login");
-    } catch (error) {
+    } catch (error:any) {
       console.error(error.response?.data || error.message);
     }
   };
