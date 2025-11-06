@@ -1,60 +1,73 @@
-import React, {useState} from 'react';
-import { Link, useRouter } from 'expo-router';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from 'react-native';
-import axios from 'axios'
-import { BACKEND_URL } from '@/constants/constants';
+import React, { useState } from "react";
+import { Link, useRouter } from "expo-router";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+} from "react-native";
+import axios from "axios";
+import { BACKEND_URL } from "@/constants/constants";
+import * as SecureStore from "expo-secure-store";
 
 export default function Login() {
-    const router = useRouter();
-    const [email, setEmail] = useState('');
-    const [password, setPassword] = useState("");
+  const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
 
-    const handleLogin = async () => {
-        try {
-          const res = await axios.post(`${BACKEND_URL}/api/login`, {
-            email, password,
-          });
-          const user = res.data.user
-          router.push({pathname: "/home", params: {name: user.username}})
-        } catch (error) {
-          console.error(error.response?.data || error.message)
-        }
-    };
+  const handleLogin = async () => {
+    try {
+      const res = await axios.post(`${BACKEND_URL}/api/login`, {
+        email,
+        password,
+      });
+      const user = res.data.user;
+      const token = res.data.token;
 
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>NightVibe</Text>
-        <Text style={styles.title}>Welcome Back</Text>
+      await SecureStore.setItemAsync("token", token);
+      await SecureStore.setItemAsync("user", JSON.stringify(user));
 
-        <TextInput
-          placeholder="Email"
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-        />
+      router.replace("/(tabs)/home");
+    } catch (error: any) {
+      console.error(error.response?.data || error.message);
+    }
+  };
 
-        <TextInput
-          placeholder="Password"
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-          autoCapitalize="none"
-          secureTextEntry
-        />
+  return (
+    <View style={styles.container}>
+      <Text style={styles.title}>NightVibe</Text>
+      <Text style={styles.title}>Welcome Back</Text>
 
-        <TouchableOpacity style={styles.button} onPress={handleLogin}>
-          <Text style={styles.buttonText}>Log In</Text>
-        </TouchableOpacity>
+      <TextInput
+        placeholder="Email"
+        style={styles.input}
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+      />
 
-        <Text style={styles.text}>
-          Don&apos;t have an account?{" "}
-          <Link href="/signup" style={styles.link}>
-            Sign up
-          </Link>
-        </Text>
-      </View>
-    );
+      <TextInput
+        placeholder="Password"
+        style={styles.input}
+        value={password}
+        onChangeText={setPassword}
+        autoCapitalize="none"
+        secureTextEntry
+      />
+
+      <TouchableOpacity style={styles.button} onPress={handleLogin}>
+        <Text style={styles.buttonText}>Log In</Text>
+      </TouchableOpacity>
+
+      <Text style={styles.text}>
+        Don&apos;t have an account?{" "}
+        <Link href="/signup" style={styles.link}>
+          Sign up
+        </Link>
+      </Text>
+    </View>
+  );
 }
 
 const styles = StyleSheet.create({
