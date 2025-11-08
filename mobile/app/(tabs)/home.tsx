@@ -2,12 +2,14 @@ import React, { useState, useEffect } from "react";
 import * as SecureStore from "expo-secure-store";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { capitalize } from "@/hooks/helpers";
+import CreateEventModal from "@/components/create-event";
+// import { capitalize } from "@/hooks/helpers";
 
 export default function Home() {
   const router = useRouter();
 
   const [userName, setUserName] = useState<string | null>(null);
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   useEffect(() => {
     const fetchUser = async () => {
@@ -25,24 +27,42 @@ export default function Home() {
     fetchUser();
   }, []);
 
-  const handleLogout = async () => {
-    await SecureStore.deleteItemAsync("token");
-    await SecureStore.deleteItemAsync("user");
-    router.replace("/login");
-  };
+  
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>
-        🎉 Welcome to the Home Page {capitalize(userName)}!
+      <Text style={styles.mainTitle}>NightVibe</Text>
+
+      <Text style={styles.subtitle}>Plan Epic Nights Out and Parties</Text>
+
+      {/* TODO: Add Best of List and Guides text from Replit */}
+      <Text style={styles.paragraph}>
+        Curated lists from local insiders and experts. Click{" "}
+        <Text style={styles.link} onPress={() => router.push("/bests")}>
+          here
+        </Text>{" "}
+        to explore the Best of Lists and Guides.
       </Text>
 
-      <TouchableOpacity style={styles.button} onPress={handleLogout}>
-        <Text style={styles.buttonText}>Logout</Text>
+      <TouchableOpacity
+        style={styles.searchButton}
+        onPress={() => router.push("/vendors")}
+      >
+        <Text style={styles.searchButtonText}>
+          Search Vendors and Venues in Your City!
+        </Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.eventButton}>
+      <TouchableOpacity
+        style={styles.eventButton}
+        onPress={() => setIsModalVisible(true)}
+      >
         <Text style={styles.createEvent}>+</Text>
       </TouchableOpacity>
+
+      <CreateEventModal
+        visible={isModalVisible}
+        onClose={() => setIsModalVisible(false)}
+      />
     </View>
   );
 }
@@ -53,9 +73,42 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  title: {
-    fontSize: 22,
+  mainTitle: {
+    fontSize: 28,
+    fontWeight: "bold",
+    marginBottom: 10,
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#555",
     marginBottom: 20,
+    textAlign: "center",
+    paddingHorizontal: 20,
+  },
+  paragraph: {
+    fontSize: 15,
+    color: "#333",
+    textAlign: "center",
+    marginHorizontal: 25,
+    marginBottom: 30,
+  },
+  link: {
+    color: "#ff5252",
+    fontWeight: "bold",
+    textDecorationLine: "underline",
+  },
+  searchButton: {
+    backgroundColor: "#ff5252",
+    paddingVertical: 14,
+    paddingHorizontal: 25,
+    borderRadius: 8,
+    marginBottom: 20,
+  },
+  searchButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    textAlign: "center",
+    fontSize: 16,
   },
   button: {
     backgroundColor: "#ff5252",
@@ -86,4 +139,5 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 30,
   },
+  
 });
