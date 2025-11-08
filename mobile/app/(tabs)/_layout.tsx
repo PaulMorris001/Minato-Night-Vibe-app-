@@ -30,20 +30,20 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="events"
-        options={{
-          title: "Events",
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name="musical-notes-outline" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="bests"
         options={{
           title: "Best of lists",
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="list-outline" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tabs.Screen
+        name="events"
+        options={{
+          title: "Events",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="musical-notes-outline" size={size} color={color} />
           ),
         }}
       />
