@@ -1,8 +1,8 @@
-import React, {useState, useEffect} from "react";
+import React, { useState, useEffect } from "react";
 import * as SecureStore from "expo-secure-store";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import { useRouter } from "expo-router";
-import { capitalize } from "@/hooks/helpers";
+import { capitalize } from "@/libs/helpers";
 
 export default function Home() {
   const router = useRouter();
@@ -32,7 +32,9 @@ export default function Home() {
   };
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🎉 Welcome to the Best of lists Page {capitalize(userName)}!</Text>
+      <Text style={styles.title}>
+        🎉 Welcome to the Best of lists Page {capitalize(userName)}!
+      </Text>
 
       <TouchableOpacity style={styles.button} onPress={handleLogout}>
         <Text style={styles.buttonText}>Logout</Text>

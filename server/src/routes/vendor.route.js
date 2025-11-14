@@ -3,7 +3,7 @@ import {
   getAllCities,
   getVendorTypesByCity,
   getVendorsByCityAndType,
-} from "../controllers/vendor.controller.js";
+} from "../controllers/vendors.controller.js";
 
 const router = express.Router();
 
