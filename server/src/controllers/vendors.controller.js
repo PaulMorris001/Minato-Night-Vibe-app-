@@ -1,4 +1,4 @@
-import { City, Vendor, VendorType } from "../models/vendor.model";
+import { City, Vendor, VendorType } from "../models/vendor.model.js";
 
 export async function getAllCities(req, res) {
   try {

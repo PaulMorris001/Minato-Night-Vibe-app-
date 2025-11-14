@@ -1,63 +1,61 @@
-import React, {useState, useEffect} from "react";
-import * as SecureStore from "expo-secure-store";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useEffect, useState } from "react";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  FlatList,
+} from "react-native";
 import { useRouter } from "expo-router";
-import { capitalize } from "@/hooks/helpers";
+import { fetchCities } from "@/libs/api";
+import { City } from "@/libs/interfaces";
 
-export default function Home() {
+export default function VendorsPage() {
   const router = useRouter();
-
-  const [userName, setUserName] = useState<string | null>(null);
+  const [cities, setCities] = useState<City[]>([]);
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const storedUser = await SecureStore.getItemAsync("user");
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          setUserName(parsedUser.username || parsedUser.name || "User");
-        }
-      } catch (error) {
-        console.error("Failed to load user:", error);
-      }
+    const loadCities = async () => {
+      const data = await fetchCities();
+      setCities(data);
     };
-
-    fetchUser();
+    loadCities();
   }, []);
 
-  const handleLogout = async () => {
-    await SecureStore.deleteItemAsync("token");
-    await SecureStore.deleteItemAsync("user");
-    router.replace("/login");
-  };
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>🎉 Welcome to the Vendors Page {capitalize(userName)}!</Text>
-
-      <TouchableOpacity style={styles.button} onPress={handleLogout}>
-        <Text style={styles.buttonText}>Logout</Text>
-      </TouchableOpacity>
+      <Text style={styles.title}>Select a City</Text>
+      <FlatList
+        data={cities}
+        keyExtractor={(item) => item._id}
+        renderItem={({ item }) => (
+          <TouchableOpacity
+            style={styles.cityButton}
+            onPress={() =>
+              router.push({
+                pathname: "/vendor-types/[cityId]",
+                params: { cityId: item._id },
+              })
+            }
+          >
+            <Text style={styles.cityText}>
+              {item.name}, {item.state}
+            </Text>
+          </TouchableOpacity>
+        )}
+      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  title: {
-    fontSize: 22,
-    marginBottom: 20,
-  },
-  button: {
-    backgroundColor: "#ff5252",
-    padding: 14,
+  container: { flex: 1, padding: 20, backgroundColor: "#fff" },
+  title: { fontSize: 22, fontWeight: "bold", marginBottom: 20 },
+  cityButton: {
+    padding: 15,
+    backgroundColor: "#eee",
     borderRadius: 8,
+    marginBottom: 10,
   },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "bold",
-  },
+  cityText: { fontSize: 18 },
 });
