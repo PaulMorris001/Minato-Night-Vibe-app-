@@ -128,7 +128,7 @@ export default function Home() {
                   <View
                     style={[
                       styles.iconContainer,
-                      { backgroundColor: "#ff6f61" },
+                      { backgroundColor: "#ff6f6" },
                     ]}
                   >
                     <Ionicons name="business" size={30} color="white" />
@@ -337,7 +337,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   featureCard: {
-    backgroundColor: "#fff",
+    backgroundColor: Colors.darkBackground,
     borderRadius: 12,
     padding: 15,
     marginTop: 10,
@@ -358,6 +358,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   featureTitle: {
+    color: "white",
     fontWeight: "bold",
     fontSize: 14,
     textAlign: "center",
@@ -365,7 +366,7 @@ const styles = StyleSheet.create({
   },
   featureDescription: {
     fontSize: 12,
-    color: "#666",
+    color: "grey",
     textAlign: "center",
   },
   sectionContainer: {

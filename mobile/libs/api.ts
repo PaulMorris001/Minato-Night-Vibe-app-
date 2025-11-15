@@ -1,4 +1,16 @@
-const BASE_URL = "http://172.20.10.2:3000/api";
+import Constants from "expo-constants";
+
+const getBaseUrl = () => {
+  let host = "localhost";
+
+  if (Constants.expoConfig?.hostUri) {
+    host = Constants.expoConfig.hostUri.split(":")[0];
+  }
+
+  return `http://${host}:3000/api`;
+};
+
+const BASE_URL = getBaseUrl();
 
 export async function fetchCities() {
   const res = await fetch(`${BASE_URL}/cities`);
