@@ -22,4 +22,4 @@ connectDB();
 app.use("/api/", authRoutes);
 app.use("/api/", vendorRoutes);
 
-app.listen(process.env.PORT, ()=>{console.log("Backend started at port: ", process.env.PORT)})
+app.listen(process.env.PORT, process.env.HOST, ()=>{console.log(`Backend started at url: ${process.env.HOST}/${process.env.PORT}`)})
