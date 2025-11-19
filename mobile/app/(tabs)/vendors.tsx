@@ -1,65 +1,4 @@
-// import React, { useEffect, useState } from "react";
-// import {
-//   View,
-//   Text,
-//   TouchableOpacity,
-//   StyleSheet,
-//   FlatList,
-// } from "react-native";
-// import { useRouter } from "expo-router";
-// import { fetchCities } from "@/libs/api";
-// import { City } from "@/libs/interfaces";
-
-// export default function VendorsPage() {
-//   const router = useRouter();
-//   const [cities, setCities] = useState<City[]>([]);
-
-//   useEffect(() => {
-//     const loadCities = async () => {
-//       const data = await fetchCities();
-//       setCities(data);
-//     };
-//     loadCities();
-//   }, []);
-
-//   return (
-//     <View style={styles.container}>
-//       <Text style={styles.title}>Select a City</Text>
-//       <FlatList
-//         data={cities}
-//         keyExtractor={(item) => item._id}
-//         renderItem={({ item }) => (
-//           <TouchableOpacity
-//             style={styles.cityButton}
-//             onPress={() =>
-//               router.push({
-//                 pathname: "/vendor-types/[cityId]",
-//                 params: { cityId: item._id },
-//               })
-//             }
-//           >
-//             <Text style={styles.cityText}>
-//               {item.name}, {item.state}
-//             </Text>
-//           </TouchableOpacity>
-//         )}
-//       />
-//     </View>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: { flex: 1, padding: 20, backgroundColor: "#fff" },
-//   title: { fontSize: 22, fontWeight: "bold", marginBottom: 20 },
-//   cityButton: {
-//     padding: 15,
-//     backgroundColor: "#eee",
-//     borderRadius: 8,
-//     marginBottom: 10,
-//   },
-//   cityText: { fontSize: 18 },
-// });
-
+/* eslint-disable react-hooks/exhaustive-deps */
 import React, { useEffect, useState, useRef } from "react";
 import {
   View,
@@ -68,26 +7,13 @@ import {
   StyleSheet,
   FlatList,
   Animated,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { fetchCities } from "@/libs/api";
 import { City } from "@/libs/interfaces";
-import { LinearGradient } from "expo-linear-gradient";
-
-// Gradient color schemes for variety
-const gradients = [
-  ["#667eea", "#764ba2"], // Purple
-  ["#f093fb", "#f5576c"], // Pink-Red
-  ["#4facfe", "#00f2fe"], // Blue
-  ["#43e97b", "#38f9d7"], // Green-Cyan
-  ["#fa709a", "#fee140"], // Pink-Yellow
-  ["#30cfd0", "#330867"], // Cyan-Purple
-  ["#a8edea", "#fed6e3"], // Light Blue-Pink
-  ["#ff9a56", "#ff6a88"], // Orange-Pink
-  ["#ffecd2", "#fcb69f"], // Peach
-  ["#ff6e7f", "#bfe9ff"], // Red-Blue
-  ["#e0c3fc", "#8ec5fc"], // Lavender-Blue
-];
+import { Fonts } from "@/constants/fonts";
 
 interface AnimatedCityItemProps {
   item: City;
@@ -101,22 +27,22 @@ const AnimatedCityItem: React.FC<AnimatedCityItemProps> = ({
   onPress,
 }) => {
   const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
+  const slideAnim = useRef(new Animated.Value(30)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 1,
-        duration: 500,
-        delay: index * 100,
+        duration: 400,
+        delay: index * 80,
         useNativeDriver: true,
       }),
       Animated.spring(slideAnim, {
         toValue: 0,
-        delay: index * 100,
+        delay: index * 80,
         tension: 50,
-        friction: 7,
+        friction: 8,
         useNativeDriver: true,
       }),
     ]).start();
@@ -124,7 +50,7 @@ const AnimatedCityItem: React.FC<AnimatedCityItemProps> = ({
 
   const handlePressIn = () => {
     Animated.spring(scaleAnim, {
-      toValue: 0.95,
+      toValue: 0.97,
       useNativeDriver: true,
     }).start();
   };
@@ -138,38 +64,33 @@ const AnimatedCityItem: React.FC<AnimatedCityItemProps> = ({
     }).start();
   };
 
-  const gradient = gradients[index % gradients.length];
-
   return (
     <Animated.View
       style={[
         styles.animatedContainer,
         {
           opacity: fadeAnim,
-          transform: [{ translateX: slideAnim }, { scale: scaleAnim }],
+          transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
         },
       ]}
     >
       <TouchableOpacity
-        activeOpacity={0.9}
+        activeOpacity={0.8}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        style={styles.touchable}
+        style={styles.cityCard}
       >
-        <LinearGradient
-          colors={gradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.gradientButton}
-        >
-          <Text style={styles.cityText}>
-            {item.name}, {item.state}
-          </Text>
-          <View style={styles.arrowContainer}>
-            <Text style={styles.arrow}>→</Text>
-          </View>
-        </LinearGradient>
+        <View style={styles.cityIconContainer}>
+          <Ionicons name="location" size={24} color="#a855f7" />
+        </View>
+        <View style={styles.cityInfo}>
+          <Text style={styles.cityName}>{item.name}</Text>
+          <Text style={styles.cityState}>{item.state}</Text>
+        </View>
+        <View style={styles.arrowContainer}>
+          <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
+        </View>
       </TouchableOpacity>
     </Animated.View>
   );
@@ -178,18 +99,59 @@ const AnimatedCityItem: React.FC<AnimatedCityItemProps> = ({
 export default function VendorsPage() {
   const router = useRouter();
   const [cities, setCities] = useState<City[]>([]);
+  const [loading, setLoading] = useState(true);
+  const headerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const loadCities = async () => {
-      const data = await fetchCities();
-      setCities(data);
+      try {
+        const data = await fetchCities();
+        setCities(data);
+      } catch (error) {
+        console.error("Error loading cities:", error);
+      } finally {
+        setLoading(false);
+      }
     };
     loadCities();
+
+    Animated.timing(headerAnim, {
+      toValue: 1,
+      duration: 600,
+      useNativeDriver: true,
+    }).start();
   }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#a855f7" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Select a City</Text>
+      <Animated.View
+        style={[
+          styles.headerContainer,
+          {
+            opacity: headerAnim,
+            transform: [
+              {
+                translateY: headerAnim.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [-20, 0],
+                }),
+              },
+            ],
+          },
+        ]}
+      >
+        <Text style={styles.title}>Find Vendors</Text>
+        <Text style={styles.subtitle}>Select your city to get started</Text>
+      </Animated.View>
+
       <FlatList
         data={cities}
         keyExtractor={(item) => item._id}
@@ -206,6 +168,13 @@ export default function VendorsPage() {
           />
         )}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <View style={styles.emptyContainer}>
+            <Ionicons name="location-outline" size={48} color="#4b5563" />
+            <Text style={styles.emptyText}>No cities available</Text>
+          </View>
+        }
       />
     </View>
   );
@@ -214,52 +183,84 @@ export default function VendorsPage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 20,
-    backgroundColor: "#f8f9fa",
+    backgroundColor: "#0f0f1a",
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#0f0f1a",
+  },
+  headerContainer: {
+    marginBottom: 30,
   },
   title: {
-    fontSize: 28,
-    fontWeight: "bold",
-    marginBottom: 20,
-    color: "#333",
+    fontSize: 32,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+    marginBottom: 8,
+  },
+  subtitle: {
+    fontSize: 16,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
+  },
+  listContent: {
+    paddingBottom: 30,
   },
   animatedContainer: {
-    marginBottom: 15,
+    marginBottom: 12,
   },
-  touchable: {
+  cityCard: {
+    backgroundColor: "#1f1f2e",
     borderRadius: 16,
-    overflow: "hidden",
-    elevation: 5,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 5,
-  },
-  gradientButton: {
-    padding: 20,
-    borderRadius: 16,
+    padding: 16,
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    minHeight: 70,
+    borderWidth: 1,
+    borderColor: "#374151",
   },
-  cityText: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#fff",
+  cityIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: "rgba(168, 85, 247, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 14,
+  },
+  cityInfo: {
     flex: 1,
   },
+  cityName: {
+    fontSize: 18,
+    fontFamily: Fonts.semiBold,
+    color: "#fff",
+    marginBottom: 4,
+  },
+  cityState: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
+  },
   arrowContainer: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: "rgba(255, 255, 255, 0.3)",
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#374151",
     justifyContent: "center",
     alignItems: "center",
   },
-  arrow: {
-    fontSize: 18,
-    color: "#fff",
-    fontWeight: "bold",
+  emptyContainer: {
+    alignItems: "center",
+    paddingTop: 60,
+  },
+  emptyText: {
+    fontSize: 16,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
+    marginTop: 12,
   },
 });

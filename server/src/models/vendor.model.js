@@ -22,7 +22,12 @@ const vendorSchema = mongoose.Schema({
         phone: { type: String, required: true },
         instagram: { type: String },
         website: { type: String },
-    }
+    },
+    // Link to user account (if vendor has registered)
+    user: { type: mongoose.Schema.Types.ObjectId, ref: "user" },
+    verified: { type: Boolean, default: false },
+}, {
+    timestamps: true
 });
 
 export const City = mongoose.model("city", citySchema);

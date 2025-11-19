@@ -8,15 +8,15 @@ import {
   Platform,
   StatusBar,
 } from "react-native";
-import { Tabs, useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import * as SecureStore from "expo-secure-store";
+import { Colors } from "@/constants/colors";
 import { capitalize } from "@/libs/helpers";
 import { Fonts } from "@/constants/fonts";
 
-export default function TabsLayout() {
+export default function VendorLayout() {
   const [user, setUser] = useState<{
     id: string;
     username: string;
@@ -26,7 +26,7 @@ export default function TabsLayout() {
     id: "",
     username: "",
     email: "",
-    userType: "client",
+    userType: "vendor",
   });
   const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
   const router = useRouter();
@@ -65,7 +65,18 @@ export default function TabsLayout() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" />
       <View style={styles.navbar}>
-        <Text style={styles.logoText}>NightVibe</Text>
+        <View style={styles.navLeft}>
+          <Text style={styles.logoText}>NightVibe</Text>
+          <LinearGradient
+            colors={["#22c55e", "#16a34a"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.badge}
+          >
+            <Ionicons name="briefcase" size={12} color="#fff" />
+            <Text style={styles.badgeText}>Vendor</Text>
+          </LinearGradient>
+        </View>
         <TouchableOpacity
           onPress={handleProfilePress}
           style={styles.profileButton}
@@ -107,31 +118,29 @@ export default function TabsLayout() {
               </Text>
               <Text style={styles.emailText}>{user.email}</Text>
               <LinearGradient
-                colors={["#3b82f6", "#1d4ed8"]}
+                colors={["#22c55e", "#16a34a"]}
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 0 }}
                 style={styles.accountTypeBadge}
               >
-                <Ionicons name="person" size={14} color="#fff" />
-                <Text style={styles.accountTypeText}>Client Account</Text>
+                <Ionicons name="briefcase" size={14} color="#fff" />
+                <Text style={styles.accountTypeText}>Vendor Account</Text>
               </LinearGradient>
             </View>
 
             <View style={styles.divider} />
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setIsProfileModalVisible(false);
+                // Navigate to dashboard
+              }}
+            >
               <View style={styles.menuIconContainer}>
-                <Ionicons name="calendar-outline" size={20} color="#a855f7" />
+                <Ionicons name="grid-outline" size={20} color="#a855f7" />
               </View>
-              <Text style={styles.menuItemText}>My Events</Text>
-              <Ionicons name="chevron-forward" size={20} color="#4b5563" />
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.menuItem}>
-              <View style={styles.menuIconContainer}>
-                <Ionicons name="heart-outline" size={20} color="#a855f7" />
-              </View>
-              <Text style={styles.menuItemText}>Favorites</Text>
+              <Text style={styles.menuItemText}>Dashboard</Text>
               <Ionicons name="chevron-forward" size={20} color="#4b5563" />
             </TouchableOpacity>
 
@@ -169,109 +178,12 @@ export default function TabsLayout() {
         </View>
       </Modal>
 
-      <Tabs
+      <Stack
         screenOptions={{
-          tabBarActiveTintColor: "#a855f7",
-          tabBarInactiveTintColor: "#6b7280",
           headerShown: false,
-          tabBarStyle: Platform.OS === "ios"
-            ? {
-                position: "absolute",
-                backgroundColor: "rgba(15, 15, 26, 0.7)",
-                borderTopWidth: 0,
-                paddingTop: 8,
-                paddingBottom: 24,
-                height: 88,
-                elevation: 0,
-                shadowOpacity: 0,
-              }
-            : {
-                backgroundColor: "#0f0f1a",
-                borderTopColor: "#1f1f2e",
-                borderTopWidth: 1,
-                paddingTop: 8,
-                paddingBottom: 8,
-                height: 64,
-              },
-          tabBarBackground: () =>
-            Platform.OS === "ios" ? (
-              <BlurView
-                intensity={80}
-                tint="dark"
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  overflow: "hidden",
-                  borderTopLeftRadius: 20,
-                  borderTopRightRadius: 20,
-                  backgroundColor: "rgba(15, 15, 26, 0.6)",
-                  borderTopWidth: 0.5,
-                  borderTopColor: "rgba(168, 85, 247, 0.2)",
-                }}
-              />
-            ) : null,
-          tabBarLabelStyle: {
-            fontSize: 11,
-            fontFamily: Fonts.semiBold,
-          },
+          contentStyle: { backgroundColor: Colors.darkBackground },
         }}
-      >
-        <Tabs.Screen
-          name="home"
-          options={{
-            title: "Home",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "home" : "home-outline"}
-                size={24}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="vendors"
-          options={{
-            title: "Vendors",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "compass" : "compass-outline"}
-                size={24}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="bests"
-          options={{
-            title: "Best Of",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "trophy" : "trophy-outline"}
-                size={24}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="events"
-          options={{
-            title: "Events",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "calendar" : "calendar-outline"}
-                size={24}
-                color={color}
-              />
-            ),
-          }}
-        />
-      </Tabs>
+      />
     </View>
   );
 }
@@ -292,6 +204,11 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: "#1f1f2e",
   },
+  navLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
   logoText: {
     fontFamily: Fonts.black,
     fontSize: 24,
@@ -299,6 +216,19 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(168, 85, 247, 0.3)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
+  },
+  badge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  badgeText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: Fonts.bold,
   },
   profileButton: {
     borderRadius: 20,

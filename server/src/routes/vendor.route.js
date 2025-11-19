@@ -1,13 +1,16 @@
 import express from "express";
-import { 
+import {
   getAllCities,
   getVendorTypesByCity,
   getVendorsByCityAndType,
+  getAllVendorTypes,
 } from "../controllers/vendors.controller.js";
 
 const router = express.Router();
 
 router.get("/cities", getAllCities);
+
+router.get("/vendor-types", getAllVendorTypes);
 
 router.get("/cities/:cityId/vendor-types", getVendorTypesByCity);
 
