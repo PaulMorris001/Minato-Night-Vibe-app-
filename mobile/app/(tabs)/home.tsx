@@ -1,5 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   ScrollView,
   View,
@@ -8,15 +7,73 @@ import {
   StyleSheet,
   StatusBar,
   Platform,
-  ImageBackground,
+  Animated,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import Background from "../../assets/images/background.jpeg";
-import { Colors } from "@/constants/colors";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import { Fonts } from "@/constants/fonts";
 
 export default function Home() {
-  const [userName, setUserName] = useState("User");
+  const router = useRouter();
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [eventData, setEventData] = useState({
+    name: "",
+    date: "",
+    time: "",
+    location: "",
+    description: "",
+    guests: "",
+  });
+
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(50)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    // Entrance animations
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 50,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Pulse animation for FAB
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    ).start();
+  }, []);
 
   // Mock top vendors data
   const topVendors: {
@@ -24,7 +81,8 @@ export default function Home() {
     name: string;
     category: string;
     rating: number;
-    icon: React.ComponentProps<typeof Ionicons>['name'];
+    icon: React.ComponentProps<typeof Ionicons>["name"];
+    gradient: readonly [string, string];
   }[] = [
     {
       id: 1,
@@ -32,6 +90,7 @@ export default function Home() {
       category: "Nightclub",
       rating: 4.8,
       icon: "musical-notes",
+      gradient: ["#667eea", "#764ba2"] as const,
     },
     {
       id: 2,
@@ -39,6 +98,7 @@ export default function Home() {
       category: "Bar & Lounge",
       rating: 4.9,
       icon: "wine",
+      gradient: ["#f093fb", "#f5576c"] as const,
     },
     {
       id: 3,
@@ -46,11 +106,20 @@ export default function Home() {
       category: "DJ Services",
       rating: 4.7,
       icon: "disc",
+      gradient: ["#4facfe", "#00f2fe"] as const,
     },
   ];
 
   // Pricing plans
-  const pricingPlans = [
+  const pricingPlans: {
+    id: number;
+    name: string;
+    price: string;
+    period: string;
+    features: string[];
+    gradient: readonly [string, string];
+    popular?: boolean;
+  }[] = [
     {
       id: 1,
       name: "Basic",
@@ -61,7 +130,7 @@ export default function Home() {
         "Contact information",
         "Basic analytics",
       ],
-      color: "#6366f1",
+      gradient: ["#667eea", "#764ba2"] as const,
     },
     {
       id: 2,
@@ -74,7 +143,7 @@ export default function Home() {
         "Advanced analytics",
         "Priority support",
       ],
-      color: "#9333ea",
+      gradient: ["#f093fb", "#f5576c"] as const,
       popular: true,
     },
     {
@@ -88,342 +157,658 @@ export default function Home() {
         "Booking system",
         "Dedicated account manager",
       ],
-      color: "#c026d3",
+      gradient: ["#43e97b", "#38f9d7"] as const,
     },
   ];
 
+  const AnimatedFeatureCard = ({
+    icon,
+    title,
+    description,
+    gradient,
+    delay,
+  }: {
+    icon: React.ComponentProps<typeof Ionicons>["name"];
+    title: string;
+    description: string;
+    gradient: readonly [string, string];
+    delay: number;
+  }) => {
+    const cardFade = useRef(new Animated.Value(0)).current;
+    const cardSlide = useRef(new Animated.Value(30)).current;
+
+    useEffect(() => {
+      Animated.parallel([
+        Animated.timing(cardFade, {
+          toValue: 1,
+          duration: 500,
+          delay,
+          useNativeDriver: true,
+        }),
+        Animated.spring(cardSlide, {
+          toValue: 0,
+          delay,
+          tension: 50,
+          friction: 8,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, []);
+
+    return (
+      <Animated.View
+        style={{
+          opacity: cardFade,
+          transform: [{ translateY: cardSlide }],
+        }}
+      >
+        <TouchableOpacity style={styles.featureCard} activeOpacity={0.8}>
+          <LinearGradient
+            colors={gradient}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.featureGradient}
+          >
+            <View style={styles.featureIconContainer}>
+              <Ionicons name={icon} size={32} color="white" />
+            </View>
+            <Text style={styles.featureTitle}>{title}</Text>
+            <Text style={styles.featureDescription}>{description}</Text>
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    );
+  };
+
   return (
     <>
+      <StatusBar barStyle="light-content" />
       <ScrollView
-        style={{ flex: 1, backgroundColor: "#000" }}
+        style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
       >
-        <ImageBackground
-          source={Background}
-          resizeMode="cover"
-          style={styles.background}
+        {/* Hero Section */}
+        <LinearGradient
+          colors={["#0f0f1a", "#1a1a2e", "#16213e"]}
+          style={styles.heroSection}
         >
-          <View style={styles.overlay}>
-            <View style={[styles.container, { marginTop: 40, flex: 1 }]}>
-              <Text style={styles.mainTitle}>NightVibe</Text>
+          <Animated.View
+            style={[
+              styles.heroContent,
+              {
+                opacity: fadeAnim,
+                transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
+              },
+            ]}
+          >
+            <Text style={styles.logoText}>NightVibe</Text>
+            <Text style={styles.heroTitle}>
+              Plan Epic Nights Out {"\n"}& Unforgettable Parties
+            </Text>
+            <Text style={styles.heroSubtitle}>
+              Discover venues, vendors, and experiences in your city
+            </Text>
 
-              <Text style={styles.subtitle}>
-                Plan Epic Nights Out and Parties
-              </Text>
+            <TouchableOpacity
+              style={styles.ctaButton}
+              activeOpacity={0.8}
+              onPress={() => router.push("/(tabs)/vendors")}
+            >
+              <LinearGradient
+                colors={["#a855f7", "#7c3aed"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.ctaGradient}
+              >
+                <Text style={styles.ctaText}>Explore Vendors</Text>
+                <Ionicons name="arrow-forward" size={20} color="white" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </Animated.View>
 
-              <Text style={styles.paragraph}>
-                Planning a night out or a bachelorette&apos;s or Christmas
-                party? Use NightVibe to find a directory of venues, vendors, and
-                things to do in your city!
-              </Text>
+          {/* Decorative elements */}
+          <View style={styles.decorCircle1} />
+          <View style={styles.decorCircle2} />
+        </LinearGradient>
 
-              <TouchableOpacity style={styles.searchButton}>
-                <Text style={styles.searchButtonText}>
-                  Search Vendors and Venues in Your City!
-                </Text>
-              </TouchableOpacity>
+        {/* Features Section */}
+        <View style={styles.featuresSection}>
+          <Text style={styles.sectionTitle}>What We Offer</Text>
+          <Text style={styles.sectionSubtitle}>
+            Everything you need for the perfect night
+          </Text>
 
-              <View style={styles.featureContainer}>
-                <TouchableOpacity style={styles.featureCard}>
-                  <View
-                    style={[
-                      styles.iconContainer,
-                      { backgroundColor: "#ff6f6" },
-                    ]}
+          <View style={styles.featuresGrid}>
+            <AnimatedFeatureCard
+              icon="business"
+              title="Find Vendors & Venues"
+              description="Discover the best nightlife spots and service providers"
+              gradient={["#667eea", "#764ba2"] as const}
+              delay={100}
+            />
+            <AnimatedFeatureCard
+              icon="calendar"
+              title="Plan Your Event"
+              description="Organize every detail of your perfect night out"
+              gradient={["#f093fb", "#f5576c"] as const}
+              delay={200}
+            />
+            <AnimatedFeatureCard
+              icon="star"
+              title="Curated Lists"
+              description="Explore top-rated picks and local favorites"
+              gradient={["#4facfe", "#00f2fe"] as const}
+              delay={300}
+            />
+          </View>
+        </View>
+
+        {/* Top Vendors Section */}
+        <View style={styles.vendorsSection}>
+          <Text style={styles.sectionTitle}>Top Rated Vendors</Text>
+          <Text style={styles.sectionSubtitle}>
+            Trusted partners for exceptional experiences
+          </Text>
+
+          {topVendors.map((vendor, index) => {
+            const VendorCard = () => {
+              const vendorFade = useRef(new Animated.Value(0)).current;
+              const vendorSlide = useRef(new Animated.Value(50)).current;
+
+              useEffect(() => {
+                Animated.parallel([
+                  Animated.timing(vendorFade, {
+                    toValue: 1,
+                    duration: 500,
+                    delay: index * 150,
+                    useNativeDriver: true,
+                  }),
+                  Animated.spring(vendorSlide, {
+                    toValue: 0,
+                    delay: index * 150,
+                    tension: 50,
+                    friction: 8,
+                    useNativeDriver: true,
+                  }),
+                ]).start();
+              }, []);
+
+              return (
+                <Animated.View
+                  style={{
+                    opacity: vendorFade,
+                    transform: [{ translateX: vendorSlide }],
+                  }}
+                >
+                  <TouchableOpacity
+                    style={styles.vendorCard}
+                    activeOpacity={0.8}
                   >
-                    <Ionicons name="business" size={30} color="white" />
-                  </View>
-                  <Text style={styles.featureTitle}>Find Vendors & Venues</Text>
-                  <Text style={styles.featureDescription}>
-                    Discover the best options near you
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.featureCard}>
-                  <View
-                    style={[
-                      styles.iconContainer,
-                      { backgroundColor: "#4caf50" },
-                    ]}
-                  >
-                    <Ionicons name="calendar" size={30} color="white" />
-                  </View>
-                  <Text style={styles.featureTitle}>Plan Your Event</Text>
-                  <Text style={styles.featureDescription}>
-                    Organize your perfect night out
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.featureCard}>
-                  <View
-                    style={[
-                      styles.iconContainer,
-                      { backgroundColor: "#2196f3" },
-                    ]}
-                  >
-                    <Ionicons name="star" size={30} color="white" />
-                  </View>
-                  <Text style={styles.featureTitle}>Best of Lists</Text>
-                  <Text style={styles.featureDescription}>
-                    Explore curated guides and top picks
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Top Vendors Section */}
-              <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>Our Top Vendors</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Trusted partners delivering exceptional experiences
-                </Text>
-
-                <View style={styles.vendorsContainer}>
-                  {topVendors.map((vendor) => (
-                    <TouchableOpacity key={vendor.id} style={styles.vendorCard}>
-                      <View style={styles.vendorIconContainer}>
-                        <Ionicons
-                          name={vendor.icon}
-                          size={28}
-                          color={Colors.primary}
-                        />
+                    <LinearGradient
+                      colors={vendor.gradient}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.vendorIconGradient}
+                    >
+                      <Ionicons name={vendor.icon} size={24} color="white" />
+                    </LinearGradient>
+                    <View style={styles.vendorInfo}>
+                      <Text style={styles.vendorName}>{vendor.name}</Text>
+                      <Text style={styles.vendorCategory}>
+                        {vendor.category}
+                      </Text>
+                      <View style={styles.ratingContainer}>
+                        <Ionicons name="star" size={14} color="#fbbf24" />
+                        <Text style={styles.ratingText}>{vendor.rating}</Text>
                       </View>
-                      <View style={styles.vendorInfo}>
-                        <Text style={styles.vendorName}>{vendor.name}</Text>
-                        <Text style={styles.vendorCategory}>
-                          {vendor.category}
-                        </Text>
-                        <View style={styles.ratingContainer}>
-                          <Ionicons name="star" size={14} color="#fbbf24" />
-                          <Text style={styles.ratingText}>{vendor.rating}</Text>
-                        </View>
-                      </View>
+                    </View>
+                    <View style={styles.vendorArrow}>
                       <Ionicons
                         name="chevron-forward"
                         size={20}
                         color="#9ca3af"
                       />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Pricing Plans Section */}
-              <View style={styles.sectionContainer}>
-                <Text style={styles.sectionTitle}>Become a Vendor</Text>
-                <Text style={styles.sectionSubtitle}>
-                  Choose the perfect plan to showcase your business
-                </Text>
-
-                <View style={styles.pricingContainer}>
-                  {pricingPlans.map((plan) => (
-                    <View
-                      key={plan.id}
-                      style={[
-                        styles.pricingCard,
-                        plan.popular && styles.popularCard,
-                      ]}
-                    >
-                      {plan.popular && (
-                        <View style={styles.popularBadge}>
-                          <Text style={styles.popularText}>MOST POPULAR</Text>
-                        </View>
-                      )}
-                      <Text style={styles.planName}>{plan.name}</Text>
-                      <View style={styles.priceContainer}>
-                        <Text style={[styles.price, { color: plan.color }]}>
-                          {plan.price}
-                        </Text>
-                        <Text style={styles.period}>{plan.period}</Text>
-                      </View>
-                      <View style={styles.featuresContainer}>
-                        {plan.features.map((feature, index) => (
-                          <View key={index} style={styles.featureRow}>
-                            <Ionicons
-                              name="checkmark-circle"
-                              size={18}
-                              color={plan.color}
-                            />
-                            <Text style={styles.featureText}>{feature}</Text>
-                          </View>
-                        ))}
-                      </View>
-                      <TouchableOpacity
-                        style={[
-                          styles.planButton,
-                          { backgroundColor: plan.color },
-                          plan.popular && styles.popularButton,
-                        ]}
-                      >
-                        <Text style={styles.planButtonText}>Get Started</Text>
-                      </TouchableOpacity>
                     </View>
-                  ))}
-                </View>
+                  </TouchableOpacity>
+                </Animated.View>
+              );
+            };
+            return <VendorCard key={vendor.id} />;
+          })}
+        </View>
+
+        {/* Pricing Section */}
+        <LinearGradient
+          colors={["#1a1a2e", "#16213e", "#0f0f1a"]}
+          style={styles.pricingSection}
+        >
+          <Text style={styles.pricingSectionTitle}>Become a Vendor</Text>
+          <Text style={styles.pricingSectionSubtitle}>
+            Choose the perfect plan for your business
+          </Text>
+
+          {pricingPlans.map((plan) => (
+            <View
+              key={plan.id}
+              style={[styles.pricingCard, plan.popular && styles.popularCard]}
+            >
+              {plan.popular && (
+                <LinearGradient
+                  colors={["#f093fb", "#f5576c"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.popularBadge}
+                >
+                  <Text style={styles.popularText}>MOST POPULAR</Text>
+                </LinearGradient>
+              )}
+              <Text style={styles.planName}>{plan.name}</Text>
+              <View style={styles.priceContainer}>
+                <LinearGradient
+                  colors={plan.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.priceGradientBg}
+                >
+                  <Text style={styles.price}>{plan.price}</Text>
+                </LinearGradient>
+                <Text style={styles.period}>{plan.period}</Text>
               </View>
-              {/* </ScrollView> */}
+              <View style={styles.planFeaturesContainer}>
+                {plan.features.map((feature, idx) => (
+                  <View key={idx} style={styles.planFeatureRow}>
+                    <LinearGradient
+                      colors={plan.gradient}
+                      style={styles.checkCircle}
+                    >
+                      <Ionicons name="checkmark" size={12} color="white" />
+                    </LinearGradient>
+                    <Text style={styles.planFeatureText}>{feature}</Text>
+                  </View>
+                ))}
+              </View>
+              <TouchableOpacity style={styles.planButton} activeOpacity={0.8}>
+                <LinearGradient
+                  colors={plan.gradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.planButtonGradient}
+                >
+                  <Text style={styles.planButtonText}>Get Started</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </LinearGradient>
+
+        {/* Footer */}
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>
+            Made with love for nightlife enthusiasts
+          </Text>
+        </View>
+      </ScrollView>
+
+      {/* Floating Action Button */}
+      <Animated.View
+        style={[
+          styles.fabContainer,
+          { transform: [{ scale: pulseAnim }] },
+        ]}
+      >
+        <TouchableOpacity
+          style={styles.fab}
+          onPress={() => setIsModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={["#a855f7", "#7c3aed"]}
+            style={styles.fabGradient}
+          >
+            <Ionicons name="add" size={28} color="white" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+
+      {/* Create Event Modal */}
+      <Modal
+        visible={isModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Create Event</Text>
+              <TouchableOpacity
+                onPress={() => setIsModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Event Name</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Birthday Party"
+                  placeholderTextColor="#6b7280"
+                  value={eventData.name}
+                  onChangeText={(text) =>
+                    setEventData({ ...eventData, name: text })
+                  }
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Date</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., 2024-12-25"
+                  placeholderTextColor="#6b7280"
+                  value={eventData.date}
+                  onChangeText={(text) =>
+                    setEventData({ ...eventData, date: text })
+                  }
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Time</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., 8:00 PM"
+                  placeholderTextColor="#6b7280"
+                  value={eventData.time}
+                  onChangeText={(text) =>
+                    setEventData({ ...eventData, time: text })
+                  }
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Location</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Downtown Club"
+                  placeholderTextColor="#6b7280"
+                  value={eventData.location}
+                  onChangeText={(text) =>
+                    setEventData({ ...eventData, location: text })
+                  }
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Number of Guests</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., 20"
+                  placeholderTextColor="#6b7280"
+                  value={eventData.guests}
+                  onChangeText={(text) =>
+                    setEventData({ ...eventData, guests: text })
+                  }
+                  keyboardType="numeric"
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Description</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Describe your event..."
+                  placeholderTextColor="#6b7280"
+                  value={eventData.description}
+                  onChangeText={(text) =>
+                    setEventData({ ...eventData, description: text })
+                  }
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setIsModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.createButton}
+                onPress={() => {
+                  if (!eventData.name || !eventData.date || !eventData.location) {
+                    Alert.alert("Error", "Please fill in required fields (Name, Date, Location)");
+                    return;
+                  }
+                  Alert.alert(
+                    "Event Created!",
+                    `Your event "${eventData.name}" has been created successfully.`,
+                    [
+                      {
+                        text: "OK",
+                        onPress: () => {
+                          setEventData({
+                            name: "",
+                            date: "",
+                            time: "",
+                            location: "",
+                            description: "",
+                            guests: "",
+                          });
+                          setIsModalVisible(false);
+                        },
+                      },
+                    ]
+                  );
+                }}
+              >
+                <LinearGradient
+                  colors={["#a855f7", "#7c3aed"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.createButtonGradient}
+                >
+                  <Text style={styles.createButtonText}>Create Event</Text>
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
           </View>
-        </ImageBackground>
-      </ScrollView>
-      <TouchableOpacity
-        style={styles.eventButton}
-        onPress={() => setIsModalVisible(true)}
-      >
-        <Text style={styles.createEvent}>+</Text>
-      </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
     </>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
+  scrollView: {
     flex: 1,
-    width: "100%",
-    height: "100%",
+    backgroundColor: "#0f0f1a",
   },
-  overlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
+  scrollContent: {
+    flexGrow: 1,
+  },
+  heroSection: {
+    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight! + 40 : 80,
+    paddingBottom: 60,
+    paddingHorizontal: 24,
+    position: "relative",
+    overflow: "hidden",
+  },
+  heroContent: {
     alignItems: "center",
   },
-  container: {
-    flex: 1,
-    justifyContent: "flex-start",
-    alignItems: "center",
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight : 0,
+  logoText: {
+    fontSize: 48,
+    fontFamily: Fonts.black,
+    color: "#a855f7",
+    marginBottom: 16,
+    textShadowColor: "rgba(168, 85, 247, 0.5)",
+    textShadowOffset: { width: 0, height: 4 },
+    textShadowRadius: 20,
   },
-  mainTitle: {
-    fontSize: 60,
-    fontWeight: "bold",
-    marginBottom: 10,
-    color: Colors.secondary,
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 16,
-    color: "white",
-    marginBottom: 20,
-    textAlign: "center",
-    paddingHorizontal: 20,
-  },
-  paragraph: {
-    fontSize: 15,
-    color: "white",
-    textAlign: "center",
-    marginHorizontal: 25,
-    marginBottom: 30,
-  },
-  searchButton: {
-    backgroundColor: "#9333ea",
-    paddingVertical: 14,
-    paddingHorizontal: 25,
-    borderRadius: 8,
-    marginBottom: 50,
-    alignSelf: "center",
-  },
-  searchButtonText: {
+  heroTitle: {
+    fontSize: 28,
+    fontFamily: Fonts.bold,
     color: "#fff",
-    fontWeight: "bold",
     textAlign: "center",
+    marginBottom: 12,
+    lineHeight: 36,
+  },
+  heroSubtitle: {
     fontSize: 16,
-  },
-  featureContainer: {
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 40,
-  },
-  featureCard: {
-    backgroundColor: Colors.darkBackground,
-    borderRadius: 12,
-    padding: 15,
-    marginTop: 10,
-    width: 300,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  iconContainer: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 10,
-  },
-  featureTitle: {
-    color: "white",
-    fontWeight: "bold",
-    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
     textAlign: "center",
-    marginBottom: 6,
-  },
-  featureDescription: {
-    fontSize: 12,
-    color: "grey",
-    textAlign: "center",
-  },
-  sectionContainer: {
-    width: "100%",
+    marginBottom: 32,
     paddingHorizontal: 20,
-    marginBottom: 50,
+  },
+  ctaButton: {
+    borderRadius: 16,
+    overflow: "hidden",
+    shadowColor: "#a855f7",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  ctaGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 16,
+    paddingHorizontal: 32,
+    gap: 8,
+  },
+  ctaText: {
+    color: "white",
+    fontSize: 18,
+    fontFamily: Fonts.bold,
+  },
+  decorCircle1: {
+    position: "absolute",
+    top: -100,
+    right: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: "rgba(168, 85, 247, 0.1)",
+  },
+  decorCircle2: {
+    position: "absolute",
+    bottom: -50,
+    left: -80,
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: "rgba(124, 58, 237, 0.1)",
+  },
+  featuresSection: {
+    paddingVertical: 50,
+    paddingHorizontal: 24,
+    backgroundColor: "#0f0f1a",
   },
   sectionTitle: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "white",
+    fontSize: 28,
+    fontFamily: Fonts.bold,
+    color: "#fff",
     textAlign: "center",
     marginBottom: 8,
   },
   sectionSubtitle: {
-    fontSize: 14,
-    color: "#d1d5db",
+    fontSize: 15,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
     textAlign: "center",
-    marginBottom: 30,
+    marginBottom: 32,
   },
-  vendorsContainer: {
-    gap: 12,
+  featuresGrid: {
+    gap: 16,
+  },
+  featureCard: {
+    borderRadius: 20,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  featureGradient: {
+    padding: 24,
+    alignItems: "center",
+  },
+  featureIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  featureTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.bold,
+    color: "white",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  featureDescription: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "rgba(255, 255, 255, 0.8)",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  vendorsSection: {
+    paddingVertical: 50,
+    paddingHorizontal: 24,
+    backgroundColor: "#1f1f2e",
   },
   vendorCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderRadius: 12,
+    backgroundColor: "#0f0f1a",
+    borderRadius: 16,
     padding: 16,
     flexDirection: "row",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#374151",
   },
-  vendorIconContainer: {
+  vendorIconGradient: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: "#f3e8ff",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 12,
+    marginRight: 14,
   },
   vendorInfo: {
     flex: 1,
   },
   vendorName: {
-    fontSize: 16,
-    fontWeight: "bold",
-    color: "#1f2937",
-    marginBottom: 2,
+    fontSize: 17,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+    marginBottom: 4,
   },
   vendorCategory: {
     fontSize: 13,
-    color: "#6b7280",
-    marginBottom: 4,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
+    marginBottom: 6,
   },
   ratingContainer: {
     flexDirection: "row",
@@ -431,112 +816,239 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   ratingText: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#1f2937",
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    color: "#fbbf24",
   },
-  pricingContainer: {
-    gap: 16,
+  vendorArrow: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#374151",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pricingSection: {
+    paddingVertical: 50,
+    paddingHorizontal: 24,
+  },
+  pricingSectionTitle: {
+    fontSize: 28,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 8,
+  },
+  pricingSectionSubtitle: {
+    fontSize: 15,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
+    textAlign: "center",
+    marginBottom: 32,
   },
   pricingCard: {
-    backgroundColor: "rgba(255, 255, 255, 0.95)",
-    borderRadius: 16,
+    backgroundColor: "#1f1f2e",
+    borderRadius: 20,
     padding: 24,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 5,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#374151",
+    position: "relative",
   },
   popularCard: {
+    borderColor: "#f093fb",
     borderWidth: 2,
-    borderColor: "#9333ea",
-    transform: [{ scale: 1.02 }],
   },
   popularBadge: {
     position: "absolute",
-    top: -12,
+    top: -14,
     right: 20,
-    backgroundColor: "#9333ea",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   popularText: {
     color: "white",
-    fontSize: 10,
-    fontWeight: "bold",
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontFamily: Fonts.extraBold,
+    letterSpacing: 1,
   },
   planName: {
     fontSize: 24,
-    fontWeight: "bold",
-    color: "#1f2937",
-    marginBottom: 8,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+    marginBottom: 12,
   },
   priceContainer: {
     flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: 20,
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  priceGradientBg: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginRight: 8,
   },
   price: {
-    fontSize: 42,
-    fontWeight: "bold",
+    fontSize: 36,
+    fontFamily: Fonts.black,
+    color: "white",
   },
   period: {
     fontSize: 16,
-    color: "#6b7280",
-    marginLeft: 4,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
   },
-  featuresContainer: {
-    gap: 12,
+  planFeaturesContainer: {
+    gap: 14,
     marginBottom: 24,
   },
-  featureRow: {
+  planFeatureRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 12,
   },
-  featureText: {
-    fontSize: 14,
-    color: "#4b5563",
+  checkCircle: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  planFeatureText: {
+    fontSize: 15,
+    fontFamily: Fonts.regular,
+    color: "#e5e7eb",
     flex: 1,
   },
   planButton: {
-    paddingVertical: 14,
-    borderRadius: 8,
-    alignItems: "center",
+    borderRadius: 12,
+    overflow: "hidden",
   },
-  popularButton: {
-    shadowColor: "#9333ea",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+  planButtonGradient: {
+    paddingVertical: 14,
+    alignItems: "center",
   },
   planButtonText: {
     color: "white",
     fontSize: 16,
-    fontWeight: "bold",
+    fontFamily: Fonts.bold,
   },
-  eventButton: {
+  footer: {
+    paddingVertical: 30,
+    alignItems: "center",
+    backgroundColor: "#0f0f1a",
+  },
+  footerText: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#6b7280",
+  },
+  fabContainer: {
     position: "absolute",
-    bottom: 20,
-    right: 20,
-    backgroundColor: "#9333ea",
+    bottom: 30,
+    right: 24,
+  },
+  fab: {
+    borderRadius: 30,
+    overflow: "hidden",
+    shadowColor: "#a855f7",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.5,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  fabGradient: {
     width: 60,
     height: 60,
-    borderRadius: 30,
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4.65,
-    elevation: 8,
   },
-  createEvent: {
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#1f1f2e",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "90%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  inputGroup: {
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    color: "#e5e7eb",
+    marginBottom: 8,
+  },
+  input: {
+    backgroundColor: "#374151",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    fontFamily: Fonts.regular,
+    color: "#fff",
+    borderWidth: 1,
+    borderColor: "#4b5563",
+  },
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: "top",
+  },
+  modalFooter: {
+    flexDirection: "row",
+    padding: 20,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#374151",
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: "#374151",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    color: "#9ca3af",
+    fontSize: 16,
+    fontFamily: Fonts.semiBold,
+  },
+  createButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  createButtonGradient: {
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  createButtonText: {
     color: "white",
-    fontSize: 30,
+    fontSize: 16,
+    fontFamily: Fonts.bold,
   },
 });

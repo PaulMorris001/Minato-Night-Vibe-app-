@@ -1,16 +1,4 @@
-import Constants from "expo-constants";
-
-const getBaseUrl = () => {
-  let host = "localhost";
-
-  if (Constants.expoConfig?.hostUri) {
-    host = Constants.expoConfig.hostUri.split(":")[0];
-  }
-
-  return `http://${host}:3000/api`;
-};
-
-const BASE_URL = getBaseUrl();
+import { BASE_URL } from '../constants/constants';
 
 export async function fetchCities() {
   const res = await fetch(`${BASE_URL}/cities`);
@@ -26,5 +14,10 @@ export async function fetchVendors(cityId: string, vendorTypeId: string) {
   const res = await fetch(
     `${BASE_URL}/cities/${cityId}/vendors/${vendorTypeId}`
   );
+  return res.json();
+}
+
+export async function fetchAllVendorTypes() {
+  const res = await fetch(`${BASE_URL}/vendor-types`);
   return res.json();
 }

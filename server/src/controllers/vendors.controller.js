@@ -31,3 +31,12 @@ export async function getVendorsByCityAndType(req, res) {
     res.status(500).json({ message: error.message });
   }
 }
+
+export async function getAllVendorTypes(req, res) {
+  try {
+    const vendorTypes = await VendorType.find();
+    res.status(200).json(vendorTypes);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
