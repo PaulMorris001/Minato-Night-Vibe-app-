@@ -5,6 +5,7 @@ import connectDB from './config/db.js';
 
 import authRoutes from './routes/auth.route.js'
 import vendorRoutes from "./routes/vendor.route.js";
+import serviceRoutes from "./routes/service.route.js";
 
 dotenv.config();
 const app = express();
@@ -17,9 +18,16 @@ app.use(
   })
 );
 app.use(express.json());
-connectDB();
 
 app.use("/api/", authRoutes);
 app.use("/api/", vendorRoutes);
+app.use("/api/", serviceRoutes);
 
-app.listen(process.env.PORT, process.env.HOST, ()=>{console.log(`Backend started at url: ${process.env.HOST}/${process.env.PORT}`)})
+// Start server
+const PORT = process.env.PORT || 3000;
+const HOST = process.env.HOST || '0.0.0.0';
+
+app.listen(PORT, HOST, async () => {
+  console.log(`🚀 Backend started at http://${HOST}:${PORT}`);
+  await connectDB();
+});

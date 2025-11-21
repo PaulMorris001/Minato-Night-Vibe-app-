@@ -3,23 +3,27 @@ import { Link, useRouter } from "expo-router";
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
   Alert,
-  ActivityIndicator,
+  Modal,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import axios from "axios";
 import { BASE_URL } from "@/constants/constants";
 import * as SecureStore from "expo-secure-store";
+import { capitalize } from "@/libs/helpers";
+import { FormInput, PrimaryButton } from "@/components/common";
 
 export default function Login() {
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [showRolePicker, setShowRolePicker] = useState(false);
+  const [userData, setUserData] = useState<any>(null);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -39,18 +43,29 @@ export default function Login() {
       await SecureStore.setItemAsync("token", token);
       await SecureStore.setItemAsync("user", JSON.stringify(user));
 
-      // Redirect based on user type
-      if (user.userType === "vendor") {
-        router.replace("/(vendor)/dashboard");
+      // If user is a vendor, show role picker
+      if (user.isVendor) {
+        setUserData(user);
+        setShowRolePicker(true);
+        setLoading(false);
       } else {
+        // Regular client, go directly to home
         router.replace("/(tabs)/home");
       }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || "Login failed. Please try again.";
       Alert.alert("Error", errorMessage);
       console.error(error.response?.data || error.message);
-    } finally {
       setLoading(false);
+    }
+  };
+
+  const selectRole = (role: "client" | "vendor") => {
+    setShowRolePicker(false);
+    if (role === "vendor") {
+      router.replace("/(vendor)/dashboard");
+    } else {
+      router.replace("/(tabs)/home");
     }
   };
 
@@ -66,43 +81,31 @@ export default function Login() {
         </View>
 
         <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
-            <TextInput
-              placeholder="Enter your email"
-              placeholderTextColor="#999"
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
-          </View>
+          <FormInput
+            label="Email"
+            placeholder="Enter your email"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
 
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              placeholder="Enter your password"
-              placeholderTextColor="#999"
-              style={styles.input}
-              value={password}
-              onChangeText={setPassword}
-              autoCapitalize="none"
-              secureTextEntry
-            />
-          </View>
+          <FormInput
+            label="Password"
+            placeholder="Enter your password"
+            value={password}
+            onChangeText={setPassword}
+            autoCapitalize="none"
+            secureTextEntry
+          />
 
-          <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+          <PrimaryButton
             onPress={handleLogin}
-            disabled={loading}
+            loading={loading}
+            style={styles.loginButton}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.buttonText}>Log In</Text>
-            )}
-          </TouchableOpacity>
+            Log In
+          </PrimaryButton>
         </View>
 
         <View style={styles.footer}>
@@ -114,6 +117,58 @@ export default function Login() {
           </Text>
         </View>
       </View>
+
+      {/* Role Picker Modal */}
+      <Modal
+        visible={showRolePicker}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowRolePicker(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="person-circle" size={48} color="#a855f7" />
+              <Text style={styles.modalTitle}>Choose Account</Text>
+              <Text style={styles.modalSubtitle}>
+                Welcome back, {capitalize(userData?.username)}!
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.roleButton}
+              onPress={() => selectRole("client")}
+            >
+              <View style={styles.roleIconContainer}>
+                <Ionicons name="person" size={32} color="#a855f7" />
+              </View>
+              <View style={styles.roleInfo}>
+                <Text style={styles.roleTitle}>Continue as Client</Text>
+                <Text style={styles.roleDescription}>
+                  Browse vendors and book services
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#9ca3af" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.roleButton}
+              onPress={() => selectRole("vendor")}
+            >
+              <View style={styles.roleIconContainer}>
+                <Ionicons name="briefcase" size={32} color="#a855f7" />
+              </View>
+              <View style={styles.roleInfo}>
+                <Text style={styles.roleTitle}>Continue as Vendor</Text>
+                <Text style={styles.roleDescription}>
+                  Manage your business and services
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={24} color="#9ca3af" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -146,43 +201,8 @@ const styles = StyleSheet.create({
   form: {
     marginBottom: 30,
   },
-  inputContainer: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: "#e5e7eb",
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: "#1f1f2e",
-    borderWidth: 1,
-    borderColor: "#374151",
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
-    color: "#fff",
-  },
-  button: {
-    backgroundColor: "#a855f7",
-    paddingVertical: 16,
-    borderRadius: 12,
+  loginButton: {
     marginTop: 10,
-    shadowColor: "#a855f7",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: "#fff",
-    textAlign: "center",
-    fontWeight: "700",
-    fontSize: 18,
   },
   footer: {
     alignItems: "center",
@@ -194,5 +214,66 @@ const styles = StyleSheet.create({
   link: {
     color: "#a855f7",
     fontWeight: "600",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.85)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "#1f1f2e",
+    borderRadius: 20,
+    padding: 24,
+    width: "100%",
+    maxWidth: 400,
+  },
+  modalHeader: {
+    alignItems: "center",
+    marginBottom: 32,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: "bold",
+    color: "#fff",
+    marginTop: 16,
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: "#9ca3af",
+  },
+  roleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#0f0f1a",
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 16,
+    borderWidth: 2,
+    borderColor: "#374151",
+  },
+  roleIconContainer: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    backgroundColor: "rgba(168, 85, 247, 0.1)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 16,
+  },
+  roleInfo: {
+    flex: 1,
+  },
+  roleTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#fff",
+    marginBottom: 4,
+  },
+  roleDescription: {
+    fontSize: 14,
+    color: "#9ca3af",
   },
 });

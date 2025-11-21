@@ -190,6 +190,7 @@ export default function VendorsList() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    paddingTop: 40,
     backgroundColor: Colors.darkBackground,
   },
   loadingContainer: {

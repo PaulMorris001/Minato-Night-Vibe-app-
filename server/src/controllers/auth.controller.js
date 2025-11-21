@@ -3,16 +3,16 @@ import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
 
 export async function register(req, res) {
-  const { username, email, password, userType = "client" } = req.body;
+  const { username, email, password } = req.body;
 
   try {
-    // Validate userType
-    if (!["client", "vendor"].includes(userType)) {
-      return res.status(400).json({ message: "Invalid user type" });
-    }
-
     const hashed = await bcrypt.hash(password, 10);
-    const user = new User({ username, email, password: hashed, userType });
+    const user = new User({
+      username,
+      email,
+      password: hashed,
+      isVendor: false // All users start as clients
+    });
     await user.save();
 
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
@@ -26,7 +26,7 @@ export async function register(req, res) {
         id: user._id,
         username: user.username,
         email: user.email,
-        userType: user.userType
+        isVendor: user.isVendor
       }
     });
   } catch (error) {
@@ -53,14 +53,14 @@ export async function login(req, res) {
       id: user._id,
       username: user.username,
       email: user.email,
-      userType: user.userType
+      isVendor: user.isVendor
     }
   });
 }
 
-// Update vendor profile with business details
-export async function updateVendorProfile(req, res) {
-  const { businessName, businessDescription, vendorType, location, contactInfo } = req.body;
+// Become a vendor (upgrade from client to vendor)
+export async function becomeVendor(req, res) {
+  const { businessName, businessDescription, businessPicture, vendorType, location, contactInfo } = req.body;
 
   try {
     const user = await User.findById(req.user.id);
@@ -69,13 +69,61 @@ export async function updateVendorProfile(req, res) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    if (user.userType !== "vendor") {
+    if (user.isVendor) {
+      return res.status(400).json({ message: "User is already a vendor" });
+    }
+
+    // Upgrade user to vendor
+    user.isVendor = true;
+    user.businessName = businessName;
+    user.businessDescription = businessDescription;
+    user.businessPicture = businessPicture || "";
+    user.vendorType = vendorType;
+    user.location = location;
+    user.contactInfo = contactInfo;
+
+    await user.save();
+
+    res.json({
+      message: "Successfully registered as a vendor",
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        isVendor: user.isVendor,
+        businessName: user.businessName,
+        businessDescription: user.businessDescription,
+        businessPicture: user.businessPicture,
+        vendorType: user.vendorType,
+        location: user.location,
+        contactInfo: user.contactInfo,
+        verified: user.verified
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ message: "Error becoming vendor", details: error.message });
+  }
+}
+
+// Update vendor profile with business details
+export async function updateVendorProfile(req, res) {
+  const { businessName, businessDescription, businessPicture, vendorType, location, contactInfo } = req.body;
+
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    if (!user.isVendor) {
       return res.status(403).json({ message: "Only vendors can update business profile" });
     }
 
     // Update vendor-specific fields
     if (businessName) user.businessName = businessName;
     if (businessDescription) user.businessDescription = businessDescription;
+    if (businessPicture !== undefined) user.businessPicture = businessPicture;
     if (vendorType) user.vendorType = vendorType;
     if (location) user.location = location;
     if (contactInfo) user.contactInfo = contactInfo;
@@ -88,9 +136,11 @@ export async function updateVendorProfile(req, res) {
         id: user._id,
         username: user.username,
         email: user.email,
-        userType: user.userType,
+        profilePicture: user.profilePicture,
+        isVendor: user.isVendor,
         businessName: user.businessName,
         businessDescription: user.businessDescription,
+        businessPicture: user.businessPicture,
         vendorType: user.vendorType,
         location: user.location,
         contactInfo: user.contactInfo,
