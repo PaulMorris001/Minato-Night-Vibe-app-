@@ -7,102 +7,26 @@ import {
   StyleSheet,
   FlatList,
   Animated,
-  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import * as SecureStore from "expo-secure-store";
 import { fetchCities } from "@/libs/api";
 import { City } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
-
-interface AnimatedCityItemProps {
-  item: City;
-  index: number;
-  onPress: () => void;
-}
-
-const AnimatedCityItem: React.FC<AnimatedCityItemProps> = ({
-  item,
-  index,
-  onPress,
-}) => {
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(30)).current;
-  const scaleAnim = useRef(new Animated.Value(1)).current;
-
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 400,
-        delay: index * 80,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        delay: index * 80,
-        tension: 50,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
-
-  const handlePressIn = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 0.97,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  const handlePressOut = () => {
-    Animated.spring(scaleAnim, {
-      toValue: 1,
-      friction: 3,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
-  };
-
-  return (
-    <Animated.View
-      style={[
-        styles.animatedContainer,
-        {
-          opacity: fadeAnim,
-          transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
-        },
-      ]}
-    >
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        style={styles.cityCard}
-      >
-        <View style={styles.cityIconContainer}>
-          <Ionicons name="location" size={24} color="#a855f7" />
-        </View>
-        <View style={styles.cityInfo}>
-          <Text style={styles.cityName}>{item.name}</Text>
-          <Text style={styles.cityState}>{item.state}</Text>
-        </View>
-        <View style={styles.arrowContainer}>
-          <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-        </View>
-      </TouchableOpacity>
-    </Animated.View>
-  );
-};
+import BecomeVendorModal from "@/components/BecomeVendorModal";
+import { AnimatedListCard, LoadingScreen } from "@/components/common";
 
 export default function VendorsPage() {
   const router = useRouter();
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showVendorModal, setShowVendorModal] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const headerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    checkAuthStatus();
     const loadCities = async () => {
       try {
         const data = await fetchCities();
@@ -122,12 +46,21 @@ export default function VendorsPage() {
     }).start();
   }, []);
 
+  const checkAuthStatus = async () => {
+    const token = await SecureStore.getItemAsync("token");
+    setIsLoggedIn(!!token);
+  };
+
+  const handleBecomeVendor = () => {
+    if (isLoggedIn) {
+      setShowVendorModal(true);
+    } else {
+      router.push("/login");
+    }
+  };
+
   if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#a855f7" />
-      </View>
-    );
+    return <LoadingScreen />;
   }
 
   return (
@@ -148,16 +81,29 @@ export default function VendorsPage() {
           },
         ]}
       >
-        <Text style={styles.title}>Find Vendors</Text>
-        <Text style={styles.subtitle}>Select your city to get started</Text>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.title}>Find Vendors</Text>
+            <Text style={styles.subtitle}>Select your city to get started</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.becomeVendorButton}
+            onPress={handleBecomeVendor}
+          >
+            <Ionicons name="briefcase" size={20} color="#fff" />
+            <Text style={styles.becomeVendorText}>Become a Vendor</Text>
+          </TouchableOpacity>
+        </View>
       </Animated.View>
 
       <FlatList
         data={cities}
         keyExtractor={(item) => item._id}
         renderItem={({ item, index }) => (
-          <AnimatedCityItem
-            item={item}
+          <AnimatedListCard
+            icon="location"
+            title={item.name}
+            subtitle={item.state}
             index={index}
             onPress={() =>
               router.push({
@@ -176,6 +122,11 @@ export default function VendorsPage() {
           </View>
         }
       />
+
+      <BecomeVendorModal
+        visible={showVendorModal}
+        onClose={() => setShowVendorModal(false)}
+      />
     </View>
   );
 }
@@ -187,14 +138,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 20,
   },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "#0f0f1a",
-  },
   headerContainer: {
     marginBottom: 30,
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+  },
+  becomeVendorButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#a855f7",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    gap: 6,
+  },
+  becomeVendorText: {
+    color: "#fff",
+    fontSize: 13,
+    fontFamily: Fonts.semiBold,
   },
   title: {
     fontSize: 32,
@@ -208,50 +172,7 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
   },
   listContent: {
-    paddingBottom: 30,
-  },
-  animatedContainer: {
-    marginBottom: 12,
-  },
-  cityCard: {
-    backgroundColor: "#1f1f2e",
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#374151",
-  },
-  cityIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: "rgba(168, 85, 247, 0.1)",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 14,
-  },
-  cityInfo: {
-    flex: 1,
-  },
-  cityName: {
-    fontSize: 18,
-    fontFamily: Fonts.semiBold,
-    color: "#fff",
-    marginBottom: 4,
-  },
-  cityState: {
-    fontSize: 14,
-    fontFamily: Fonts.regular,
-    color: "#9ca3af",
-  },
-  arrowContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#374151",
-    justifyContent: "center",
-    alignItems: "center",
+    paddingBottom: 90,
   },
   emptyContainer: {
     alignItems: "center",

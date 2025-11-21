@@ -1,4 +1,5 @@
 import { City, Vendor, VendorType } from "../models/vendor.model.js";
+import User from "../models/user.model.js";
 
 export async function getAllCities(req, res) {
   try {
@@ -25,8 +26,23 @@ export async function getVendorsByCityAndType(req, res) {
     const vendors = await Vendor.find({
       city: cityId,
       vendorType: vendorTypeId,
+    }).populate('user', 'businessPicture');
+
+    // Enhance vendors with business picture from user if available
+    const enhancedVendors = vendors.map(vendor => {
+      const vendorObj = vendor.toObject();
+      if (vendor.user && vendor.user.businessPicture) {
+        // Add business picture to images array if it doesn't exist
+        if (!vendorObj.images || vendorObj.images.length === 0) {
+          vendorObj.images = [vendor.user.businessPicture];
+        } else if (!vendorObj.images.includes(vendor.user.businessPicture)) {
+          vendorObj.images.unshift(vendor.user.businessPicture);
+        }
+      }
+      return vendorObj;
     });
-    res.status(200).json(vendors);
+
+    res.status(200).json(enhancedVendors);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
