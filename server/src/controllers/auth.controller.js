@@ -107,7 +107,7 @@ export async function becomeVendor(req, res) {
 
 // Update vendor profile with business details
 export async function updateVendorProfile(req, res) {
-  const { businessName, businessDescription, businessPicture, vendorType, location, contactInfo } = req.body;
+  const { businessName, businessDescription, businessPicture, profilePicture, vendorType, location, contactInfo } = req.body;
 
   try {
     const user = await User.findById(req.user.id);
@@ -124,6 +124,7 @@ export async function updateVendorProfile(req, res) {
     if (businessName) user.businessName = businessName;
     if (businessDescription) user.businessDescription = businessDescription;
     if (businessPicture !== undefined) user.businessPicture = businessPicture;
+    if (profilePicture !== undefined) user.profilePicture = profilePicture;
     if (vendorType) user.vendorType = vendorType;
     if (location) user.location = location;
     if (contactInfo) user.contactInfo = contactInfo;
@@ -164,5 +165,34 @@ export async function getProfile(req, res) {
     res.json({ user });
   } catch (error) {
     res.status(400).json({ message: "Error fetching profile", details: error.message });
+  }
+}
+
+// Update profile picture (for both clients and vendors)
+export async function updateProfilePicture(req, res) {
+  const { profilePicture } = req.body;
+
+  try {
+    const user = await User.findById(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.profilePicture = profilePicture;
+    await user.save();
+
+    res.json({
+      message: "Profile picture updated successfully",
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        profilePicture: user.profilePicture,
+        isVendor: user.isVendor
+      }
+    });
+  } catch (error) {
+    res.status(400).json({ message: "Error updating profile picture", details: error.message });
   }
 }

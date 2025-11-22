@@ -12,7 +12,7 @@ import {
 import axios from "axios";
 import { BASE_URL } from "@/constants/constants";
 import * as SecureStore from "expo-secure-store";
-import { FormInput, PrimaryButton } from "@/components/common";
+import { FormInput, PrimaryButton } from "@/components/shared";
 
 export default function Signup() {
   const router = useRouter();

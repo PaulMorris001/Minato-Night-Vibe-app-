@@ -23,26 +23,39 @@ export async function getVendorTypesByCity(req, res) {
 export async function getVendorsByCityAndType(req, res) {
   try {
     const { cityId, vendorTypeId } = req.params;
-    const vendors = await Vendor.find({
-      city: cityId,
-      vendorType: vendorTypeId,
-    }).populate('user', 'businessPicture');
 
-    // Enhance vendors with business picture from user if available
-    const enhancedVendors = vendors.map(vendor => {
-      const vendorObj = vendor.toObject();
-      if (vendor.user && vendor.user.businessPicture) {
-        // Add business picture to images array if it doesn't exist
-        if (!vendorObj.images || vendorObj.images.length === 0) {
-          vendorObj.images = [vendor.user.businessPicture];
-        } else if (!vendorObj.images.includes(vendor.user.businessPicture)) {
-          vendorObj.images.unshift(vendor.user.businessPicture);
-        }
-      }
-      return vendorObj;
+    // Find the city and vendor type to get their names
+    const city = await City.findById(cityId);
+    const vendorType = await VendorType.findById(vendorTypeId);
+
+    if (!city || !vendorType) {
+      return res.status(404).json({ message: "City or vendor type not found" });
+    }
+
+    // Find all users who are vendors, match the city and vendor type
+    const vendorUsers = await User.find({
+      isVendor: true,
+      'location.city': city.name,
+      vendorType: vendorType.name
     });
 
-    res.status(200).json(enhancedVendors);
+    // Transform vendor users to match the expected format
+    const vendors = vendorUsers.map(user => ({
+      _id: user._id,
+      name: user.businessName,
+      description: user.businessDescription,
+      images: user.businessPicture ? [user.businessPicture] : [],
+      priceRange: 2, // Default price range
+      rating: 4.5, // Default rating
+      contact: {
+        phone: user.contactInfo?.phone || '',
+        instagram: user.contactInfo?.instagram || '',
+        website: user.contactInfo?.website || ''
+      },
+      verified: user.verified
+    }));
+
+    res.status(200).json(vendors);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

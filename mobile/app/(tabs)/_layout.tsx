@@ -7,44 +7,70 @@ import {
   Modal,
   Platform,
   StatusBar,
+  Image,
 } from "react-native";
-import { Tabs, useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import * as SecureStore from "expo-secure-store";
+import axios from "axios";
 import { capitalize } from "@/libs/helpers";
 import { Fonts } from "@/constants/fonts";
+import { BASE_URL } from "@/constants/constants";
+import { useAccount } from "@/contexts/AccountContext";
 
 export default function TabsLayout() {
+  const { activeAccount, setActiveAccount } = useAccount();
   const [user, setUser] = useState<{
     id: string;
     username: string;
     email: string;
-    userType: string;
+    profilePicture?: string;
+    isVendor?: boolean;
   }>({
     id: "",
     username: "",
     email: "",
-    userType: "client",
+    profilePicture: "",
+    isVendor: false,
   });
   const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    const getDetails = async () => {
-      try {
-        const storedDetails = await SecureStore.getItemAsync("user");
-        if (storedDetails) {
-          const parsedDetails = JSON.parse(storedDetails);
-          setUser(parsedDetails);
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error);
+  const fetchUserProfile = async () => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      if (token) {
+        const res = await axios.get(`${BASE_URL}/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const userData = res.data.user;
+        setUser({
+          id: userData._id,
+          username: userData.username,
+          email: userData.email,
+          profilePicture: userData.profilePicture || "",
+          isVendor: userData.isVendor || false,
+        });
       }
-    };
-    getDetails();
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserProfile();
   }, []);
+
+  // Check if we should redirect to vendor dashboard only on mount and account changes
+  useEffect(() => {
+    if (activeAccount === "vendor" && user.isVendor) {
+      router.replace("/(vendor)/dashboard");
+    } else if (activeAccount === "client") {
+      // Ensure we're on the client dashboard when switching to client
+      router.replace("/(tabs)/dashboard");
+    }
+  }, [activeAccount, user.isVendor, router]);
 
   const handleProfilePress = () => {
     setIsProfileModalVisible(true);
@@ -54,6 +80,7 @@ export default function TabsLayout() {
     try {
       await SecureStore.deleteItemAsync("user");
       await SecureStore.deleteItemAsync("token");
+      await SecureStore.deleteItemAsync("activeAccount");
       router.replace("/login");
       setIsProfileModalVisible(false);
     } catch (error) {
@@ -71,12 +98,19 @@ export default function TabsLayout() {
           style={styles.profileButton}
           activeOpacity={0.7}
         >
-          <LinearGradient
-            colors={["#a855f7", "#7c3aed"]}
-            style={styles.profileGradient}
-          >
-            <Ionicons name="person" size={20} color="#fff" />
-          </LinearGradient>
+          {user.profilePicture ? (
+            <Image
+              source={{ uri: user.profilePicture }}
+              style={styles.profileImage}
+            />
+          ) : (
+            <LinearGradient
+              colors={["#a855f7", "#7c3aed"]}
+              style={styles.profileGradient}
+            >
+              <Ionicons name="person" size={20} color="#fff" />
+            </LinearGradient>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -96,12 +130,19 @@ export default function TabsLayout() {
             </TouchableOpacity>
 
             <View style={styles.profileHeader}>
-              <LinearGradient
-                colors={["#a855f7", "#7c3aed"]}
-                style={styles.avatarGradient}
-              >
-                <Ionicons name="person" size={40} color="#fff" />
-              </LinearGradient>
+              {user.profilePicture ? (
+                <Image
+                  source={{ uri: user.profilePicture }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <LinearGradient
+                  colors={["#a855f7", "#7c3aed"]}
+                  style={styles.avatarGradient}
+                >
+                  <Ionicons name="person" size={40} color="#fff" />
+                </LinearGradient>
+              )}
               <Text style={styles.usernameText}>
                 {capitalize(user.username)}
               </Text>
@@ -112,8 +153,15 @@ export default function TabsLayout() {
                 end={{ x: 1, y: 0 }}
                 style={styles.accountTypeBadge}
               >
-                <Ionicons name="person" size={14} color="#fff" />
-                <Text style={styles.accountTypeText}>Client Account</Text>
+                <Ionicons
+                  name="person"
+                  size={14}
+                  color="#fff"
+                />
+                <Text style={styles.accountTypeText}>
+                  Client Account
+                  {user.isVendor && <Text style={styles.accountTypeSubtext}> • Has Vendor</Text>}
+                </Text>
               </LinearGradient>
             </View>
 
@@ -135,7 +183,13 @@ export default function TabsLayout() {
               <Ionicons name="chevron-forward" size={20} color="#4b5563" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setIsProfileModalVisible(false);
+                router.push("/settings");
+              }}
+            >
               <View style={styles.menuIconContainer}>
                 <Ionicons name="settings-outline" size={20} color="#a855f7" />
               </View>
@@ -169,109 +223,12 @@ export default function TabsLayout() {
         </View>
       </Modal>
 
-      <Tabs
+      <Stack
         screenOptions={{
-          tabBarActiveTintColor: "#a855f7",
-          tabBarInactiveTintColor: "#6b7280",
           headerShown: false,
-          tabBarStyle: Platform.OS === "ios"
-            ? {
-                position: "absolute",
-                backgroundColor: "rgba(15, 15, 26, 0.7)",
-                borderTopWidth: 0,
-                paddingTop: 8,
-                paddingBottom: 24,
-                height: 88,
-                elevation: 0,
-                shadowOpacity: 0,
-              }
-            : {
-                backgroundColor: "#0f0f1a",
-                borderTopColor: "#1f1f2e",
-                borderTopWidth: 1,
-                paddingTop: 8,
-                paddingBottom: 8,
-                height: 64,
-              },
-          tabBarBackground: () =>
-            Platform.OS === "ios" ? (
-              <BlurView
-                intensity={80}
-                tint="dark"
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  overflow: "hidden",
-                  borderTopLeftRadius: 20,
-                  borderTopRightRadius: 20,
-                  backgroundColor: "rgba(15, 15, 26, 0.6)",
-                  borderTopWidth: 0.5,
-                  borderTopColor: "rgba(168, 85, 247, 0.2)",
-                }}
-              />
-            ) : null,
-          tabBarLabelStyle: {
-            fontSize: 11,
-            fontFamily: Fonts.semiBold,
-          },
+          contentStyle: { backgroundColor: "#0f0f1a" },
         }}
-      >
-        <Tabs.Screen
-          name="home"
-          options={{
-            title: "Home",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "home" : "home-outline"}
-                size={24}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="vendors"
-          options={{
-            title: "Vendors",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "compass" : "compass-outline"}
-                size={24}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="bests"
-          options={{
-            title: "Best Of",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "trophy" : "trophy-outline"}
-                size={24}
-                color={color}
-              />
-            ),
-          }}
-        />
-        <Tabs.Screen
-          name="events"
-          options={{
-            title: "Events",
-            tabBarIcon: ({ color, focused }) => (
-              <Ionicons
-                name={focused ? "calendar" : "calendar-outline"}
-                size={24}
-                color={color}
-              />
-            ),
-          }}
-        />
-      </Tabs>
+      />
     </View>
   );
 }
@@ -315,6 +272,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  profileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.7)",
@@ -349,6 +311,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 16,
   },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 16,
+  },
   usernameText: {
     fontSize: 24,
     fontFamily: Fonts.bold,
@@ -373,6 +341,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Fonts.semiBold,
     color: "#fff",
+  },
+  accountTypeSubtext: {
+    fontSize: 11,
+    fontFamily: Fonts.regular,
+    color: "rgba(255, 255, 255, 0.7)",
   },
   divider: {
     height: 1,

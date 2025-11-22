@@ -12,7 +12,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { VendorType } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
-import { AnimatedListCard, LoadingScreen } from "@/components/common";
+import { AnimatedListCard, LoadingScreen } from "@/components/shared";
 
 export default function VendorTypesPage() {
   const { cityId } = useLocalSearchParams();
@@ -69,7 +69,7 @@ export default function VendorTypesPage() {
         >
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>
-        <Text style={styles.title}>Choose Service</Text>
+        <Text style={styles.title}>Choose Vendor Type</Text>
         <Text style={styles.subtitle}>What are you looking for?</Text>
       </Animated.View>
 

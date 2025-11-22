@@ -167,12 +167,14 @@ export default function Home() {
     description,
     gradient,
     delay,
+    page,
   }: {
     icon: React.ComponentProps<typeof Ionicons>["name"];
     title: string;
     description: string;
     gradient: readonly [string, string];
-    delay: number;
+      delay: number;
+    page?: string;
   }) => {
     const cardFade = useRef(new Animated.Value(0)).current;
     const cardSlide = useRef(new Animated.Value(30)).current;
@@ -202,18 +204,27 @@ export default function Home() {
           transform: [{ translateY: cardSlide }],
         }}
       >
-        <TouchableOpacity style={styles.featureCard} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.featureCard}
+          activeOpacity={0.8}
+          onPress={() => {
+        if (page) {
+          const target = page.startsWith("/") ? page : `/${page}`;
+          router.push(target as any);
+        }
+          }}
+        >
           <LinearGradient
-            colors={gradient}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.featureGradient}
+        colors={gradient}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.featureGradient}
           >
-            <View style={styles.featureIconContainer}>
-              <Ionicons name={icon} size={32} color="white" />
-            </View>
-            <Text style={styles.featureTitle}>{title}</Text>
-            <Text style={styles.featureDescription}>{description}</Text>
+        <View style={styles.featureIconContainer}>
+          <Ionicons name={icon} size={32} color="white" />
+        </View>
+        <Text style={styles.featureTitle}>{title}</Text>
+        <Text style={styles.featureDescription}>{description}</Text>
           </LinearGradient>
         </TouchableOpacity>
       </Animated.View>
@@ -286,6 +297,7 @@ export default function Home() {
               description="Discover the best nightlife spots and service providers"
               gradient={["#667eea", "#764ba2"] as const}
               delay={100}
+              page="vendors"
             />
             <AnimatedFeatureCard
               icon="calendar"
@@ -293,6 +305,7 @@ export default function Home() {
               description="Organize every detail of your perfect night out"
               gradient={["#f093fb", "#f5576c"] as const}
               delay={200}
+              page="events"
             />
             <AnimatedFeatureCard
               icon="star"
@@ -300,6 +313,7 @@ export default function Home() {
               description="Explore top-rated picks and local favorites"
               gradient={["#4facfe", "#00f2fe"] as const}
               delay={300}
+              page="bests"
             />
           </View>
         </View>
@@ -452,10 +466,7 @@ export default function Home() {
 
       {/* Floating Action Button */}
       <Animated.View
-        style={[
-          styles.fabContainer,
-          { transform: [{ scale: pulseAnim }] },
-        ]}
+        style={[styles.fabContainer, { transform: [{ scale: pulseAnim }] }]}
       >
         <TouchableOpacity
           style={styles.fab}
@@ -589,8 +600,15 @@ export default function Home() {
               <TouchableOpacity
                 style={styles.createButton}
                 onPress={() => {
-                  if (!eventData.name || !eventData.date || !eventData.location) {
-                    Alert.alert("Error", "Please fill in required fields (Name, Date, Location)");
+                  if (
+                    !eventData.name ||
+                    !eventData.date ||
+                    !eventData.location
+                  ) {
+                    Alert.alert(
+                      "Error",
+                      "Please fill in required fields (Name, Date, Location)"
+                    );
                     return;
                   }
                   Alert.alert(
@@ -947,7 +965,7 @@ const styles = StyleSheet.create({
   },
   fabContainer: {
     position: "absolute",
-    bottom: 100,
+    bottom: 16,
     right: 24,
   },
   fab: {

@@ -165,23 +165,7 @@ export default function VendorsList() {
             <Text style={styles.emptyText}>No vendors found in this category</Text>
           </View>
         }
-        ListFooterComponent={
-          <View style={styles.footer}>
-            <View style={styles.ctaContainer}>
-              <Text style={styles.ctaTitle}>Are you a vendor?</Text>
-              <Text style={styles.ctaText}>
-                Join NightVibe and showcase your business to thousands of potential customers
-              </Text>
-              <TouchableOpacity
-                style={styles.ctaButton}
-                onPress={() => router.push("/signup")}
-              >
-                <Ionicons name="business-outline" size={20} color="#fff" />
-                <Text style={styles.ctaButtonText}>Create Vendor Account</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        }
+        
       />
     </View>
   );

@@ -11,6 +11,8 @@ import {
   Outfit_900Black,
 } from "@expo-google-fonts/outfit";
 import * as SplashScreen from "expo-splash-screen";
+import { PortalProvider } from "@gorhom/portal";
+import { AccountProvider } from "@/contexts/AccountContext";
 
 // Prevent auto-hiding splash screen
 SplashScreen.preventAutoHideAsync();
@@ -36,5 +38,11 @@ export default function RootLayout() {
     return null;
   }
 
-  return <Stack screenOptions={{ headerShown: false }} />;
+  return (
+    <AccountProvider>
+      <PortalProvider>
+        <Stack screenOptions={{ headerShown: false }} />
+      </PortalProvider>
+    </AccountProvider>
+  );
 }

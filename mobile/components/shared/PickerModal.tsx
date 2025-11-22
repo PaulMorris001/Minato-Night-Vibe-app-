@@ -44,6 +44,11 @@ export default function PickerModal<T extends PickerItem>({
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
+        <TouchableOpacity
+          style={styles.overlayTouchable}
+          activeOpacity={1}
+          onPress={onClose}
+        />
         <View style={styles.content}>
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
@@ -98,8 +103,11 @@ export const PickerItemText = ({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
     justifyContent: "flex-end",
+  },
+  overlayTouchable: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
   },
   content: {
     backgroundColor: "#1f1f2e",

@@ -15,10 +15,12 @@ import axios from "axios";
 import { BASE_URL } from "@/constants/constants";
 import * as SecureStore from "expo-secure-store";
 import { capitalize } from "@/libs/helpers";
-import { FormInput, PrimaryButton } from "@/components/common";
+import { FormInput, PrimaryButton } from "@/components/shared";
+import { useAccount } from "@/contexts/AccountContext";
 
 export default function Login() {
   const router = useRouter();
+  const { setActiveAccount } = useAccount();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -50,6 +52,7 @@ export default function Login() {
         setLoading(false);
       } else {
         // Regular client, go directly to home
+        await setActiveAccount("client");
         router.replace("/(tabs)/home");
       }
     } catch (error: any) {
@@ -60,8 +63,12 @@ export default function Login() {
     }
   };
 
-  const selectRole = (role: "client" | "vendor") => {
+  const selectRole = async (role: "client" | "vendor") => {
     setShowRolePicker(false);
+
+    // Set the active account in context
+    await setActiveAccount(role);
+
     if (role === "vendor") {
       router.replace("/(vendor)/dashboard");
     } else {
