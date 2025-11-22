@@ -18,6 +18,7 @@ import { Colors } from "@/constants/colors";
 import { fetchCities, fetchAllVendorTypes } from "@/libs/api";
 import { BASE_URL } from "@/constants/constants";
 import { City, VendorType } from "@/libs/interfaces";
+import { ImagePickerButton } from "@/components/shared";
 
 interface AccountTabProps {
   onRefresh: () => void;
@@ -31,6 +32,8 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
   const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
   const [showCityPicker, setShowCityPicker] = useState(false);
   const [showTypePicker, setShowTypePicker] = useState(false);
+  const [businessPicture, setBusinessPicture] = useState("");
+  const [profilePicture, setProfilePicture] = useState("");
   const [profile, setProfile] = useState({
     username: "",
     email: "",
@@ -84,6 +87,8 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
         website: user.contactInfo?.website || "",
         verified: user.verified || false,
       });
+      setBusinessPicture(user.businessPicture || "");
+      setProfilePicture(user.profilePicture || "");
     } catch (error: any) {
       console.error("Error fetching profile:", error);
       Alert.alert("Error", "Failed to load profile");
@@ -101,6 +106,8 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
         {
           businessName: profile.businessName,
           businessDescription: profile.businessDescription,
+          businessPicture: businessPicture,
+          profilePicture: profilePicture,
           vendorType: profile.vendorTypeName,
           location: {
             city: profile.cityName,
@@ -208,6 +215,36 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
           <Text style={styles.label}>Email</Text>
           <View style={styles.disabledField}>
             <Text style={styles.disabledText}>{profile.email}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Profile and Business Images */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Profile & Business Images</Text>
+
+        <View style={styles.imageRow}>
+          <View style={styles.imageColumn}>
+            <ImagePickerButton
+              imageUri={profilePicture}
+              onImageSelected={setProfilePicture}
+              label="Profile Picture"
+              size={120}
+              shape="circle"
+              showLabel={true}
+              disabled={!isEditing}
+            />
+          </View>
+          <View style={styles.imageColumn}>
+            <ImagePickerButton
+              imageUri={businessPicture}
+              onImageSelected={setBusinessPicture}
+              label="Business Cover"
+              size={120}
+              shape="square"
+              showLabel={true}
+              disabled={!isEditing}
+            />
           </View>
         </View>
       </View>
@@ -671,6 +708,15 @@ const styles = StyleSheet.create({
   typeIcon: {
     fontSize: 20,
     marginRight: 12,
+  },
+  imageRow: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    gap: 16,
+  },
+  imageColumn: {
+    flex: 1,
+    alignItems: "center",
   },
   bottomPadding: {
     height: 40,

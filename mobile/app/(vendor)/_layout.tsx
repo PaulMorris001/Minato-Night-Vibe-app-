@@ -7,44 +7,84 @@ import {
   Modal,
   Platform,
   StatusBar,
+  Image,
 } from "react-native";
-import { Stack, useRouter } from "expo-router";
+import { Stack, useRouter, useFocusEffect, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
+import axios from "axios";
 import { Colors } from "@/constants/colors";
 import { capitalize } from "@/libs/helpers";
 import { Fonts } from "@/constants/fonts";
+import { BASE_URL } from "@/constants/constants";
+import { useAccount } from "@/contexts/AccountContext";
 
 export default function VendorLayout() {
+  const { activeAccount, setActiveAccount } = useAccount();
   const [user, setUser] = useState<{
     id: string;
     username: string;
     email: string;
-    userType: string;
+    profilePicture?: string;
+    isVendor?: boolean;
   }>({
     id: "",
     username: "",
     email: "",
-    userType: "vendor",
+    profilePicture: "",
+    isVendor: false,
   });
   const [isProfileModalVisible, setIsProfileModalVisible] = useState(false);
   const router = useRouter();
+  const pathname = usePathname();
+
+  const fetchUserProfile = async () => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      if (token) {
+        const res = await axios.get(`${BASE_URL}/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const userData = res.data.user;
+        setUser({
+          id: userData._id,
+          username: userData.username,
+          email: userData.email,
+          profilePicture: userData.profilePicture || "",
+          isVendor: userData.isVendor || false,
+        });
+
+        // If user is not a vendor, redirect to client tabs
+        if (!userData.isVendor) {
+          setActiveAccount("client");
+          router.replace("/(tabs)/dashboard");
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+    }
+  };
 
   useEffect(() => {
-    const getDetails = async () => {
-      try {
-        const storedDetails = await SecureStore.getItemAsync("user");
-        if (storedDetails) {
-          const parsedDetails = JSON.parse(storedDetails);
-          setUser(parsedDetails);
-        }
-      } catch (error) {
-        console.error("Error fetching user:", error);
-      }
-    };
-    getDetails();
+    fetchUserProfile();
+    // Set active account to vendor when entering vendor layout
+    setActiveAccount("vendor");
   }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchUserProfile();
+    }, [])
+  );
+
+  // Separate effect for account switching to avoid conflicts with settings navigation
+  useEffect(() => {
+    // Only redirect if we're not on the settings page
+    if (activeAccount === "client" && !pathname.includes("settings")) {
+      router.replace("/(tabs)/dashboard");
+    }
+  }, [activeAccount, pathname]);
 
   const handleProfilePress = () => {
     setIsProfileModalVisible(true);
@@ -54,6 +94,7 @@ export default function VendorLayout() {
     try {
       await SecureStore.deleteItemAsync("user");
       await SecureStore.deleteItemAsync("token");
+      await SecureStore.deleteItemAsync("activeAccount");
       router.replace("/login");
       setIsProfileModalVisible(false);
     } catch (error) {
@@ -82,12 +123,19 @@ export default function VendorLayout() {
           style={styles.profileButton}
           activeOpacity={0.7}
         >
-          <LinearGradient
-            colors={["#a855f7", "#7c3aed"]}
-            style={styles.profileGradient}
-          >
-            <Ionicons name="person" size={20} color="#fff" />
-          </LinearGradient>
+          {user.profilePicture ? (
+            <Image
+              source={{ uri: user.profilePicture }}
+              style={styles.profileImage}
+            />
+          ) : (
+            <LinearGradient
+              colors={["#a855f7", "#7c3aed"]}
+              style={styles.profileGradient}
+            >
+              <Ionicons name="person" size={20} color="#fff" />
+            </LinearGradient>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -107,12 +155,19 @@ export default function VendorLayout() {
             </TouchableOpacity>
 
             <View style={styles.profileHeader}>
-              <LinearGradient
-                colors={["#a855f7", "#7c3aed"]}
-                style={styles.avatarGradient}
-              >
-                <Ionicons name="person" size={40} color="#fff" />
-              </LinearGradient>
+              {user.profilePicture ? (
+                <Image
+                  source={{ uri: user.profilePicture }}
+                  style={styles.avatarImage}
+                />
+              ) : (
+                <LinearGradient
+                  colors={["#a855f7", "#7c3aed"]}
+                  style={styles.avatarGradient}
+                >
+                  <Ionicons name="person" size={40} color="#fff" />
+                </LinearGradient>
+              )}
               <Text style={styles.usernameText}>
                 {capitalize(user.username)}
               </Text>
@@ -144,7 +199,13 @@ export default function VendorLayout() {
               <Ionicons name="chevron-forward" size={20} color="#4b5563" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => {
+                setIsProfileModalVisible(false);
+                router.push("/settings");
+              }}
+            >
               <View style={styles.menuIconContainer}>
                 <Ionicons name="settings-outline" size={20} color="#a855f7" />
               </View>
@@ -245,6 +306,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  profileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.7)",
@@ -277,6 +343,12 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: 16,
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
     marginBottom: 16,
   },
   usernameText: {

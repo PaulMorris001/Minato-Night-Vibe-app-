@@ -18,6 +18,7 @@ interface ImagePickerButtonProps {
   size?: number;
   shape?: "circle" | "square";
   showLabel?: boolean;
+  disabled?: boolean;
 }
 
 export default function ImagePickerButton({
@@ -27,8 +28,11 @@ export default function ImagePickerButton({
   size = 120,
   shape = "circle",
   showLabel = true,
+  disabled = false,
 }: ImagePickerButtonProps) {
   const pickImage = async () => {
+    if (disabled) return;
+
     // Request permission
     const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
@@ -58,9 +62,11 @@ export default function ImagePickerButton({
           styles.imageContainer,
           shape === "circle" ? styles.circle : styles.square,
           { width: size, height: size },
+          disabled && styles.disabled,
         ]}
         onPress={pickImage}
-        activeOpacity={0.8}
+        activeOpacity={disabled ? 1 : 0.8}
+        disabled={disabled}
       >
         {imageUri ? (
           <>
@@ -136,5 +142,8 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: "#9ca3af",
     marginTop: 8,
+  },
+  disabled: {
+    opacity: 0.5,
   },
 });

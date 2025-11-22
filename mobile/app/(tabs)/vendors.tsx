@@ -8,14 +8,16 @@ import {
   FlatList,
   Animated,
 } from "react-native";
+import axios from "axios";
+import { BASE_URL } from "@/constants/constants";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import { fetchCities } from "@/libs/api";
 import { City } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
-import BecomeVendorModal from "@/components/BecomeVendorModal";
-import { AnimatedListCard, LoadingScreen } from "@/components/common";
+import BecomeVendorModal from "@/components/client/BecomeVendorModal";
+import { AnimatedListCard, LoadingScreen } from "@/components/shared";
 
 export default function VendorsPage() {
   const router = useRouter();
@@ -24,6 +26,44 @@ export default function VendorsPage() {
   const [showVendorModal, setShowVendorModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const headerAnim = useRef(new Animated.Value(0)).current;
+  const [user, setUser] = useState<{
+      id: string;
+      username: string;
+      email: string;
+      profilePicture?: string;
+      isVendor?: boolean;
+    }>({
+      id: "",
+      username: "",
+      email: "",
+      profilePicture: "",
+      isVendor: false,
+    });
+  
+  const fetchUserProfile = async () => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      if (token) {
+        const res = await axios.get(`${BASE_URL}/profile`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const userData = res.data.user;
+        setUser({
+          id: userData._id,
+          username: userData.username,
+          email: userData.email,
+          profilePicture: userData.profilePicture || "",
+          isVendor: userData.isVendor || false,
+        });
+      }
+    } catch (error) {
+      console.error("Error fetching user profile:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserProfile();
+  }, []);
 
   useEffect(() => {
     checkAuthStatus();
@@ -62,7 +102,6 @@ export default function VendorsPage() {
   if (loading) {
     return <LoadingScreen />;
   }
-
   return (
     <View style={styles.container}>
       <Animated.View
@@ -86,13 +125,13 @@ export default function VendorsPage() {
             <Text style={styles.title}>Find Vendors</Text>
             <Text style={styles.subtitle}>Select your city to get started</Text>
           </View>
-          <TouchableOpacity
+          {!user.isVendor && <TouchableOpacity
             style={styles.becomeVendorButton}
             onPress={handleBecomeVendor}
           >
             <Ionicons name="briefcase" size={20} color="#fff" />
             <Text style={styles.becomeVendorText}>Become a Vendor</Text>
-          </TouchableOpacity>
+          </TouchableOpacity>}
         </View>
       </Animated.View>
 
