@@ -82,7 +82,19 @@ export default function VendorsList() {
   };
 
   const renderVendorCard = ({ item }: { item: Vendor }) => (
-    <View style={styles.card}>
+    <TouchableOpacity
+      style={styles.card}
+      activeOpacity={0.8}
+      onPress={() =>
+        router.push({
+          pathname: "/vendor-details/[vendorId]",
+          params: {
+            vendorId: item._id,
+            vendorName: item.name,
+          },
+        })
+      }
+    >
       {item.images && item.images.length > 0 && (
         <Image source={{ uri: item.images[0] }} style={styles.cardImage} />
       )}
@@ -110,7 +122,10 @@ export default function VendorsList() {
           {item.contact?.phone && (
             <TouchableOpacity
               style={styles.contactButton}
-              onPress={() => handleContact("phone", item.contact.phone)}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleContact("phone", item.contact.phone);
+              }}
             >
               <Ionicons name="call-outline" size={18} color={Colors.primary} />
             </TouchableOpacity>
@@ -118,7 +133,10 @@ export default function VendorsList() {
           {item.contact?.instagram && (
             <TouchableOpacity
               style={styles.contactButton}
-              onPress={() => handleContact("instagram", item.contact.instagram)}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleContact("instagram", item.contact.instagram);
+              }}
             >
               <Ionicons name="logo-instagram" size={18} color={Colors.primary} />
             </TouchableOpacity>
@@ -126,14 +144,17 @@ export default function VendorsList() {
           {item.contact?.website && (
             <TouchableOpacity
               style={styles.contactButton}
-              onPress={() => handleContact("website", item.contact.website)}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleContact("website", item.contact.website);
+              }}
             >
               <Ionicons name="globe-outline" size={18} color={Colors.primary} />
             </TouchableOpacity>
           )}
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 
   if (loading) {

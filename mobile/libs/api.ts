@@ -21,3 +21,8 @@ export async function fetchAllVendorTypes() {
   const res = await fetch(`${BASE_URL}/vendor-types`);
   return res.json();
 }
+
+export async function fetchVendorServices(vendorId: string) {
+  const res = await fetch(`${BASE_URL}/vendors/${vendorId}/services`);
+  return res.json();
+}
