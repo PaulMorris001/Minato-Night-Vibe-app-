@@ -15,8 +15,9 @@ import HomeScreen from "./home";
 import VendorsScreen from "./vendors";
 import BestsScreen from "./bests";
 import EventsScreen from "./events";
+import ChatsScreen from "./chats";
 
-type TabType = "home" | "vendors" | "bests" | "events";
+type TabType = "home" | "vendors" | "bests" | "events" | "chats";
 
 export default function ClientDashboard() {
   const [activeTab, setActiveTab] = useState<TabType>("home");
@@ -56,6 +57,7 @@ export default function ClientDashboard() {
         {activeTab === "vendors" && <VendorsScreen />}
         {activeTab === "bests" && <BestsScreen />}
         {activeTab === "events" && <EventsScreen />}
+        {activeTab === "chats" && <ChatsScreen />}
       </View>
 
       {/* Bottom Tab Navigation */}
@@ -64,6 +66,7 @@ export default function ClientDashboard() {
         {renderTabButton("vendors", "compass-outline", "compass", "Vendors")}
         {renderTabButton("bests", "trophy-outline", "trophy", "Best Of")}
         {renderTabButton("events", "calendar-outline", "calendar", "Events")}
+        {renderTabButton("chats", "chatbubbles-outline", "chatbubbles", "Chats")}
       </View>
     </View>
   );

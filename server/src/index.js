@@ -6,6 +6,8 @@ import connectDB from './config/db.js';
 import authRoutes from './routes/auth.route.js'
 import vendorRoutes from "./routes/vendor.route.js";
 import serviceRoutes from "./routes/service.route.js";
+import eventRoutes from "./routes/event.route.js";
+import chatRoutes from "./routes/chat.route.js";
 
 dotenv.config();
 const app = express();
@@ -23,6 +25,8 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use("/api/", authRoutes);
 app.use("/api/", vendorRoutes);
 app.use("/api/", serviceRoutes);
+app.use("/api/", eventRoutes);
+app.use("/api/", chatRoutes);
 
 // Start server
 const PORT = process.env.PORT || 3000;

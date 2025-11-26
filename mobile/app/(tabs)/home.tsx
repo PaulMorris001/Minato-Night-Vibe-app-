@@ -12,22 +12,29 @@ import {
   TextInput,
   Alert,
   KeyboardAvoidingView,
+  Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Fonts } from "@/constants/fonts";
+import * as ImagePicker from "expo-image-picker";
+import * as SecureStore from "expo-secure-store";
+import { BASE_URL } from "@/constants/constants";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 export default function Home() {
   const router = useRouter();
   const [isModalVisible, setIsModalVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [eventData, setEventData] = useState({
-    name: "",
+    title: "",
     date: "",
-    time: "",
     location: "",
+    image: "",
     description: "",
-    guests: "",
   });
 
   // Animation values
@@ -74,6 +81,115 @@ export default function Home() {
       ])
     ).start();
   }, []);
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      setEventData({ ...eventData, image: base64Image });
+    }
+  };
+
+  const onDateChange = (event: any, date?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setSelectedDate(date);
+      // Format date as ISO string for the backend
+      setEventData({ ...eventData, date: date.toISOString() });
+    }
+  };
+
+  const formatDisplayDate = (dateString: string) => {
+    if (!dateString) return "Select date and time";
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const handleCreateEvent = async () => {
+    if (!eventData.title || !eventData.date || !eventData.location) {
+      Alert.alert("Error", "Please fill in required fields (Title, Date, Location)");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const token = await SecureStore.getItemAsync("token");
+
+      if (!token) {
+        Alert.alert("Error", "Please log in to create an event");
+        setIsModalVisible(false);
+        router.push("/login");
+        return;
+      }
+
+      const response = await fetch(`${BASE_URL}/events`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(eventData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert(
+          "Event Created!",
+          `Your event "${eventData.title}" has been created successfully.`,
+          [
+            {
+              text: "View Events",
+              onPress: () => {
+                setEventData({
+                  title: "",
+                  date: "",
+                  location: "",
+                  image: "",
+                  description: "",
+                });
+                setIsModalVisible(false);
+                router.push("/(tabs)/events");
+              },
+            },
+            {
+              text: "OK",
+              onPress: () => {
+                setEventData({
+                  title: "",
+                  date: "",
+                  location: "",
+                  image: "",
+                  description: "",
+                });
+                setIsModalVisible(false);
+              },
+            },
+          ]
+        );
+      } else {
+        Alert.alert("Error", data.message || "Failed to create event");
+      }
+    } catch (error) {
+      console.error("Create event error:", error);
+      Alert.alert("Error", "Failed to create event. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   // Mock top vendors data
   const topVendors: {
@@ -509,46 +625,43 @@ export default function Home() {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Event Name</Text>
+                <Text style={styles.inputLabel}>Event Title *</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="e.g., Birthday Party"
                   placeholderTextColor="#6b7280"
-                  value={eventData.name}
+                  value={eventData.title}
                   onChangeText={(text) =>
-                    setEventData({ ...eventData, name: text })
+                    setEventData({ ...eventData, title: text })
                   }
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Date</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., 2024-12-25"
-                  placeholderTextColor="#6b7280"
-                  value={eventData.date}
-                  onChangeText={(text) =>
-                    setEventData({ ...eventData, date: text })
-                  }
-                />
+                <Text style={styles.inputLabel}>Date & Time *</Text>
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowDatePicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="calendar-outline" size={20} color="#a855f7" />
+                  <Text style={styles.datePickerText}>
+                    {formatDisplayDate(eventData.date)}
+                  </Text>
+                </TouchableOpacity>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="datetime"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onDateChange}
+                    minimumDate={new Date()}
+                  />
+                )}
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Time</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., 8:00 PM"
-                  placeholderTextColor="#6b7280"
-                  value={eventData.time}
-                  onChangeText={(text) =>
-                    setEventData({ ...eventData, time: text })
-                  }
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Location</Text>
+                <Text style={styles.inputLabel}>Location *</Text>
                 <TextInput
                   style={styles.input}
                   placeholder="e.g., Downtown Club"
@@ -561,17 +674,40 @@ export default function Home() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Number of Guests</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., 20"
-                  placeholderTextColor="#6b7280"
-                  value={eventData.guests}
-                  onChangeText={(text) =>
-                    setEventData({ ...eventData, guests: text })
-                  }
-                  keyboardType="numeric"
-                />
+                <Text style={styles.inputLabel}>Event Image</Text>
+                <TouchableOpacity
+                  style={styles.imagePickerButton}
+                  onPress={pickImage}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={["#667eea", "#764ba2"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.imagePickerGradient}
+                  >
+                    <Ionicons name="image-outline" size={20} color="white" />
+                    <Text style={styles.imagePickerText}>
+                      {eventData.image ? "Change Image" : "Pick an Image"}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                {eventData.image ? (
+                  <View style={styles.imagePreviewContainer}>
+                    <Image
+                      source={{ uri: eventData.image }}
+                      style={styles.imagePreview}
+                    />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() =>
+                        setEventData({ ...eventData, image: "" })
+                      }
+                    >
+                      <Ionicons name="close-circle" size={24} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
               </View>
 
               <View style={styles.inputGroup}>
@@ -599,39 +735,8 @@ export default function Home() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.createButton}
-                onPress={() => {
-                  if (
-                    !eventData.name ||
-                    !eventData.date ||
-                    !eventData.location
-                  ) {
-                    Alert.alert(
-                      "Error",
-                      "Please fill in required fields (Name, Date, Location)"
-                    );
-                    return;
-                  }
-                  Alert.alert(
-                    "Event Created!",
-                    `Your event "${eventData.name}" has been created successfully.`,
-                    [
-                      {
-                        text: "OK",
-                        onPress: () => {
-                          setEventData({
-                            name: "",
-                            date: "",
-                            time: "",
-                            location: "",
-                            description: "",
-                            guests: "",
-                          });
-                          setIsModalVisible(false);
-                        },
-                      },
-                    ]
-                  );
-                }}
+                onPress={handleCreateEvent}
+                disabled={isLoading}
               >
                 <LinearGradient
                   colors={["#a855f7", "#7c3aed"]}
@@ -639,7 +744,9 @@ export default function Home() {
                   end={{ x: 1, y: 0 }}
                   style={styles.createButtonGradient}
                 >
-                  <Text style={styles.createButtonText}>Create Event</Text>
+                  <Text style={styles.createButtonText}>
+                    {isLoading ? "Creating..." : "Create Event"}
+                  </Text>
                 </LinearGradient>
               </TouchableOpacity>
             </View>
@@ -1068,5 +1175,57 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontFamily: Fonts.bold,
+  },
+  imagePickerButton: {
+    borderRadius: 12,
+    overflow: "hidden",
+    marginTop: 4,
+  },
+  imagePickerGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  imagePickerText: {
+    color: "white",
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+  },
+  imagePreviewContainer: {
+    marginTop: 12,
+    position: "relative",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  imagePreview: {
+    width: "100%",
+    height: 180,
+    borderRadius: 12,
+  },
+  removeImageButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 12,
+  },
+  datePickerButton: {
+    backgroundColor: "#374151",
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "#4b5563",
+  },
+  datePickerText: {
+    fontSize: 16,
+    fontFamily: Fonts.regular,
+    color: "#fff",
+    flex: 1,
   },
 });

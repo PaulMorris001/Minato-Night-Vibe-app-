@@ -196,3 +196,37 @@ export async function updateProfilePicture(req, res) {
     res.status(400).json({ message: "Error updating profile picture", details: error.message });
   }
 }
+
+// Search users by username or email
+export async function searchUsers(req, res) {
+  const { query } = req.query;
+
+  try {
+    if (!query || query.trim().length < 2) {
+      return res.status(400).json({ message: "Search query must be at least 2 characters" });
+    }
+
+    const users = await User.find({
+      _id: { $ne: req.user.id }, // Exclude current user
+      $or: [
+        { username: { $regex: query, $options: "i" } },
+        { email: { $regex: query, $options: "i" } }
+      ]
+    })
+      .select("_id username email profilePicture isVendor businessName")
+      .limit(20);
+
+    res.json({
+      users: users.map(user => ({
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        profilePicture: user.profilePicture,
+        isVendor: user.isVendor,
+        businessName: user.businessName
+      }))
+    });
+  } catch (error) {
+    res.status(400).json({ message: "Error searching users", details: error.message });
+  }
+}

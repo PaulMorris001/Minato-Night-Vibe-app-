@@ -1,65 +1,858 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import * as SecureStore from "expo-secure-store";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { useRouter } from "expo-router";
-import { capitalize } from "@/libs/helpers";
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  RefreshControl,
+  Image,
+  Alert,
+  Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
+  Share,
+} from "react-native";
+import { useRouter, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import * as ImagePicker from "expo-image-picker";
+import { BASE_URL } from "@/constants/constants";
+import { Fonts } from "@/constants/fonts";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
-export default function Home() {
+interface Event {
+  _id: string;
+  title: string;
+  date: string;
+  location: string;
+  image?: string;
+  description?: string;
+  shareToken: string;
+  createdBy: {
+    _id: string;
+    username: string;
+    email: string;
+    profilePicture?: string;
+  };
+  invitedUsers: {
+    _id: string;
+    username: string;
+    email: string;
+    profilePicture?: string;
+  }[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export default function EventsPage() {
   const router = useRouter();
+  const [events, setEvents] = useState<Event[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [isEditModalVisible, setIsEditModalVisible] = useState(false);
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
+  const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
+  const [inviteUsername, setInviteUsername] = useState("");
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [editData, setEditData] = useState({
+    title: "",
+    date: "",
+    location: "",
+    image: "",
+    description: "",
+  });
 
-  const [userName, setUserName] = useState<string | null>(null);
+  const fetchEvents = async () => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) {
+        router.replace("/login");
+        return;
+      }
+
+      const response = await fetch(`${BASE_URL}/events`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setEvents(data.events || []);
+      } else {
+        Alert.alert("Error", data.message || "Failed to fetch events");
+      }
+    } catch (error) {
+      console.error("Fetch events error:", error);
+      Alert.alert("Error", "Failed to load events");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchUser = async () => {
-      try {
-        const storedUser = await SecureStore.getItemAsync("user");
-        if (storedUser) {
-          const parsedUser = JSON.parse(storedUser);
-          setUserName(parsedUser.username || parsedUser.name || "User");
-        }
-      } catch (error) {
-        console.error("Failed to load user:", error);
-      }
-    };
-
-    fetchUser();
+    fetchEvents();
   }, []);
 
-  const handleLogout = async () => {
-    await SecureStore.deleteItemAsync("token");
-    await SecureStore.deleteItemAsync("user");
-    router.replace("/login");
-  };
-  return (
-    <View style={styles.container}>
-      <Text style={styles.title}>
-        🎉 Welcome to the Events Page {capitalize(userName)}!
-      </Text>
+  useFocusEffect(
+    useCallback(() => {
+      fetchEvents();
+    }, [])
+  );
 
-      <TouchableOpacity style={styles.button} onPress={handleLogout}>
-        <Text style={styles.buttonText}>Logout</Text>
-      </TouchableOpacity>
-    </View>
+  const onRefresh = () => {
+    setRefreshing(true);
+    fetchEvents();
+  };
+
+  const handleShareEvent = async (event: Event) => {
+    try {
+      const shareUrl = `nightvibe://events/share/${event.shareToken}`;
+      await Share.share({
+        message: `Join my event: ${event.title}\nDate: ${new Date(event.date).toLocaleDateString()}\nLocation: ${event.location}\n\nJoin here: ${shareUrl}`,
+        title: event.title,
+      });
+    } catch (error) {
+      console.error("Share error:", error);
+    }
+  };
+
+  const openEditModal = (event: Event) => {
+    setSelectedEvent(event);
+    const eventDate = new Date(event.date);
+    setSelectedDate(eventDate);
+    setEditData({
+      title: event.title,
+      date: eventDate.toISOString(),
+      location: event.location,
+      image: event.image || "",
+      description: event.description || "",
+    });
+    setIsEditModalVisible(true);
+  };
+
+  const onDateChange = (event: any, date?: Date) => {
+    setShowDatePicker(Platform.OS === 'ios');
+    if (date) {
+      setSelectedDate(date);
+      setEditData({ ...editData, date: date.toISOString() });
+    }
+  };
+
+  const formatDisplayDate = (dateString: string) => {
+    if (!dateString) return "Select date and time";
+    const date = new Date(dateString);
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const openInviteModal = (event: Event) => {
+    setSelectedEvent(event);
+    setInviteUsername("");
+    setIsInviteModalVisible(true);
+  };
+
+  const handleUpdateEvent = async () => {
+    if (!selectedEvent) return;
+
+    if (!editData.title || !editData.date || !editData.location) {
+      Alert.alert("Error", "Please fill in required fields");
+      return;
+    }
+
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const response = await fetch(`${BASE_URL}/events/${selectedEvent._id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(editData),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert("Success", "Event updated successfully");
+        setIsEditModalVisible(false);
+        fetchEvents();
+      } else {
+        Alert.alert("Error", data.message || "Failed to update event");
+      }
+    } catch (error) {
+      console.error("Update event error:", error);
+      Alert.alert("Error", "Failed to update event");
+    }
+  };
+
+  const handleInviteUser = async () => {
+    if (!selectedEvent || !inviteUsername.trim()) {
+      Alert.alert("Error", "Please enter a username");
+      return;
+    }
+
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const response = await fetch(
+        `${BASE_URL}/events/${selectedEvent._id}/invite`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ username: inviteUsername }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert("Success", "User invited successfully");
+        setIsInviteModalVisible(false);
+        setInviteUsername("");
+        fetchEvents();
+      } else {
+        Alert.alert("Error", data.message || "Failed to invite user");
+      }
+    } catch (error) {
+      console.error("Invite user error:", error);
+      Alert.alert("Error", "Failed to invite user");
+    }
+  };
+
+  const handleDeleteEvent = async (eventId: string) => {
+    Alert.alert(
+      "Delete Event",
+      "Are you sure you want to delete this event?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              const token = await SecureStore.getItemAsync("token");
+              const response = await fetch(`${BASE_URL}/events/${eventId}`, {
+                method: "DELETE",
+                headers: {
+                  Authorization: `Bearer ${token}`,
+                },
+              });
+
+              const data = await response.json();
+
+              if (response.ok) {
+                Alert.alert("Success", "Event deleted successfully");
+                fetchEvents();
+              } else {
+                Alert.alert("Error", data.message || "Failed to delete event");
+              }
+            } catch (error) {
+              console.error("Delete event error:", error);
+              Alert.alert("Error", "Failed to delete event");
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const pickImage = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+      base64: true,
+    });
+
+    if (!result.canceled && result.assets[0].base64) {
+      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
+      setEditData({ ...editData, image: base64Image });
+    }
+  };
+
+  const renderEvent = (event: Event) => {
+    const isCreator = event.createdBy._id;
+    const eventDate = new Date(event.date);
+
+    return (
+      <View key={event._id} style={styles.eventCard}>
+        {event.image ? (
+          <Image source={{ uri: event.image }} style={styles.eventImage} />
+        ) : (
+          <View style={styles.placeholderImage}>
+            <Ionicons name="calendar-outline" size={40} color="#6b7280" />
+          </View>
+        )}
+
+        <View style={styles.eventContent}>
+          <Text style={styles.eventTitle}>{event.title}</Text>
+
+          <View style={styles.eventDetail}>
+            <Ionicons name="calendar" size={16} color="#a855f7" />
+            <Text style={styles.eventDetailText}>
+              {eventDate.toLocaleDateString()} at{" "}
+              {eventDate.toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </Text>
+          </View>
+
+          <View style={styles.eventDetail}>
+            <Ionicons name="location" size={16} color="#a855f7" />
+            <Text style={styles.eventDetailText}>{event.location}</Text>
+          </View>
+
+          {event.description ? (
+            <View style={styles.eventDetail}>
+              <Ionicons name="document-text" size={16} color="#a855f7" />
+              <Text style={styles.eventDetailText} numberOfLines={2}>
+                {event.description}
+              </Text>
+            </View>
+          ) : null}
+
+          <View style={styles.eventDetail}>
+            <Ionicons name="people" size={16} color="#a855f7" />
+            <Text style={styles.eventDetailText}>
+              {event.invitedUsers.length} invited
+            </Text>
+          </View>
+
+          <View style={styles.eventActions}>
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleShareEvent(event)}
+            >
+              <Ionicons name="share-social" size={20} color="#a855f7" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => openInviteModal(event)}
+            >
+              <Ionicons name="person-add" size={20} color="#a855f7" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => openEditModal(event)}
+            >
+              <Ionicons name="create-outline" size={20} color="#a855f7" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionButton}
+              onPress={() => handleDeleteEvent(event._id)}
+            >
+              <Ionicons name="trash-outline" size={20} color="#ef4444" />
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  return (
+    <>
+      <LinearGradient colors={["#0f0f1a", "#1a1a2e"]} style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>My Events</Text>
+        </View>
+
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#a855f7"
+            />
+          }
+        >
+          {loading ? (
+            <View style={styles.emptyState}>
+              <Text style={styles.emptyStateText}>Loading events...</Text>
+            </View>
+          ) : events.length === 0 ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="calendar-outline" size={64} color="#6b7280" />
+              <Text style={styles.emptyStateTitle}>No events yet</Text>
+              <Text style={styles.emptyStateText}>
+                Create your first event from the home page
+              </Text>
+            </View>
+          ) : (
+            events.map(renderEvent)
+          )}
+        </ScrollView>
+      </LinearGradient>
+
+      {/* Edit Event Modal */}
+      <Modal
+        visible={isEditModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsEditModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit Event</Text>
+              <TouchableOpacity
+                onPress={() => setIsEditModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              style={styles.modalBody}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Event Title *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Birthday Party"
+                  placeholderTextColor="#6b7280"
+                  value={editData.title}
+                  onChangeText={(text) =>
+                    setEditData({ ...editData, title: text })
+                  }
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Date & Time *</Text>
+                <TouchableOpacity
+                  style={styles.datePickerButton}
+                  onPress={() => setShowDatePicker(true)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="calendar-outline" size={20} color="#a855f7" />
+                  <Text style={styles.datePickerText}>
+                    {formatDisplayDate(editData.date)}
+                  </Text>
+                </TouchableOpacity>
+                {showDatePicker && (
+                  <DateTimePicker
+                    value={selectedDate}
+                    mode="datetime"
+                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                    onChange={onDateChange}
+                    minimumDate={new Date()}
+                  />
+                )}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Location *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g., Downtown Club"
+                  placeholderTextColor="#6b7280"
+                  value={editData.location}
+                  onChangeText={(text) =>
+                    setEditData({ ...editData, location: text })
+                  }
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Event Image</Text>
+                <TouchableOpacity
+                  style={styles.imagePickerButton}
+                  onPress={pickImage}
+                  activeOpacity={0.7}
+                >
+                  <LinearGradient
+                    colors={["#667eea", "#764ba2"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.imagePickerGradient}
+                  >
+                    <Ionicons name="image-outline" size={20} color="white" />
+                    <Text style={styles.imagePickerText}>
+                      {editData.image ? "Change Image" : "Pick an Image"}
+                    </Text>
+                  </LinearGradient>
+                </TouchableOpacity>
+                {editData.image ? (
+                  <View style={styles.imagePreviewContainer}>
+                    <Image
+                      source={{ uri: editData.image }}
+                      style={styles.imagePreview}
+                    />
+                    <TouchableOpacity
+                      style={styles.removeImageButton}
+                      onPress={() => setEditData({ ...editData, image: "" })}
+                    >
+                      <Ionicons name="close-circle" size={24} color="#ef4444" />
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Description</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea]}
+                  placeholder="Describe your event..."
+                  placeholderTextColor="#6b7280"
+                  value={editData.description}
+                  onChangeText={(text) =>
+                    setEditData({ ...editData, description: text })
+                  }
+                  multiline
+                  numberOfLines={4}
+                />
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setIsEditModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.createButton}
+                onPress={handleUpdateEvent}
+              >
+                <LinearGradient
+                  colors={["#a855f7", "#7c3aed"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.createButtonGradient}
+                >
+                  <Text style={styles.createButtonText}>Update Event</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Invite User Modal */}
+      <Modal
+        visible={isInviteModalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsInviteModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.inviteModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Invite User</Text>
+              <TouchableOpacity
+                onPress={() => setIsInviteModalVisible(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Username</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="Enter username"
+                  placeholderTextColor="#6b7280"
+                  value={inviteUsername}
+                  onChangeText={setInviteUsername}
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => setIsInviteModalVisible(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.createButton}
+                onPress={handleInviteUser}
+              >
+                <LinearGradient
+                  colors={["#a855f7", "#7c3aed"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.createButtonGradient}
+                >
+                  <Text style={styles.createButtonText}>Send Invite</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  header: {
+    paddingTop: 10,
+    paddingBottom: 20,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+  },
+  headerTitle: {
+    fontSize: 32,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 80,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
+    textAlign: "center",
+  },
+  eventCard: {
+    backgroundColor: "#1f1f2e",
+    borderRadius: 16,
+    marginBottom: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  eventImage: {
+    width: "100%",
+    height: 180,
+    resizeMode: "cover",
+  },
+  placeholderImage: {
+    width: "100%",
+    height: 180,
+    backgroundColor: "#374151",
     justifyContent: "center",
     alignItems: "center",
   },
-  title: {
-    fontSize: 22,
+  eventContent: {
+    padding: 16,
+  },
+  eventTitle: {
+    fontSize: 20,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+    marginBottom: 12,
+  },
+  eventDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    gap: 8,
+  },
+  eventDetailText: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#e5e7eb",
+    flex: 1,
+  },
+  eventActions: {
+    flexDirection: "row",
+    marginTop: 16,
+    gap: 12,
+  },
+  actionButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#374151",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "flex-end",
+  },
+  modalContent: {
+    backgroundColor: "#1f1f2e",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "90%",
+  },
+  inviteModalContent: {
+    backgroundColor: "#1f1f2e",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "50%",
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  closeButton: {
+    padding: 4,
+  },
+  modalBody: {
+    padding: 20,
+  },
+  inputGroup: {
     marginBottom: 20,
   },
-  button: {
-    backgroundColor: "#ff5252",
-    padding: 14,
-    borderRadius: 8,
+  inputLabel: {
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    color: "#e5e7eb",
+    marginBottom: 8,
   },
-  buttonText: {
+  input: {
+    backgroundColor: "#374151",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    fontFamily: Fonts.regular,
     color: "#fff",
-    fontWeight: "bold",
+    borderWidth: 1,
+    borderColor: "#4b5563",
+  },
+  textArea: {
+    minHeight: 100,
+    textAlignVertical: "top",
+  },
+  modalFooter: {
+    flexDirection: "row",
+    padding: 20,
+    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: "#374151",
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: "#374151",
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: "center",
+  },
+  cancelButtonText: {
+    color: "#9ca3af",
+    fontSize: 16,
+    fontFamily: Fonts.semiBold,
+  },
+  createButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  createButtonGradient: {
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  createButtonText: {
+    color: "white",
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+  },
+  imagePickerButton: {
+    borderRadius: 12,
+    overflow: "hidden",
+    marginTop: 4,
+  },
+  imagePickerGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  imagePickerText: {
+    color: "white",
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+  },
+  imagePreviewContainer: {
+    marginTop: 12,
+    position: "relative",
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  imagePreview: {
+    width: "100%",
+    height: 180,
+    borderRadius: 12,
+  },
+  removeImageButton: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    borderRadius: 12,
+  },
+  datePickerButton: {
+    backgroundColor: "#374151",
+    borderRadius: 12,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: "#4b5563",
+  },
+  datePickerText: {
+    fontSize: 16,
+    fontFamily: Fonts.regular,
+    color: "#fff",
+    flex: 1,
   },
 });

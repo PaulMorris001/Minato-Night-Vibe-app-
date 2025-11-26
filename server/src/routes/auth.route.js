@@ -1,5 +1,5 @@
 import express from 'express';
-import { register, login, updateVendorProfile, getProfile, becomeVendor, updateProfilePicture } from '../controllers/auth.controller.js'
+import { register, login, updateVendorProfile, getProfile, becomeVendor, updateProfilePicture, searchUsers } from '../controllers/auth.controller.js'
 import { authenticate } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -10,5 +10,6 @@ router.get("/profile", authenticate, getProfile);
 router.put("/profile/picture", authenticate, updateProfilePicture);
 router.post("/become-vendor", authenticate, becomeVendor);
 router.put("/vendor/profile", authenticate, updateVendorProfile);
+router.get("/users/search", authenticate, searchUsers);
 
 export default router;
