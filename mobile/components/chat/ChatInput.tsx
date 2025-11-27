@@ -35,7 +35,6 @@ export default function ChatInput({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={90}
     >
       <View style={styles.container}>
         {onImagePick && (
@@ -89,7 +88,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-end",
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    paddingBottom: 24,
     backgroundColor: "#1f1f2e",
     borderTopWidth: 1,
     borderTopColor: "#374151",
@@ -104,18 +104,18 @@ const styles = StyleSheet.create({
   inputContainer: {
     flex: 1,
     backgroundColor: "#374151",
-    borderRadius: 20,
+    borderRadius: 10,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    minHeight: 40,
-    maxHeight: 120,
+    paddingBottom: 6,
+    width: "100%",
+    height: 40,
     justifyContent: "center",
   },
   input: {
     fontSize: 15,
     fontFamily: Fonts.regular,
     color: "#fff",
-    maxHeight: 100,
+    maxHeight: 120,
   },
   sendButton: {
     width: 40,

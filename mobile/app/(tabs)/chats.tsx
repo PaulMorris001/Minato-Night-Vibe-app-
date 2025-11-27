@@ -20,6 +20,7 @@ import ChatListItem from "@/components/chat/ChatListItem";
 import chatService, { Chat } from "@/services/chat.service";
 import { BASE_URL } from "@/constants/constants";
 import * as SecureStore from "expo-secure-store";
+import { capitalize } from "@/libs/helpers";
 
 interface SearchUser {
   id: string;
@@ -311,7 +312,7 @@ export default function ChatsScreen() {
                     </View>
                   )}
                   <View style={styles.userInfo}>
-                    <Text style={styles.userName}>{item.username}</Text>
+                    <Text style={styles.userName}>{capitalize(item.username)}</Text>
                     <Text style={styles.userEmail}>
                       {item.isVendor && item.businessName
                         ? item.businessName

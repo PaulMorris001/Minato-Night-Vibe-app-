@@ -1,20 +1,13 @@
 /**
  * Socket Service - Real-time Communication
- *
- * This service provides the structure for real-time messaging using WebSocket/Socket.io.
- * It's currently a placeholder that can be integrated when real-time features are needed.
- *
- * To implement:
- * 1. Install socket.io-client: npm install socket.io-client
- * 2. Set up Socket.io server on the backend
- * 3. Uncomment and configure the code below
- * 4. Connect the service to chat screens for real-time updates
  */
 
 import * as SecureStore from "expo-secure-store";
-// import io, { Socket } from "socket.io-client";
+import io, { Socket } from "socket.io-client";
+import { BASE_URL } from "@/constants/constants";
 
-// const SOCKET_URL = "http://192.168.1.206:3000"; // Replace with your server URL
+// Extract base URL without /api path
+const SOCKET_URL = BASE_URL.replace("/api", "");
 
 interface SocketEvents {
   onNewMessage?: (message: any) => void;
@@ -26,7 +19,7 @@ interface SocketEvents {
 }
 
 class SocketService {
-  // private socket: Socket | null = null;
+  private socket: Socket | null = null;
   private events: SocketEvents = {};
   private connected = false;
 
@@ -42,26 +35,30 @@ class SocketService {
         return;
       }
 
-      console.log("Socket service ready (not connected - implement Socket.io first)");
-
-      /*
-      // Uncomment when implementing Socket.io:
+      console.log("🔌 Connecting to socket server:", SOCKET_URL);
 
       this.socket = io(SOCKET_URL, {
         auth: {
           token,
         },
         transports: ["websocket"],
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 1000,
       });
 
       this.socket.on("connect", () => {
-        console.log("Socket connected:", this.socket?.id);
+        console.log("✅ Socket connected:", this.socket?.id);
         this.connected = true;
       });
 
       this.socket.on("disconnect", () => {
-        console.log("Socket disconnected");
+        console.log("❌ Socket disconnected");
         this.connected = false;
+      });
+
+      this.socket.on("connect_error", (error) => {
+        console.error("Socket connection error:", error.message);
       });
 
       this.socket.on("error", (error) => {
@@ -70,6 +67,7 @@ class SocketService {
 
       // Listen for new messages
       this.socket.on("message:new", (message) => {
+        console.log("📨 New message received:", message._id);
         if (this.events.onNewMessage) {
           this.events.onNewMessage(message);
         }
@@ -107,7 +105,6 @@ class SocketService {
           this.events.onUserOffline(userId);
         }
       });
-      */
     } catch (error) {
       console.error("Socket connection error:", error);
     }
@@ -117,14 +114,12 @@ class SocketService {
    * Disconnect from the socket server
    */
   disconnect() {
-    /*
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
       this.connected = false;
+      console.log("🔌 Socket disconnected");
     }
-    */
-    console.log("Socket disconnected");
   }
 
   /**
@@ -138,48 +133,38 @@ class SocketService {
    * Join a chat room
    */
   joinChat(chatId: string) {
-    /*
-    if (this.socket) {
+    if (this.socket && this.connected) {
       this.socket.emit("chat:join", chatId);
+      console.log(`✅ Joined chat: ${chatId}`);
     }
-    */
-    console.log(`Would join chat: ${chatId}`);
   }
 
   /**
    * Leave a chat room
    */
   leaveChat(chatId: string) {
-    /*
-    if (this.socket) {
+    if (this.socket && this.connected) {
       this.socket.emit("chat:leave", chatId);
+      console.log(`🚪 Left chat: ${chatId}`);
     }
-    */
-    console.log(`Would leave chat: ${chatId}`);
   }
 
   /**
    * Send typing indicator
    */
   sendTyping(chatId: string, isTyping: boolean) {
-    /*
-    if (this.socket) {
+    if (this.socket && this.connected) {
       this.socket.emit(isTyping ? "typing:start" : "typing:stop", { chatId });
     }
-    */
-    console.log(`Would send typing: ${isTyping} for chat: ${chatId}`);
   }
 
   /**
    * Mark message as delivered
    */
   markDelivered(messageId: string) {
-    /*
-    if (this.socket) {
+    if (this.socket && this.connected) {
       this.socket.emit("message:delivered", { messageId });
     }
-    */
-    console.log(`Would mark delivered: ${messageId}`);
   }
 
   /**

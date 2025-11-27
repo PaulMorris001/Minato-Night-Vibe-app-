@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Fonts } from "@/constants/fonts";
 import type { Chat } from "@/services/chat.service";
+import { capitalize } from "@/libs/helpers";
 
 interface ChatListItemProps {
   chat: Chat;
@@ -104,7 +105,7 @@ export default function ChatListItem({
       <View style={styles.content}>
         <View style={styles.header}>
           <Text style={styles.name} numberOfLines={1}>
-            {chatInfo.name}
+            {capitalize(chatInfo.name)}
           </Text>
           {lastMessage && (
             <Text style={styles.time}>

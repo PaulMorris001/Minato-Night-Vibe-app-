@@ -1,6 +1,7 @@
 import Chat from "../models/chat.model.js";
 import Message from "../models/message.model.js";
 import User from "../models/user.model.js";
+import { emitNewMessage } from "./socket.service.js";
 
 /**
  * Chat Service - Business logic layer for chat operations
@@ -145,6 +146,9 @@ class ChatService {
     await message.populate('sender', 'username email profilePicture');
     await message.populate('replyTo');
     await message.populate('event');
+
+    // Emit message via Socket.IO to chat participants
+    emitNewMessage(chatId.toString(), message);
 
     return message;
   }

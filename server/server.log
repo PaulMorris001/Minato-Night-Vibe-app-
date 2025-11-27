@@ -1,0 +1,137 @@
+
+> server@1.0.0 dev
+> nodemon src/index.js
+
+[33m[nodemon] 3.1.10[39m
+[33m[nodemon] to restart at any time, enter `rs`[39m
+[33m[nodemon] watching path(s): *.*[39m
+[33m[nodemon] watching extensions: js,mjs,cjs,json[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: ⚙️  enable debug logging with { debug: true }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+✅ Database Connected Successfully
+📊 Connected to: test
+✅ User connected: 690bc4bf6cc8ee92c190bf42 (-rbsUOKh2mIh7lYnAAAB)
+User 690bc4bf6cc8ee92c190bf42 joined chat 69276e80a0e7bc6f73afc996
+User 690bc4bf6cc8ee92c190bf42 left chat 69276e80a0e7bc6f73afc996
+User 690bc4bf6cc8ee92c190bf42 joined chat 69276e80a0e7bc6f73afc996
+User 690bc4bf6cc8ee92c190bf42 left chat 69276e80a0e7bc6f73afc996
+User 690bc4bf6cc8ee92c190bf42 joined chat 69276bd7a0e7bc6f73afc973
+User 690bc4bf6cc8ee92c190bf42 left chat 69276bd7a0e7bc6f73afc973
+User 690bc4bf6cc8ee92c190bf42 joined chat 69276bd7a0e7bc6f73afc973
+📨 Emitted new message to chat 69276bd7a0e7bc6f73afc973
+User 690bc4bf6cc8ee92c190bf42 left chat 69276bd7a0e7bc6f73afc973
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+✅ User connected: 690bc4bf6cc8ee92c190bf42 (y6SnhGTeRbkF9278AAAB)
+✅ Database Connected Successfully
+📊 Connected to: test
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+file:///Users/setemi/Desktop/NightVibe/server/src/config/db.js:20
+}
+ 
+
+SyntaxError: Unexpected end of input
+    at compileSourceTextModule (node:internal/modules/esm/utils:346:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:146:18)
+    at #translate (node:internal/modules/esm/loader:497:12)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:544:27)
+
+Node.js v20.19.5
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+file:///Users/setemi/Desktop/NightVibe/server/src/config/db.js:20
+}
+ 
+
+SyntaxError: Unexpected end of input
+    at compileSourceTextModule (node:internal/modules/esm/utils:346:16)
+    at ModuleLoader.moduleStrategy (node:internal/modules/esm/translators:146:18)
+    at #translate (node:internal/modules/esm/loader:497:12)
+    at ModuleLoader.loadAndTranslate (node:internal/modules/esm/loader:544:27)
+
+Node.js v20.19.5
+[31m[nodemon] app crashed - waiting for file changes before starting...[39m
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🛠️  run anywhere with `dotenvx run -- yourcommand`
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+✅ User connected: 690bc4bf6cc8ee92c190bf42 (IWxh_yJSad8WinkHAAAB)
+✅ Database Connected Successfully
+📊 Connected to: test
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 📡 add observability to secrets: https://dotenvx.com/ops
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+✅ User connected: 690bc4bf6cc8ee92c190bf42 (1BFC5ArvekMrGbatAAAB)
+✅ Database Connected Successfully
+📊 Connected to: test
+User 690bc4bf6cc8ee92c190bf42 joined chat 69276bd7a0e7bc6f73afc973
+User 690bc4bf6cc8ee92c190bf42 left chat 69276bd7a0e7bc6f73afc973
+User 690bc4bf6cc8ee92c190bf42 joined chat 69276bd7a0e7bc6f73afc973
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+✅ Database Connected Successfully
+📊 Connected to: test
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+✅ Database Connected Successfully
+📊 Connected to: test
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[dotenv@17.2.3] injecting env (0) from .env -- tip: ⚙️  write to custom object with { processEnv: myObject }
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+✅ Database Connected Successfully
+📊 Connected to: test
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+✅ Database Connected Successfully
+📊 Connected to: test
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 👥 sync secrets across teammates & machines: https://dotenvx.com/ops
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+✅ Database Connected Successfully
+📊 Connected to: test
+[32m[nodemon] restarting due to changes...[39m
+[32m[nodemon] starting `node src/index.js`[39m
+[dotenv@17.2.3] injecting env (4) from .env -- tip: 🗂️ backup and recover secrets: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+🔌 Socket.IO initialized
+🚀 Backend started at http://0.0.0.0:3000
+✅ Database Connected Successfully
+📊 Connected to: test
