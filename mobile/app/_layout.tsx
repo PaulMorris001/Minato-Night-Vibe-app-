@@ -13,6 +13,7 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import { PortalProvider } from "@gorhom/portal";
 import { AccountProvider } from "@/contexts/AccountContext";
+import socketService from "@/services/socket.service";
 
 // Prevent auto-hiding splash screen
 SplashScreen.preventAutoHideAsync();
@@ -31,7 +32,15 @@ export default function RootLayout() {
   useEffect(() => {
     if (fontsLoaded) {
       SplashScreen.hideAsync();
+
+      // Initialize socket connection
+      socketService.connect();
     }
+
+    // Cleanup on unmount
+    return () => {
+      socketService.disconnect();
+    };
   }, [fontsLoaded]);
 
   if (!fontsLoaded) {

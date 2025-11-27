@@ -19,7 +19,9 @@ import * as ImagePicker from "expo-image-picker";
 import MessageBubble from "@/components/chat/MessageBubble";
 import ChatInput from "@/components/chat/ChatInput";
 import chatService, { Message, Chat } from "@/services/chat.service";
+import socketService from "@/services/socket.service";
 import * as SecureStore from "expo-secure-store";
+import { capitalize } from "@/libs/helpers";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -34,8 +36,34 @@ export default function ChatScreen() {
     loadCurrentUser();
     if (id) {
       loadChatAndMessages();
+
+      // Join chat room via socket
+      socketService.joinChat(id);
+
+      // Listen for new messages
+      socketService.on({
+        onNewMessage: (message: Message) => {
+          // Only add if message is for this chat and not from current user
+          if (message.chat === id && message.sender._id !== currentUserId) {
+            setMessages((prev) => [...prev, message]);
+
+            // Scroll to bottom
+            setTimeout(() => {
+              flatListRef.current?.scrollToEnd({ animated: true });
+            }, 100);
+          }
+        },
+      });
     }
-  }, [id]);
+
+    // Cleanup on unmount
+    return () => {
+      if (id) {
+        socketService.leaveChat(id);
+        socketService.off();
+      }
+    };
+  }, [id, currentUserId]);
 
   const loadCurrentUser = async () => {
     try {
@@ -57,14 +85,14 @@ export default function ChatScreen() {
       const chat = await chatService.getChatById(id);
       setChat(chat);
 
-      // Load messages
+      // Load messages (backend already returns them in chronological order)
       const messagesData = await chatService.getChatMessages(id);
-      setMessages(messagesData.messages.reverse()); // Reverse to show newest at bottom
+      setMessages(messagesData.messages);
 
       // Mark messages as read
       await chatService.markMessagesAsRead(id);
     } catch (error: any) {
-      console.error("Error loading chat:", error);
+      console.error("❌ Error loading chat:", error);
       Alert.alert("Error", "Failed to load chat");
     } finally {
       setLoading(false);
@@ -213,7 +241,7 @@ export default function ChatScreen() {
               </View>
             )}
             <View style={styles.headerTextContainer}>
-              <Text style={styles.headerTitle}>{getChatName()}</Text>
+              <Text style={styles.headerTitle}>{capitalize(getChatName())}</Text>
               {chat?.type === "group" && (
                 <Text style={styles.headerSubtitle}>
                   {chat.participants.length} participants
