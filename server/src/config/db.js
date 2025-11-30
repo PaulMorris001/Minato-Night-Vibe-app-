@@ -1,16 +1,9 @@
 import mongoose from "mongoose";
-import dotenv from "dotenv";
-
-dotenv.config();
+import config from "./env.js";
 
 export default async function connectDB() {
   try {
-    const options = {
-      serverSelectionTimeoutMS: 5000,
-      socketTimeoutMS: 45000,
-    };
-
-    await mongoose.connect(process.env.MONGO_URI, options);
+    await mongoose.connect(config.database.uri, config.database.options);
     console.log("✅ Database Connected Successfully");
     console.log(`📊 Connected to: ${mongoose.connection.name}`);
   } catch (error) {

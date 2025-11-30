@@ -2,6 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, Image, TouchableOpacity } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Fonts } from "@/constants/fonts";
+import { useRouter } from "expo-router";
 import type { Message } from "@/services/chat.service";
 
 interface MessageBubbleProps {
@@ -17,12 +18,20 @@ export default function MessageBubble({
   showSender = false,
   onLongPress,
 }: MessageBubbleProps) {
+  const router = useRouter();
+
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleTimeString([], {
       hour: "2-digit",
       minute: "2-digit",
     });
+  };
+
+  const handleEventPress = () => {
+    if (message.event && message.event._id) {
+      router.push(`/event/${message.event._id}`);
+    }
   };
 
   const renderContent = () => {
@@ -92,16 +101,33 @@ export default function MessageBubble({
 
       case "event":
         return (
-          <View style={styles.eventContainer}>
-            <Ionicons name="calendar" size={20} color="#a855f7" />
-            <View style={{ marginLeft: 12, flex: 1 }}>
-              <Text style={styles.eventTitle}>Event Shared</Text>
-              <Text style={styles.eventSubtitle}>
-                Tap to view event details
+          <TouchableOpacity
+            style={styles.eventContainer}
+            onPress={handleEventPress}
+            activeOpacity={0.7}
+          >
+            <View style={styles.eventIconContainer}>
+              <Ionicons name="calendar" size={24} color="#a855f7" />
+            </View>
+            <View style={styles.eventContent}>
+              <Text
+                style={[
+                  styles.eventText,
+                  isOwnMessage ? styles.ownMessageText : styles.otherMessageText,
+                ]}
+              >
+                {message.content}
+              </Text>
+              <Text style={styles.eventTapHint}>
+                Tap to view details
               </Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#9ca3af" />
-          </View>
+            <Ionicons
+              name="chevron-forward"
+              size={20}
+              color={isOwnMessage ? "rgba(255, 255, 255, 0.7)" : "#9ca3af"}
+            />
+          </TouchableOpacity>
         );
 
       case "system":
@@ -279,18 +305,33 @@ const styles = StyleSheet.create({
   eventContainer: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 4,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: "rgba(0, 0, 0, 0.1)",
   },
-  eventTitle: {
+  eventIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(168, 85, 247, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  eventContent: {
+    flex: 1,
+  },
+  eventText: {
     fontSize: 14,
-    fontFamily: Fonts.semiBold,
-    color: "#fff",
+    fontFamily: Fonts.regular,
+    lineHeight: 20,
   },
-  eventSubtitle: {
-    fontSize: 12,
+  eventTapHint: {
+    fontSize: 11,
     fontFamily: Fonts.regular,
     color: "#9ca3af",
-    marginTop: 2,
+    marginTop: 4,
+    fontStyle: "italic",
   },
   systemContainer: {
     alignItems: "center",

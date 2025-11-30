@@ -1,5 +1,6 @@
 import Event from "../models/event.model.js";
 import User from "../models/user.model.js";
+import ChatService from "../services/chat.service.js";
 
 // Create a new event
 export const createEvent = async (req, res) => {
@@ -217,6 +218,32 @@ export const inviteUserByUsername = async (req, res) => {
     const updatedEvent = await Event.findById(eventId)
       .populate('createdBy', 'username email profilePicture')
       .populate('invitedUsers', 'username email profilePicture');
+
+    // Send event invitation notification via chat
+    try {
+      // Get or create direct chat between inviter and invitee
+      const chat = await ChatService.getOrCreateDirectChat(userId, userToInvite._id.toString());
+
+      // Format the event date
+      const eventDate = new Date(event.date);
+      const formattedDate = eventDate.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+
+      // Send event invitation message
+      await ChatService.sendMessage(chat._id, userId, {
+        type: 'event',
+        content: `📅 You've been invited to "${event.title}"\n📍 ${event.location}\n🕐 ${formattedDate}`,
+        eventId: event._id
+      });
+    } catch (chatError) {
+      console.error("Error sending chat notification:", chatError);
+      // Don't fail the invitation if chat notification fails
+    }
 
     res.status(200).json({
       message: "User invited successfully",

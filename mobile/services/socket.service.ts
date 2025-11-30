@@ -4,10 +4,7 @@
 
 import * as SecureStore from "expo-secure-store";
 import io, { Socket } from "socket.io-client";
-import { BASE_URL } from "@/constants/constants";
-
-// Extract base URL without /api path
-const SOCKET_URL = BASE_URL.replace("/api", "");
+import { config } from "@/constants/constants";
 
 interface SocketEvents {
   onNewMessage?: (message: any) => void;
@@ -35,9 +32,9 @@ class SocketService {
         return;
       }
 
-      console.log("🔌 Connecting to socket server:", SOCKET_URL);
+      console.log("🔌 Connecting to socket server:", config.socketUrl);
 
-      this.socket = io(SOCKET_URL, {
+      this.socket = io(config.socketUrl, {
         auth: {
           token,
         },

@@ -14,6 +14,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Share,
+  FlatList,
+  ActivityIndicator,
 } from "react-native";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -56,6 +58,8 @@ export default function EventsPage() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
   const [inviteUsername, setInviteUsername] = useState("");
+  const [searchedUsers, setSearchedUsers] = useState<any[]>([]);
+  const [searchingUsers, setSearchingUsers] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [editData, setEditData] = useState({
@@ -160,8 +164,55 @@ export default function EventsPage() {
   const openInviteModal = (event: Event) => {
     setSelectedEvent(event);
     setInviteUsername("");
+    setSearchedUsers([]);
     setIsInviteModalVisible(true);
   };
+
+  useEffect(() => {
+    const searchUsers = async (query: string) => {
+      if (query.trim().length < 2) {
+        setSearchedUsers([]);
+        return;
+      }
+
+      try {
+        setSearchingUsers(true);
+        const token = await SecureStore.getItemAsync("token");
+        const response = await fetch(
+          `${BASE_URL}/users/search?query=${encodeURIComponent(query)}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        const data = await response.json();
+        if (response.ok) {
+          // Filter out users that are already invited or are the creator
+          const filteredUsers = data.users.filter(
+            (user: any) =>
+              user.id !== selectedEvent?.createdBy._id &&
+              !selectedEvent?.invitedUsers.some((invitedUser) => invitedUser._id === user.id)
+          );
+          setSearchedUsers(filteredUsers);
+        }
+      } catch (error) {
+        console.error("Error searching users:", error);
+      } finally {
+        setSearchingUsers(false);
+      }
+    };
+
+    if (inviteUsername.trim().length >= 2) {
+      const debounce = setTimeout(() => {
+        searchUsers(inviteUsername);
+      }, 300);
+      return () => clearTimeout(debounce);
+    } else {
+      setSearchedUsers([]);
+    }
+  }, [inviteUsername, selectedEvent]);
 
   const handleUpdateEvent = async () => {
     if (!selectedEvent) return;
@@ -197,11 +248,8 @@ export default function EventsPage() {
     }
   };
 
-  const handleInviteUser = async () => {
-    if (!selectedEvent || !inviteUsername.trim()) {
-      Alert.alert("Error", "Please enter a username");
-      return;
-    }
+  const handleInviteUser = async (user: any) => {
+    if (!selectedEvent) return;
 
     try {
       const token = await SecureStore.getItemAsync("token");
@@ -213,7 +261,7 @@ export default function EventsPage() {
             "Content-Type": "application/json",
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ username: inviteUsername }),
+          body: JSON.stringify({ username: user.username }),
         }
       );
 
@@ -223,6 +271,7 @@ export default function EventsPage() {
         Alert.alert("Success", "User invited successfully");
         setIsInviteModalVisible(false);
         setInviteUsername("");
+        setSearchedUsers([]);
         fetchEvents();
       } else {
         Alert.alert("Error", data.message || "Failed to invite user");
@@ -285,12 +334,21 @@ export default function EventsPage() {
     }
   };
 
+  const handleEventPress = (eventId: string) => {
+    router.push(`/event/${eventId}`);
+  };
+
   const renderEvent = (event: Event) => {
     const isCreator = event.createdBy._id;
     const eventDate = new Date(event.date);
 
     return (
-      <View key={event._id} style={styles.eventCard}>
+      <TouchableOpacity
+        key={event._id}
+        style={styles.eventCard}
+        onPress={() => handleEventPress(event._id)}
+        activeOpacity={0.8}
+      >
         {event.image ? (
           <Image source={{ uri: event.image }} style={styles.eventImage} />
         ) : (
@@ -337,34 +395,46 @@ export default function EventsPage() {
           <View style={styles.eventActions}>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => handleShareEvent(event)}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleShareEvent(event);
+              }}
             >
               <Ionicons name="share-social" size={20} color="#a855f7" />
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => openInviteModal(event)}
+              onPress={(e) => {
+                e.stopPropagation();
+                openInviteModal(event);
+              }}
             >
               <Ionicons name="person-add" size={20} color="#a855f7" />
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => openEditModal(event)}
+              onPress={(e) => {
+                e.stopPropagation();
+                openEditModal(event);
+              }}
             >
               <Ionicons name="create-outline" size={20} color="#a855f7" />
             </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => handleDeleteEvent(event._id)}
+              onPress={(e) => {
+                e.stopPropagation();
+                handleDeleteEvent(event._id);
+              }}
             >
               <Ionicons name="trash-outline" size={20} color="#ef4444" />
             </TouchableOpacity>
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -560,14 +630,34 @@ export default function EventsPage() {
         visible={isInviteModalVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setIsInviteModalVisible(false)}
+        onRequestClose={() => {
+          setIsInviteModalVisible(false);
+          setInviteUsername("");
+          setSearchedUsers([]);
+        }}
       >
-        <View style={styles.modalOverlay}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => {
+              setIsInviteModalVisible(false);
+              setInviteUsername("");
+              setSearchedUsers([]);
+            }}
+          />
           <View style={styles.inviteModalContent}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Invite User</Text>
               <TouchableOpacity
-                onPress={() => setIsInviteModalVisible(false)}
+                onPress={() => {
+                  setIsInviteModalVisible(false);
+                  setInviteUsername("");
+                  setSearchedUsers([]);
+                }}
                 style={styles.closeButton}
               >
                 <Ionicons name="close" size={24} color="#fff" />
@@ -576,41 +666,85 @@ export default function EventsPage() {
 
             <View style={styles.modalBody}>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Username</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="Enter username"
-                  placeholderTextColor="#6b7280"
-                  value={inviteUsername}
-                  onChangeText={setInviteUsername}
-                  autoCapitalize="none"
-                />
+                <Text style={styles.inputLabel}>Search User</Text>
+                <View style={styles.searchInputContainer}>
+                  <Ionicons
+                    name="search"
+                    size={20}
+                    color="#6b7280"
+                    style={styles.searchIconInModal}
+                  />
+                  <TextInput
+                    style={styles.searchInputInModal}
+                    placeholder="Enter username or email..."
+                    placeholderTextColor="#6b7280"
+                    value={inviteUsername}
+                    onChangeText={setInviteUsername}
+                    autoCapitalize="none"
+                  />
+                </View>
               </View>
-            </View>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setIsInviteModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.createButton}
-                onPress={handleInviteUser}
-              >
-                <LinearGradient
-                  colors={["#a855f7", "#7c3aed"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.createButtonGradient}
-                >
-                  <Text style={styles.createButtonText}>Send Invite</Text>
-                </LinearGradient>
-              </TouchableOpacity>
+              {searchingUsers && (
+                <View style={styles.loadingUserContainer}>
+                  <ActivityIndicator size="small" color="#a855f7" />
+                </View>
+              )}
+
+              <FlatList
+                data={searchedUsers}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.userSearchItem}
+                    onPress={() => handleInviteUser(item)}
+                  >
+                    {item.profilePicture ? (
+                      <Image
+                        source={{ uri: item.profilePicture }}
+                        style={styles.userSearchAvatar}
+                      />
+                    ) : (
+                      <View style={styles.userSearchAvatarPlaceholder}>
+                        <Ionicons name="person" size={24} color="#a855f7" />
+                      </View>
+                    )}
+                    <View style={styles.userSearchInfo}>
+                      <Text style={styles.userSearchName}>{item.username}</Text>
+                      <Text style={styles.userSearchEmail}>
+                        {item.isVendor && item.businessName
+                          ? item.businessName
+                          : item.email}
+                      </Text>
+                    </View>
+                    {item.isVendor && (
+                      <View style={styles.vendorBadge}>
+                        <Text style={styles.vendorBadgeText}>Vendor</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                )}
+                ListEmptyComponent={
+                  !searchingUsers && inviteUsername.length >= 2 ? (
+                    <View style={styles.emptyUserSearchContainer}>
+                      <Ionicons name="people-outline" size={48} color="#6b7280" />
+                      <Text style={styles.emptyUserSearchText}>No users found</Text>
+                    </View>
+                  ) : !searchingUsers && inviteUsername.length < 2 ? (
+                    <View style={styles.emptyUserSearchContainer}>
+                      <Ionicons name="search-outline" size={48} color="#6b7280" />
+                      <Text style={styles.emptyUserSearchText}>
+                        Type at least 2 characters to search
+                      </Text>
+                    </View>
+                  ) : null
+                }
+                contentContainerStyle={styles.userSearchListContent}
+                keyboardShouldPersistTaps="handled"
+              />
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </>
   );
@@ -716,6 +850,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0, 0, 0, 0.7)",
     justifyContent: "flex-end",
   },
+  modalBackdrop: {
+    flex: 1,
+  },
   modalContent: {
     backgroundColor: "#1f1f2e",
     borderTopLeftRadius: 24,
@@ -726,7 +863,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#1f1f2e",
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: "50%",
+    height: "75%",
+    maxHeight: 600,
   },
   modalHeader: {
     flexDirection: "row",
@@ -854,5 +992,89 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: "#fff",
     flex: 1,
+  },
+  searchInputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#374151",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    height: 48,
+    borderWidth: 1,
+    borderColor: "#4b5563",
+  },
+  searchIconInModal: {
+    marginRight: 8,
+  },
+  searchInputInModal: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: Fonts.regular,
+    color: "#fff",
+  },
+  loadingUserContainer: {
+    paddingVertical: 20,
+    alignItems: "center",
+  },
+  userSearchItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+  },
+  userSearchAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#374151",
+  },
+  userSearchAvatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: "#374151",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  userSearchInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  userSearchName: {
+    fontSize: 16,
+    fontFamily: Fonts.semiBold,
+    color: "#fff",
+  },
+  userSearchEmail: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#6b7280",
+    marginTop: 2,
+  },
+  vendorBadge: {
+    backgroundColor: "#a855f7",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  vendorBadgeText: {
+    fontSize: 12,
+    fontFamily: Fonts.semiBold,
+    color: "#fff",
+  },
+  emptyUserSearchContainer: {
+    paddingVertical: 60,
+    alignItems: "center",
+  },
+  emptyUserSearchText: {
+    fontSize: 16,
+    fontFamily: Fonts.regular,
+    color: "#6b7280",
+    marginTop: 12,
+    textAlign: "center",
+  },
+  userSearchListContent: {
+    flexGrow: 1,
   },
 });

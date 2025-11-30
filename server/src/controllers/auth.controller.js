@@ -1,5 +1,6 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import config from "../config/env.js";
 import User from "../models/user.model.js";
 
 export async function register(req, res) {
@@ -15,8 +16,8 @@ export async function register(req, res) {
     });
     await user.save();
 
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "7d",
+    const token = jwt.sign({ id: user._id }, config.jwt.secret, {
+      expiresIn: config.jwt.expiresIn,
     });
 
     res.status(201).json({
@@ -44,8 +45,8 @@ export async function login(req, res) {
   const valid = await bcrypt.compare(password, user.password);
   if (!valid) return res.status(401).json({ message: "Invalid Credentials" });
 
-  const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-    expiresIn: "7d",
+  const token = jwt.sign({ id: user._id }, config.jwt.secret, {
+    expiresIn: config.jwt.expiresIn,
   });
   res.json({
     token,
