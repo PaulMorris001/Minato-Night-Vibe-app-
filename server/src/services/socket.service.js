@@ -4,6 +4,7 @@
 
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
+import config from "../config/env.js";
 
 /**
  * Initialize Socket.io server
@@ -11,12 +12,7 @@ import jwt from "jsonwebtoken";
  * @param {object} server - HTTP server instance
  */
 export const initializeSocket = (server) => {
-  const io = new Server(server, {
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST"],
-    },
-  });
+  const io = new Server(server, config.socket);
 
   // Store connected users
   const connectedUsers = new Map(); // userId -> socketId
@@ -30,7 +26,7 @@ export const initializeSocket = (server) => {
         return next(new Error("Authentication error"));
       }
 
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, config.jwt.secret);
       socket.userId = decoded.id;
       next();
     } catch (error) {
