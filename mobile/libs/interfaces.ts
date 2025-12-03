@@ -60,3 +60,70 @@ export interface VendorStats {
   }[];
 }
 
+export interface GuideSection {
+  title: string;
+  rank: number;
+  description: string;
+}
+
+export interface Guide {
+  _id: string;
+  title: string;
+  author: {
+    _id: string;
+    username: string;
+    email: string;
+    profilePicture?: string;
+  };
+  authorName: string;
+  description: string;
+  price: number;
+  city: string;
+  topic: string;
+  sections: GuideSection[];
+  isDraft: boolean;
+  isPurchased: boolean;
+  purchasedBy: string[];
+  views: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export const GUIDE_TOPICS = [
+  "Chefs",
+  "Food and Restaurants",
+  "Music and Bands",
+  "Bars and Clubs",
+  "Casinos",
+  "Concerts",
+  "Events",
+  "Transportation",
+  "Venues",
+  "Florists",
+  "Decorations",
+  "Desserts",
+  "Beverages",
+  "Grocery stores",
+  "Museums",
+  "Parks",
+  "Hotels",
+  "Spas",
+  "Hair and Nail Salons",
+  "Barber Shops"
+];
+
+export const CITIES = [
+  { name: "Boston", state: "Massachusetts" },
+  { name: "New York City", state: "New York" },
+  { name: "Atlanta", state: "Georgia" },
+  { name: "Los Angeles", state: "California" },
+  { name: "Houston", state: "Texas" },
+  { name: "Chicago", state: "Illinois" },
+  { name: "Washington", state: "DC" },
+  { name: "Miami", state: "Florida" },
+  { name: "New Orleans", state: "Louisiana" },
+  { name: "Detroit", state: "Michigan" },
+  { name: "San Francisco", state: "California" }
+];
+
