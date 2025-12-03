@@ -17,6 +17,7 @@ import {
   FlatList,
   ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -441,9 +442,10 @@ export default function EventsPage() {
   return (
     <>
       <LinearGradient colors={["#0f0f1a", "#1a1a2e"]} style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Events</Text>
-        </View>
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>My Events</Text>
+          </View>
 
         <ScrollView
           style={styles.scrollView}
@@ -472,6 +474,7 @@ export default function EventsPage() {
             events.map(renderEvent)
           )}
         </ScrollView>
+        </SafeAreaView>
       </LinearGradient>
 
       {/* Edit Event Modal */}
@@ -752,6 +755,9 @@ export default function EventsPage() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  safeArea: {
     flex: 1,
   },
   header: {

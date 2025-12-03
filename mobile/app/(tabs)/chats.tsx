@@ -12,6 +12,7 @@ import {
   Modal,
   Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { Fonts } from "@/constants/fonts";
@@ -190,16 +191,17 @@ export default function ChatsScreen() {
 
   return (
     <LinearGradient colors={["#1a1a2e", "#16213e"]} style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Messages</Text>
-        <TouchableOpacity
-          style={styles.newChatButton}
-          onPress={() => setNewChatModalVisible(true)}
-        >
-          <Ionicons name="create-outline" size={24} color="#a855f7" />
-        </TouchableOpacity>
-      </View>
+      <SafeAreaView style={styles.safeArea}>
+        {/* Header */}
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Messages</Text>
+          <TouchableOpacity
+            style={styles.newChatButton}
+            onPress={() => setNewChatModalVisible(true)}
+          >
+            <Ionicons name="create-outline" size={24} color="#a855f7" />
+          </TouchableOpacity>
+        </View>
 
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -243,6 +245,7 @@ export default function ChatsScreen() {
         ListEmptyComponent={renderEmptyState}
         showsVerticalScrollIndicator={false}
       />
+      </SafeAreaView>
 
       {/* New Chat Modal */}
       <Modal
@@ -353,6 +356,9 @@ export default function ChatsScreen() {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  safeArea: {
     flex: 1,
   },
   loadingContainer: {

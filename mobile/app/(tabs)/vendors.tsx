@@ -8,6 +8,7 @@ import {
   FlatList,
   Animated,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import axios from "axios";
 import { BASE_URL } from "@/constants/constants";
 import { useRouter } from "expo-router";
@@ -103,7 +104,7 @@ export default function VendorsPage() {
     return <LoadingScreen />;
   }
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container}>
       <Animated.View
         style={[
           styles.headerContainer,
@@ -166,7 +167,7 @@ export default function VendorsPage() {
         visible={showVendorModal}
         onClose={() => setShowVendorModal(false)}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
