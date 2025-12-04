@@ -39,21 +39,12 @@ export default function CityGuidesPage() {
     try {
       setLoading(true);
       const url = `${BASE_URL}/guides?city=${encodeURIComponent(cityName as string)}`;
-      console.log("Fetching guides from:", url);
-      console.log("City name param:", cityName);
 
       const response = await fetch(url);
       const data = await response.json();
 
-      console.log("Response status:", response.status);
-      console.log("Response data:", data);
-      console.log("Guides count:", data.guides?.length || 0);
-
       if (response.ok) {
         setGuides(data.guides || []);
-        console.log("Guides set:", data.guides?.length || 0);
-      } else {
-        console.error("Error response:", data);
       }
     } catch (error) {
       console.error("Failed to fetch guides:", error);
@@ -64,7 +55,6 @@ export default function CityGuidesPage() {
 
   const filterGuides = () => {
     let filtered = [...guides];
-    console.log("Starting filter with guides:", filtered.length);
 
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
@@ -74,23 +64,18 @@ export default function CityGuidesPage() {
           guide.description.toLowerCase().includes(query) ||
           guide.authorName.toLowerCase().includes(query)
       );
-      console.log("After search filter:", filtered.length);
     }
 
     if (selectedTopic) {
       filtered = filtered.filter((guide) => guide.topic === selectedTopic);
-      console.log("After topic filter:", filtered.length, "Topic:", selectedTopic);
     }
 
     if (priceFilter === "free") {
       filtered = filtered.filter((guide) => guide.price === 0);
-      console.log("After free filter:", filtered.length);
     } else if (priceFilter === "paid") {
       filtered = filtered.filter((guide) => guide.price > 0);
-      console.log("After paid filter:", filtered.length);
     }
 
-    console.log("Final filtered guides:", filtered.length);
     setFilteredGuides(filtered);
   };
 

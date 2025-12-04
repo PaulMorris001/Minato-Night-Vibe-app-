@@ -7,7 +7,11 @@ import {
   updateEvent,
   deleteEvent,
   inviteUserByUsername,
-  joinEventByShareLink
+  joinEventByShareLink,
+  getPublicEvents,
+  purchaseTicket,
+  getUserTickets,
+  getEventTicketSales
 } from "../controllers/event.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 
@@ -18,6 +22,18 @@ router.post("/events", authenticate, createEvent);
 
 // Get all events for the authenticated user
 router.get("/events", authenticate, getUserEvents);
+
+// Get public events for exploration
+router.get("/events/public/explore", authenticate, getPublicEvents);
+
+// Get user's purchased tickets
+router.get("/tickets", authenticate, getUserTickets);
+
+// Purchase a ticket for a public paid event
+router.post("/events/:eventId/purchase", authenticate, purchaseTicket);
+
+// Get ticket sales for an event (organizer only)
+router.get("/events/:eventId/tickets", authenticate, getEventTicketSales);
 
 // Get a specific event by ID
 router.get("/events/:eventId", authenticate, getEventById);
