@@ -1,15 +1,26 @@
 import Event from "../models/event.model.js";
 import User from "../models/user.model.js";
+import Ticket from "../models/ticket.model.js";
 import ChatService from "../services/chat.service.js";
 
 // Create a new event
 export const createEvent = async (req, res) => {
   try {
-    const { title, date, location, image, description } = req.body;
+    const { title, date, location, image, description, isPublic, isPaid, ticketPrice, maxGuests } = req.body;
     const userId = req.user.id;
 
     if (!title || !date || !location) {
       return res.status(400).json({ message: "Title, date, and location are required" });
+    }
+
+    // Validate pricing options for public paid events
+    if (isPublic && isPaid) {
+      if (!ticketPrice || ticketPrice <= 0) {
+        return res.status(400).json({ message: "Ticket price must be greater than 0 for paid events" });
+      }
+      if (!maxGuests || maxGuests <= 0) {
+        return res.status(400).json({ message: "Max guests must be specified for paid events" });
+      }
     }
 
     const event = new Event({
@@ -18,7 +29,11 @@ export const createEvent = async (req, res) => {
       location,
       image: image || "",
       description: description || "",
-      createdBy: userId
+      createdBy: userId,
+      isPublic: isPublic || false,
+      isPaid: isPublic && isPaid ? isPaid : false,
+      ticketPrice: isPublic && isPaid ? ticketPrice : 0,
+      maxGuests: isPublic && isPaid ? maxGuests : 0
     });
 
     await event.save();
@@ -290,5 +305,154 @@ export const joinEventByShareLink = async (req, res) => {
   } catch (error) {
     console.error("Join event error:", error);
     res.status(500).json({ message: "Error joining event", error: error.message });
+  }
+};
+
+// Get public events for exploration
+export const getPublicEvents = async (req, res) => {
+  try {
+    const { limit = 20 } = req.query;
+
+    const events = await Event.find({
+      isPublic: true,
+      isActive: true,
+      date: { $gte: new Date() } // Only future events
+    })
+      .populate('createdBy', 'username email profilePicture')
+      .sort({ date: 1 })
+      .limit(parseInt(limit));
+
+    // Get ticket counts for paid events
+    const eventsWithTicketInfo = await Promise.all(
+      events.map(async (event) => {
+        const eventObj = event.toObject();
+        if (event.isPaid && event.maxGuests > 0) {
+          const soldTickets = await Ticket.countDocuments({ event: event._id, isValid: true });
+          eventObj.ticketsSold = soldTickets;
+          eventObj.ticketsRemaining = event.maxGuests - soldTickets;
+        }
+        return eventObj;
+      })
+    );
+
+    res.status(200).json({ events: eventsWithTicketInfo });
+  } catch (error) {
+    console.error("Get public events error:", error);
+    res.status(500).json({ message: "Error fetching public events", error: error.message });
+  }
+};
+
+// Purchase a ticket for a public paid event
+export const purchaseTicket = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const userId = req.user.id;
+
+    const event = await Event.findById(eventId);
+
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    if (!event.isPublic) {
+      return res.status(403).json({ message: "This is a private event" });
+    }
+
+    if (!event.isPaid) {
+      return res.status(400).json({ message: "This event is free" });
+    }
+
+    // Check if user already has a ticket
+    const existingTicket = await Ticket.findOne({ event: eventId, user: userId, isValid: true });
+    if (existingTicket) {
+      return res.status(400).json({ message: "You already have a ticket for this event" });
+    }
+
+    // Check if tickets are still available
+    const soldTickets = await Ticket.countDocuments({ event: eventId, isValid: true });
+    if (soldTickets >= event.maxGuests) {
+      return res.status(400).json({ message: "No tickets available" });
+    }
+
+    // Create ticket
+    const ticket = new Ticket({
+      event: eventId,
+      user: userId,
+      ticketPrice: event.ticketPrice
+    });
+
+    await ticket.save();
+
+    const populatedTicket = await Ticket.findById(ticket._id)
+      .populate('event', 'title date location image')
+      .populate('user', 'username email profilePicture');
+
+    res.status(201).json({
+      message: "Ticket purchased successfully",
+      ticket: populatedTicket
+    });
+  } catch (error) {
+    console.error("Purchase ticket error:", error);
+    res.status(500).json({ message: "Error purchasing ticket", error: error.message });
+  }
+};
+
+// Get user's purchased tickets
+export const getUserTickets = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const tickets = await Ticket.find({ user: userId, isValid: true })
+      .populate({
+        path: 'event',
+        populate: {
+          path: 'createdBy',
+          select: 'username email profilePicture'
+        }
+      })
+      .sort({ purchaseDate: -1 });
+
+    res.status(200).json({ tickets });
+  } catch (error) {
+    console.error("Get user tickets error:", error);
+    res.status(500).json({ message: "Error fetching tickets", error: error.message });
+  }
+};
+
+// Get ticket sales for an event (organizer only)
+export const getEventTicketSales = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const userId = req.user.id;
+
+    const event = await Event.findById(eventId);
+
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    // Only the creator can view ticket sales
+    if (event.createdBy.toString() !== userId) {
+      return res.status(403).json({ message: "You don't have permission to view ticket sales" });
+    }
+
+    const soldTickets = await Ticket.countDocuments({ event: eventId, isValid: true });
+    const ticketsRemaining = event.maxGuests - soldTickets;
+
+    const tickets = await Ticket.find({ event: eventId, isValid: true })
+      .populate('user', 'username email profilePicture')
+      .sort({ purchaseDate: -1 });
+
+    res.status(200).json({
+      ticketsSold: soldTickets,
+      ticketsRemaining,
+      maxGuests: event.maxGuests,
+      ticketPrice: event.ticketPrice,
+      totalRevenue: soldTickets * event.ticketPrice,
+      tickets
+    });
+  } catch (error) {
+    console.error("Get event ticket sales error:", error);
+    res.status(500).json({ message: "Error fetching ticket sales", error: error.message });
   }
 };

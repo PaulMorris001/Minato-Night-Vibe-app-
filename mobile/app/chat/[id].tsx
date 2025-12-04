@@ -11,6 +11,7 @@ import {
   Alert,
   Image,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
@@ -211,13 +212,14 @@ export default function ChatScreen() {
 
   return (
     <LinearGradient colors={["#1a1a2e", "#16213e"]} style={styles.container}>
-      <KeyboardAvoidingView
-        style={styles.container}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
-      >
-        {/* Header */}
-        <View style={styles.header}>
+      <SafeAreaView style={styles.safeArea} edges={['top']}>
+        <KeyboardAvoidingView
+          style={styles.keyboardView}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={0}
+        >
+          {/* Header */}
+          <View style={styles.header}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
@@ -290,12 +292,19 @@ export default function ChatScreen() {
           disabled={sending}
         />
       </KeyboardAvoidingView>
+      </SafeAreaView>
     </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  safeArea: {
+    flex: 1,
+  },
+  keyboardView: {
     flex: 1,
   },
   loadingContainer: {
@@ -307,7 +316,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 12,
-    paddingTop: 60,
+    paddingTop: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: "#374151",

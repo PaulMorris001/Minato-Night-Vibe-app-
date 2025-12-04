@@ -13,6 +13,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Image,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
@@ -22,6 +23,28 @@ import * as ImagePicker from "expo-image-picker";
 import * as SecureStore from "expo-secure-store";
 import { BASE_URL } from "@/constants/constants";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import Carousel from "@/components/Carousel";
+
+interface PublicEvent {
+  _id: string;
+  title: string;
+  date: string;
+  location: string;
+  image?: string;
+  description?: string;
+  isPublic: boolean;
+  isPaid: boolean;
+  ticketPrice?: number;
+  maxGuests?: number;
+  ticketsSold?: number;
+  ticketsRemaining?: number;
+  createdBy: {
+    _id: string;
+    username: string;
+    email: string;
+    profilePicture?: string;
+  };
+}
 
 export default function Home() {
   const router = useRouter();
@@ -29,12 +52,18 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [publicEvents, setPublicEvents] = useState<PublicEvent[]>([]);
+  const [loadingEvents, setLoadingEvents] = useState(false);
   const [eventData, setEventData] = useState({
     title: "",
     date: "",
     location: "",
     image: "",
     description: "",
+    isPublic: false,
+    isPaid: false,
+    ticketPrice: "",
+    maxGuests: "",
   });
 
   // Animation values
@@ -42,6 +71,29 @@ export default function Home() {
   const slideAnim = useRef(new Animated.Value(50)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  const fetchPublicEvents = async () => {
+    try {
+      setLoadingEvents(true);
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) return;
+
+      const response = await fetch(`${BASE_URL}/events/public/explore?limit=10`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+      if (response.ok) {
+        setPublicEvents(data.events || []);
+      }
+    } catch (error) {
+      console.error("Fetch public events error:", error);
+    } finally {
+      setLoadingEvents(false);
+    }
+  };
 
   useEffect(() => {
     // Entrance animations
@@ -80,6 +132,9 @@ export default function Home() {
         }),
       ])
     ).start();
+
+    // Fetch public events
+    fetchPublicEvents();
   }, []);
 
   const pickImage = async () => {
@@ -124,6 +179,17 @@ export default function Home() {
       return;
     }
 
+    if (eventData.isPublic && eventData.isPaid) {
+      if (!eventData.ticketPrice || parseFloat(eventData.ticketPrice) <= 0) {
+        Alert.alert("Error", "Please enter a valid ticket price");
+        return;
+      }
+      if (!eventData.maxGuests || parseInt(eventData.maxGuests) <= 0) {
+        Alert.alert("Error", "Please enter a valid number of max guests");
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       const token = await SecureStore.getItemAsync("token");
@@ -135,13 +201,19 @@ export default function Home() {
         return;
       }
 
+      const payload = {
+        ...eventData,
+        ticketPrice: eventData.isPaid ? parseFloat(eventData.ticketPrice) : 0,
+        maxGuests: eventData.isPaid ? parseInt(eventData.maxGuests) : 0,
+      };
+
       const response = await fetch(`${BASE_URL}/events`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify(eventData),
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -160,6 +232,10 @@ export default function Home() {
                   location: "",
                   image: "",
                   description: "",
+                  isPublic: false,
+                  isPaid: false,
+                  ticketPrice: "",
+                  maxGuests: "",
                 });
                 setIsModalVisible(false);
                 router.push("/(tabs)/events");
@@ -174,8 +250,13 @@ export default function Home() {
                   location: "",
                   image: "",
                   description: "",
+                  isPublic: false,
+                  isPaid: false,
+                  ticketPrice: "",
+                  maxGuests: "",
                 });
                 setIsModalVisible(false);
+                fetchPublicEvents();
               },
             },
           ]
@@ -188,6 +269,32 @@ export default function Home() {
       Alert.alert("Error", "Failed to create event. Please try again.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handlePurchaseTicket = async (eventId: string, eventTitle: string) => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) return;
+
+      const response = await fetch(`${BASE_URL}/events/${eventId}/purchase`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        Alert.alert("Success!", `Successfully purchased ticket for "${eventTitle}"`);
+        fetchPublicEvents();
+      } else {
+        Alert.alert("Error", data.message || "Failed to purchase ticket");
+      }
+    } catch (error) {
+      console.error("Purchase ticket error:", error);
+      Alert.alert("Error", "Failed to purchase ticket");
     }
   };
 
@@ -398,6 +505,125 @@ export default function Home() {
           <View style={styles.decorCircle1} />
           <View style={styles.decorCircle2} />
         </LinearGradient>
+
+        {/* Explore Events Section */}
+        {publicEvents.length > 0 && (
+          <View style={styles.exploreSection}>
+            <View style={styles.exploreSectionHeader}>
+              <Text style={styles.sectionTitle}>Explore Events</Text>
+              <TouchableOpacity onPress={() => router.push("/(tabs)/events")}>
+                <Text style={styles.seeAllText}>See All</Text>
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.sectionSubtitle}>
+              Discover amazing public events happening near you
+            </Text>
+
+            {loadingEvents ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#a855f7" />
+              </View>
+            ) : (
+              <Carousel itemWidth={320} gap={16}>
+                {publicEvents.map((event) => (
+                  <TouchableOpacity
+                    key={event._id}
+                    style={styles.eventCard}
+                    activeOpacity={0.9}
+                    onPress={() => router.push(`/event/${event._id}` as any)}
+                  >
+                    <View style={styles.eventCardInner}>
+                      {event.image ? (
+                        <Image source={{ uri: event.image }} style={styles.eventCardImage} />
+                      ) : (
+                        <LinearGradient
+                          colors={["#667eea", "#764ba2"]}
+                          style={styles.eventCardImagePlaceholder}
+                        >
+                          <Ionicons name="calendar" size={48} color="rgba(255,255,255,0.5)" />
+                        </LinearGradient>
+                      )}
+
+                      <LinearGradient
+                        colors={["transparent", "rgba(0,0,0,0.9)"]}
+                        style={styles.eventCardGradient}
+                      >
+                        <View style={styles.eventCardContent}>
+                          <Text style={styles.eventCardTitle} numberOfLines={2}>
+                            {event.title}
+                          </Text>
+
+                          <View style={styles.eventCardDetail}>
+                            <Ionicons name="location" size={14} color="#a855f7" />
+                            <Text style={styles.eventCardDetailText} numberOfLines={1}>
+                              {event.location}
+                            </Text>
+                          </View>
+
+                          <View style={styles.eventCardDetail}>
+                            <Ionicons name="calendar" size={14} color="#a855f7" />
+                            <Text style={styles.eventCardDetailText}>
+                              {new Date(event.date).toLocaleDateString()}
+                            </Text>
+                          </View>
+
+                          {event.isPaid && (
+                            <>
+                              <View style={styles.eventCardPriceContainer}>
+                                <LinearGradient
+                                  colors={["#f093fb", "#f5576c"]}
+                                  start={{ x: 0, y: 0 }}
+                                  end={{ x: 1, y: 0 }}
+                                  style={styles.eventCardPriceBadge}
+                                >
+                                  <Ionicons name="pricetag" size={12} color="#fff" />
+                                  <Text style={styles.eventCardPriceText}>
+                                    ${event.ticketPrice}
+                                  </Text>
+                                </LinearGradient>
+
+                                {event.ticketsRemaining !== undefined && (
+                                  <Text style={styles.eventCardTicketsText}>
+                                    {event.ticketsRemaining} left
+                                  </Text>
+                                )}
+                              </View>
+
+                              <TouchableOpacity
+                                style={styles.buyTicketButton}
+                                onPress={(e) => {
+                                  e.stopPropagation();
+                                  handlePurchaseTicket(event._id, event.title);
+                                }}
+                                activeOpacity={0.8}
+                              >
+                                <LinearGradient
+                                  colors={["#a855f7", "#7c3aed"]}
+                                  start={{ x: 0, y: 0 }}
+                                  end={{ x: 1, y: 0 }}
+                                  style={styles.buyTicketGradient}
+                                >
+                                  <Ionicons name="ticket" size={16} color="#fff" />
+                                  <Text style={styles.buyTicketText}>Buy Ticket</Text>
+                                </LinearGradient>
+                              </TouchableOpacity>
+                            </>
+                          )}
+
+                          {!event.isPaid && (
+                            <View style={styles.freeEventBadge}>
+                              <Text style={styles.freeEventText}>FREE EVENT</Text>
+                            </View>
+                          )}
+                        </View>
+                      </LinearGradient>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </Carousel>
+            )}
+          </View>
+        )}
 
         {/* Features Section */}
         <View style={styles.featuresSection}>
@@ -724,6 +950,153 @@ export default function Home() {
                   numberOfLines={4}
                 />
               </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Event Visibility</Text>
+                <View style={styles.visibilityOptions}>
+                  <TouchableOpacity
+                    style={[
+                      styles.visibilityOption,
+                      !eventData.isPublic && styles.visibilityOptionActive,
+                    ]}
+                    onPress={() =>
+                      setEventData({ ...eventData, isPublic: false, isPaid: false })
+                    }
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="lock-closed"
+                      size={20}
+                      color={!eventData.isPublic ? "#a855f7" : "#6b7280"}
+                    />
+                    <Text
+                      style={[
+                        styles.visibilityOptionText,
+                        !eventData.isPublic && styles.visibilityOptionTextActive,
+                      ]}
+                    >
+                      Private
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.visibilityOption,
+                      eventData.isPublic && styles.visibilityOptionActive,
+                    ]}
+                    onPress={() => setEventData({ ...eventData, isPublic: true })}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="globe"
+                      size={20}
+                      color={eventData.isPublic ? "#a855f7" : "#6b7280"}
+                    />
+                    <Text
+                      style={[
+                        styles.visibilityOptionText,
+                        eventData.isPublic && styles.visibilityOptionTextActive,
+                      ]}
+                    >
+                      Public
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {eventData.isPublic && (
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Pricing</Text>
+                    <View style={styles.visibilityOptions}>
+                      <TouchableOpacity
+                        style={[
+                          styles.visibilityOption,
+                          !eventData.isPaid && styles.visibilityOptionActive,
+                        ]}
+                        onPress={() =>
+                          setEventData({
+                            ...eventData,
+                            isPaid: false,
+                            ticketPrice: "",
+                            maxGuests: "",
+                          })
+                        }
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name="gift"
+                          size={20}
+                          color={!eventData.isPaid ? "#10b981" : "#6b7280"}
+                        />
+                        <Text
+                          style={[
+                            styles.visibilityOptionText,
+                            !eventData.isPaid && styles.visibilityOptionTextActive,
+                          ]}
+                        >
+                          Free
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.visibilityOption,
+                          eventData.isPaid && styles.visibilityOptionActive,
+                        ]}
+                        onPress={() => setEventData({ ...eventData, isPaid: true })}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons
+                          name="card"
+                          size={20}
+                          color={eventData.isPaid ? "#a855f7" : "#6b7280"}
+                        />
+                        <Text
+                          style={[
+                            styles.visibilityOptionText,
+                            eventData.isPaid && styles.visibilityOptionTextActive,
+                          ]}
+                        >
+                          Paid
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  {eventData.isPaid && (
+                    <>
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Ticket Price ($) *</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="e.g., 25"
+                          placeholderTextColor="#6b7280"
+                          value={eventData.ticketPrice}
+                          onChangeText={(text) =>
+                            setEventData({ ...eventData, ticketPrice: text })
+                          }
+                          keyboardType="decimal-pad"
+                        />
+                      </View>
+
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Max Guests *</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="e.g., 100"
+                          placeholderTextColor="#6b7280"
+                          value={eventData.maxGuests}
+                          onChangeText={(text) =>
+                            setEventData({ ...eventData, maxGuests: text })
+                          }
+                          keyboardType="number-pad"
+                        />
+                      </View>
+                    </>
+                  )}
+                </>
+              )}
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -1227,5 +1600,167 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: "#fff",
     flex: 1,
+  },
+  exploreSection: {
+    paddingVertical: 50,
+    backgroundColor: "#0f0f1a",
+  },
+  exploreSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 24,
+    marginBottom: 8,
+  },
+  seeAllText: {
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    color: "#a855f7",
+  },
+  loadingContainer: {
+    paddingVertical: 60,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  eventCard: {
+    width: "100%",
+    height: 400,
+    borderRadius: 20,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  eventCardInner: {
+    flex: 1,
+    position: "relative",
+  },
+  eventCardImage: {
+    width: "100%",
+    height: "100%",
+    resizeMode: "cover",
+  },
+  eventCardImagePlaceholder: {
+    width: "100%",
+    height: "100%",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  eventCardGradient: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: "60%",
+    justifyContent: "flex-end",
+  },
+  eventCardContent: {
+    padding: 20,
+  },
+  eventCardTitle: {
+    fontSize: 22,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+    marginBottom: 12,
+  },
+  eventCardDetail: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+    gap: 8,
+  },
+  eventCardDetailText: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#e5e7eb",
+    flex: 1,
+  },
+  eventCardPriceContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 8,
+    marginBottom: 12,
+    gap: 12,
+  },
+  eventCardPriceBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    gap: 6,
+  },
+  eventCardPriceText: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  eventCardTicketsText: {
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+    color: "#fbbf24",
+  },
+  buyTicketButton: {
+    borderRadius: 12,
+    overflow: "hidden",
+    marginTop: 4,
+  },
+  buyTicketGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  buyTicketText: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  freeEventBadge: {
+    backgroundColor: "#10b981",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+    marginTop: 8,
+  },
+  freeEventText: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+    letterSpacing: 0.5,
+  },
+  visibilityOptions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  visibilityOption: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    backgroundColor: "#374151",
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
+  visibilityOptionActive: {
+    borderColor: "#a855f7",
+    backgroundColor: "rgba(168, 85, 247, 0.1)",
+  },
+  visibilityOptionText: {
+    fontSize: 15,
+    fontFamily: Fonts.semiBold,
+    color: "#9ca3af",
+  },
+  visibilityOptionTextActive: {
+    color: "#a855f7",
   },
 });

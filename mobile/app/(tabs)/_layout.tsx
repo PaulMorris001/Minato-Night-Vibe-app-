@@ -21,6 +21,7 @@ import { capitalize } from "@/libs/helpers";
 import { Fonts } from "@/constants/fonts";
 import { BASE_URL } from "@/constants/constants";
 import { useAccount } from "@/contexts/AccountContext";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabsLayout() {
   const { activeAccount } = useAccount();
@@ -28,6 +29,7 @@ export default function TabsLayout() {
   const isGlassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
   const segments = useSegments();
   const currentTab = segments[1]; // Gets the current tab name (home, vendors, bests, etc.)
+  const insets = useSafeAreaInsets();
 
   const [user, setUser] = useState<{
     id: string;
@@ -227,25 +229,39 @@ export default function TabsLayout() {
       {currentTab === "home" && (
         <View style={styles.navbar}>
           <Text style={styles.logoText}>NightVibe</Text>
-          <TouchableOpacity
-            onPress={handleProfilePress}
-            style={styles.profileButton}
-            activeOpacity={0.7}
-          >
-            {user.profilePicture ? (
-              <Image
-                source={{ uri: user.profilePicture }}
-                style={styles.profileImage}
-              />
-            ) : (
+          <View style={styles.navbarActions}>
+            <TouchableOpacity
+              onPress={() => router.push("/tickets" as any)}
+              style={styles.ticketButton}
+              activeOpacity={0.7}
+            >
               <LinearGradient
                 colors={["#a855f7", "#7c3aed"]}
-                style={styles.profileGradient}
+                style={styles.ticketGradient}
               >
-                <Ionicons name="person" size={20} color="#fff" />
+                <Ionicons name="ticket" size={20} color="#fff" />
               </LinearGradient>
-            )}
-          </TouchableOpacity>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={handleProfilePress}
+              style={styles.profileButton}
+              activeOpacity={0.7}
+            >
+              {user.profilePicture ? (
+                <Image
+                  source={{ uri: user.profilePicture }}
+                  style={styles.profileImage}
+                />
+              ) : (
+                <LinearGradient
+                  colors={["#a855f7", "#7c3aed"]}
+                  style={styles.profileGradient}
+                >
+                  <Ionicons name="person" size={20} color="#fff" />
+                </LinearGradient>
+              )}
+            </TouchableOpacity>
+          </View>
         </View>
       )}
 
@@ -277,11 +293,11 @@ export default function TabsLayout() {
           tabBarInactiveTintColor: "#6b7280",
           tabBarStyle: {
             backgroundColor: Platform.OS === "ios" ? "rgba(31, 31, 46, 0.95)" : "#1f1f2e",
-            paddingBottom: Platform.OS === "ios" ? 24 : 8,
+            paddingBottom: Math.max(insets.bottom, Platform.OS === "ios" ? 24 : 16),
             paddingTop: 8,
             borderTopWidth: 0.5,
             borderTopColor: "rgba(168, 85, 247, 0.2)",
-            height: Platform.OS === "ios" ? 90 : 70,
+            height: Platform.OS === "ios" ? 90 : 70 + Math.max(insets.bottom - 8, 0),
             shadowColor: "#000",
             shadowOffset: {
               width: 0,
@@ -407,6 +423,26 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(168, 85, 247, 0.3)",
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 8,
+  },
+  navbarActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  ticketButton: {
+    borderRadius: 20,
+    overflow: "hidden",
+    shadowColor: "#a855f7",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
+  },
+  ticketGradient: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
   },
   profileButton: {
     borderRadius: 20,

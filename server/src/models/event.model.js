@@ -14,11 +14,19 @@ const eventSchema = mongoose.Schema({
     required: true
   },
 
-  // Invited users
+  // Invited users (for private events)
   invitedUsers: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "user"
   }],
+
+  // Event visibility
+  isPublic: { type: Boolean, default: false },
+
+  // Pricing options (only for public events)
+  isPaid: { type: Boolean, default: false },
+  ticketPrice: { type: Number, default: 0 },
+  maxGuests: { type: Number, default: 0 },
 
   // Shareable link token
   shareToken: { type: String, unique: true, sparse: true },
