@@ -23,7 +23,7 @@ const ticketSchema = mongoose.Schema({
   isValid: { type: Boolean, default: true },
 
   // Unique ticket code for verification
-  ticketCode: { type: String, unique: true, required: true }
+  ticketCode: { type: String, unique: true, sparse: true }
 }, {
   timestamps: true
 });
