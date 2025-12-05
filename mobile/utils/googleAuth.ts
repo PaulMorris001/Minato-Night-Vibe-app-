@@ -1,5 +1,6 @@
 import * as WebBrowser from 'expo-web-browser';
 import * as AuthSession from 'expo-auth-session';
+import * as Crypto from 'expo-crypto';
 
 // Required for web browser authentication
 WebBrowser.maybeCompleteAuthSession();
@@ -17,15 +18,20 @@ export const configureGoogleSignIn = () => {
   // Configuration is handled automatically by Expo AuthSession
 };
 
-// Sign in with Google using Expo AuthSession with proper OAuth flow
+// Sign in with Google using Expo AuthSession with proxy
 export const signInWithGoogle = async () => {
   try {
-    // Use Expo's auth proxy which provides an https:// redirect URI
-    const redirectUri = AuthSession.makeRedirectUri({
-      useProxy: true,
-    });
+    // Manually construct the Expo proxy redirect URI
+    // Format: https://auth.expo.io/@owner/slug
+    const redirectUri = 'https://auth.expo.io/@setemiloye1/nightvibe';
 
     console.log('Redirect URI:', redirectUri); // Log for debugging
+
+    // Generate a nonce for security (required by Google for id_token flow)
+    const nonce = await Crypto.digestStringAsync(
+      Crypto.CryptoDigestAlgorithm.SHA256,
+      Math.random().toString()
+    );
 
     // Create the authorization request
     const request = new AuthSession.AuthRequest({
@@ -34,12 +40,13 @@ export const signInWithGoogle = async () => {
       scopes: ['openid', 'profile', 'email'],
       responseType: AuthSession.ResponseType.IdToken,
       usePKCE: false, // ID token flow doesn't use PKCE
+      extraParams: {
+        nonce, // Required for id_token response type
+      },
     });
 
     // Prompt the user to authenticate
-    const result = await request.promptAsync(discovery, {
-      useProxy: true,
-    });
+    const result = await request.promptAsync(discovery);
 
     if (result.type === 'success') {
       const { params } = result;
