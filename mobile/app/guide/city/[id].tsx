@@ -18,25 +18,49 @@ import { BASE_URL } from "@/constants/constants";
 
 export default function CityGuidesPage() {
   const router = useRouter();
-  const { cityName, cityId } = useLocalSearchParams<{ cityName: string; cityId?: string }>();
+  const { cityName } = useLocalSearchParams<{ cityName: string }>();
 
   const [guides, setGuides] = useState<Guide[]>([]);
   const [filteredGuides, setFilteredGuides] = useState<Guide[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedTopic, setSelectedTopic] = useState<string | null>(null);
-  const [priceFilter, setPriceFilter] = useState<"all" | "free" | "paid">("all");
+  const [priceFilter, setPriceFilter] = useState<"all" | "free" | "paid">(
+    "all"
+  );
 
   const fetchGuides = useCallback(async () => {
     try {
       setLoading(true);
 
-      const url = `${BASE_URL}/city/${cityId}/guides`;
-      console.log(url)
+      const token = await SecureStore.getItemAsync("token");
 
-      const response = await fetch(url);
+      // Convert city name to URL-safe format (e.g., "New York City" -> "new-york-city")
+      const urlSafeCityName = cityName.toLowerCase().replace(/\s+/g, "-");
+      const url = `${BASE_URL}/guide/by-city?name=${urlSafeCityName}`;
+
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      } else {
+        console.warn(
+          "⚠️ debug: No token found, making unauthenticated request"
+        );
+      }
+
+      const response = await fetch(url, {
+        headers,
+      });
+
       const data = await response.json();
-      console.log(data)
+
+      if (response.status === 401) {
+        console.warn(
+          "⛔️ debug: 401 Unauthorized received. Redirecting to login..."
+        );
+        router.push("/login"); // or whatever your login route is, assume /login based on context
+        return;
+      }
 
       if (response.ok) {
         setGuides(data.guides || []);
@@ -46,7 +70,7 @@ export default function CityGuidesPage() {
     } finally {
       setLoading(false);
     }
-  }, [cityId]);
+  }, [cityName, router]);
 
   const filterGuides = useCallback(() => {
     let filtered = [...guides];
@@ -81,8 +105,6 @@ export default function CityGuidesPage() {
   useEffect(() => {
     filterGuides();
   }, [filterGuides]);
-
-  console.log(guides)
 
   const renderGuideCard = ({ item }: { item: Guide }) => (
     <TouchableOpacity
@@ -128,9 +150,7 @@ export default function CityGuidesPage() {
         styles.topicFilterButton,
         selectedTopic === item && styles.topicFilterButtonActive,
       ]}
-      onPress={() =>
-        setSelectedTopic(selectedTopic === item ? null : item)
-      }
+      onPress={() => setSelectedTopic(selectedTopic === item ? null : item)}
     >
       <Text
         style={[
@@ -250,7 +270,11 @@ export default function CityGuidesPage() {
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Ionicons name="document-text-outline" size={64} color="#6b7280" />
+              <Ionicons
+                name="document-text-outline"
+                size={64}
+                color="#6b7280"
+              />
               <Text style={styles.emptyTitle}>No guides found</Text>
               <Text style={styles.emptyText}>
                 {searchQuery || selectedTopic

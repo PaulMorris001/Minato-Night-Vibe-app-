@@ -212,39 +212,7 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Switch Account (only show if user is a vendor) */}
-      {user.isVendor && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account Management</Text>
-          <Text style={styles.sectionDescription}>
-            Switch between client and vendor views
-          </Text>
-
-          <TouchableOpacity
-            style={styles.switchAccountButton}
-            onPress={handleSwitchAccount}
-          >
-            <View style={styles.switchAccountLeft}>
-              <View style={styles.switchIconContainer}>
-                <Ionicons name="swap-horizontal" size={22} color={Colors.primary} />
-              </View>
-              <View>
-                <Text style={styles.switchAccountTitle}>
-                  {activeAccount === "client"
-                    ? "Switch to Vendor Account"
-                    : "Switch to Client Account"}
-                </Text>
-                <Text style={styles.switchAccountSubtitle}>
-                  {activeAccount === "client"
-                    ? "Manage your business and services"
-                    : "Browse events and venues"}
-                </Text>
-              </View>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#6b7280" />
-          </TouchableOpacity>
-        </View>
-      )}
+      
 
       {/* Additional Settings */}
       <View style={styles.section}>
@@ -275,6 +243,17 @@ export default function SettingsScreen() {
             <Text style={styles.preferenceValue}>English</Text>
             <Ionicons name="chevron-forward" size={20} color="#6b7280" />
           </View>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.preferenceItem}
+          onPress={() => router.push("/debug-logs" as any)}
+        >
+          <View style={styles.preferenceLeft}>
+            <Ionicons name="bug-outline" size={22} color="#e5e7eb" />
+            <Text style={styles.preferenceText}>Debug Logs</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color="#6b7280" />
         </TouchableOpacity>
       </View>
 

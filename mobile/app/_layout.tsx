@@ -19,9 +19,14 @@ import { AccountProvider } from "@/contexts/AccountContext";
 import socketService from "@/services/socket.service";
 import { theme } from "@/constants/theme";
 import { StatusBar } from "expo-status-bar";
+import { setupGlobalErrorHandler, setupConsoleOverride } from "@/utils/errorHandler";
 
 // Prevent auto-hiding splash screen
 SplashScreen.preventAutoHideAsync();
+
+// Setup global error handlers
+setupGlobalErrorHandler();
+setupConsoleOverride();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme() || "dark";
