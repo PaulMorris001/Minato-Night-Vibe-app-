@@ -47,7 +47,8 @@
         {
           "url": "https://sentry.io/",
           "project": "react-native",
-          "organization": "setemi-if"
+          "organization": "setemi-if",
+          "setCommits": false
         }
       ]
     ],
