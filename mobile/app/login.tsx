@@ -20,6 +20,7 @@ import { capitalize } from "@/libs/helpers";
 import { FormInput, PrimaryButton } from "@/components/shared";
 import { useAccount } from "@/contexts/AccountContext";
 import { configureGoogleSignIn, signInWithGoogle } from "@/utils/googleAuth";
+import { logger } from "@/utils/logger";
 
 export default function Login() {
   const router = useRouter();
@@ -44,10 +45,14 @@ export default function Login() {
 
     setLoading(true);
     try {
+      logger.info("Attempting login", { email, apiUrl: BASE_URL });
+
       const res = await axios.post(`${BASE_URL}/login`, {
         email,
         password,
       });
+
+      logger.info("Login successful", { userId: res.data.user?._id });
 
       const user = res.data.user;
       const token = res.data.token;
@@ -66,12 +71,16 @@ export default function Login() {
         router.replace("/(tabs)/home");
       }
     } catch (error: any) {
-      console.error("Login error details:");
-      console.error("Error message:", error.message);
-      console.error("Error code:", error.code);
-      console.error("Response data:", error.response?.data);
-      console.error("Response status:", error.response?.status);
-      console.error("Request URL:", error.config?.url);
+      // Log detailed error information to backend
+      await logger.error("Login failed", error, {
+        email,
+        apiUrl: BASE_URL,
+        statusCode: error.response?.status,
+        responseData: error.response?.data,
+        errorCode: error.code,
+        errorMessage: error.message,
+        requestUrl: error.config?.url,
+      });
 
       let errorMessage = "Login failed. Please try again.";
 
