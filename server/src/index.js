@@ -37,8 +37,6 @@ app.use("/api/", chatRoutes);
 app.use("/api/", guideRoutes);
 app.use("/api/upload", uploadRoutes);
 
-// This will be executed after server starts
-// (removed route debugging for now)
 
 // Initialize Socket.IO
 const io = initializeSocket(httpServer);

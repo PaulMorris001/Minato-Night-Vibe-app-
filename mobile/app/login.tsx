@@ -44,15 +44,11 @@ export default function Login() {
 
     setLoading(true);
     try {
-      console.log("Attempting login to:", `${BASE_URL}/login`);
-      console.log("Email:", email);
-
       const res = await axios.post(`${BASE_URL}/login`, {
         email,
         password,
       });
 
-      console.log("Login response:", res.data);
       const user = res.data.user;
       const token = res.data.token;
 
@@ -79,11 +75,14 @@ export default function Login() {
 
       let errorMessage = "Login failed. Please try again.";
 
-      if (error.code === 'ECONNREFUSED' || error.code === 'ENOTFOUND') {
+      if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
         errorMessage = `Cannot connect to server at ${BASE_URL}. Make sure the backend is running.`;
-      } else if (error.code === 'ETIMEDOUT' || error.message.includes('timeout')) {
+      } else if (
+        error.code === "ETIMEDOUT" ||
+        error.message.includes("timeout")
+      ) {
         errorMessage = "Connection timeout. Check your network connection.";
-      } else if (error.message.includes('Network Error')) {
+      } else if (error.message.includes("Network Error")) {
         errorMessage = `Network error. Cannot reach ${BASE_URL}. Check if backend is running and accessible.`;
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
@@ -139,9 +138,14 @@ export default function Login() {
         router.replace("/(tabs)/home");
       }
     } catch (error: any) {
-      const errorMessage = error.response?.data?.message || "Google sign-in failed. Please try again.";
+      const errorMessage =
+        error.response?.data?.message ||
+        "Google sign-in failed. Please try again.";
       Alert.alert("Error", errorMessage);
-      console.error("Google Sign-In Error:", error.response?.data || error.message);
+      console.error(
+        "Google Sign-In Error:",
+        error.response?.data || error.message
+      );
       setGoogleLoading(false);
     }
   };

@@ -16,7 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import { GUIDE_TOPICS, GuideSection, City } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
-import { BASE_URL } from "@/constants/constants";
+import { BASE_URL, CITIES } from "@/constants/constants";
 import { Picker } from "@react-native-picker/picker";
 
 export default function CreateGuidePage() {
@@ -34,30 +34,11 @@ export default function CreateGuidePage() {
   const [cities, setCities] = useState<City[]>([]);
   const [loadingCities, setLoadingCities] = useState(true);
 
-  // Fetch cities from API on component mount
+  // Load static cities on component mount
   useEffect(() => {
-    fetchCities();
+    setCities(CITIES);
+    setLoadingCities(false);
   }, []);
-
-  const fetchCities = async () => {
-    try {
-      const response = await fetch(`${BASE_URL}/cities`);
-      const data = await response.json();
-
-      if (response.ok) {
-        // Vendor endpoint returns array directly, not wrapped in { cities: [...] }
-        setCities(Array.isArray(data) ? data : []);
-      } else {
-        console.error("Failed to fetch cities:", data.message);
-        Alert.alert("Error", "Failed to load cities. Please try again.");
-      }
-    } catch (error) {
-      console.error("Fetch cities error:", error);
-      Alert.alert("Error", "Failed to load cities. Please check your connection.");
-    } finally {
-      setLoadingCities(false);
-    }
-  };
 
   const addSection = () => {
     if (sections.length >= 10) {
@@ -151,6 +132,14 @@ export default function CreateGuidePage() {
         return;
       }
 
+      // Find the selected city to get name and state
+      const selectedCity = cities.find(c => c._id === city);
+      if (!selectedCity) {
+        Alert.alert("Error", "Please select a valid city");
+        setLoading(false);
+        return;
+      }
+
       const response = await fetch(`${BASE_URL}/guides`, {
         method: "POST",
         headers: {
@@ -161,7 +150,8 @@ export default function CreateGuidePage() {
           title,
           description,
           price: parseFloat(price),
-          city,
+          city: selectedCity.name,
+          cityState: selectedCity.state,
           topic,
           sections,
           isDraft,

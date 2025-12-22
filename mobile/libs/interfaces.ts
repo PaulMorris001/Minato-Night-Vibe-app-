@@ -78,7 +78,8 @@ export interface Guide {
   authorName: string;
   description: string;
   price: number;
-  city: City | string; // Can be populated City object or just ID string
+  city: string; // City name
+  cityState: string; // State name
   topic: string;
   sections: GuideSection[];
   isDraft: boolean;
@@ -111,19 +112,5 @@ export const GUIDE_TOPICS = [
   "Spas",
   "Hair and Nail Salons",
   "Barber Shops"
-];
-
-export const CITIES = [
-  { name: "Boston", state: "Massachusetts" },
-  { name: "New York City", state: "New York" },
-  { name: "Atlanta", state: "Georgia" },
-  { name: "Los Angeles", state: "California" },
-  { name: "Houston", state: "Texas" },
-  { name: "Chicago", state: "Illinois" },
-  { name: "Washington", state: "DC" },
-  { name: "Miami", state: "Florida" },
-  { name: "New Orleans", state: "Louisiana" },
-  { name: "Detroit", state: "Michigan" },
-  { name: "San Francisco", state: "California" }
 ];
 

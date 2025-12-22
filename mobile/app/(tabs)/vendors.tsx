@@ -10,11 +10,10 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import axios from "axios";
-import { BASE_URL } from "@/constants/constants";
+import { BASE_URL, CITIES } from "@/constants/constants";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
-import { fetchCities } from "@/libs/api";
 import { City } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
 import BecomeVendorModal from "@/components/client/BecomeVendorModal";
@@ -68,17 +67,8 @@ export default function VendorsPage() {
 
   useEffect(() => {
     checkAuthStatus();
-    const loadCities = async () => {
-      try {
-        const data = await fetchCities();
-        setCities(data);
-      } catch (error) {
-        console.error("Error loading cities:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadCities();
+    setCities(CITIES);
+    setLoading(false);
 
     Animated.timing(headerAnim, {
       toValue: 1,
