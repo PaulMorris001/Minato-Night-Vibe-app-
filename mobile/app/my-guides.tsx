@@ -112,7 +112,7 @@ export default function MyGuidesPage() {
           <View style={styles.metadataRow}>
             <Ionicons name="location-outline" size={14} color="#9ca3af" />
             <Text style={styles.metadataText}>
-              {typeof item.city === 'string' ? item.city : item.city?.name || 'Unknown'}
+              {item.city}, {item.cityState}
             </Text>
             <Text style={styles.metadataSeparator}>•</Text>
             <Text style={styles.metadataText}>{item.topic}</Text>

@@ -15,7 +15,7 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import * as SecureStore from "expo-secure-store";
 import axios from "axios";
-import { BASE_URL } from "@/constants/constants";
+import { BASE_URL, CITIES } from "@/constants/constants";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { ImagePickerButton } from "@/components/shared";
@@ -56,22 +56,10 @@ export default function CreateEventModal({
 
   useEffect(() => {
     if (visible) {
-      fetchCities();
-    }
-  }, [visible]);
-
-  const fetchCities = async () => {
-    try {
-      setLoadingCities(true);
-      const response = await axios.get(`${BASE_URL}/cities`);
-      setCities(response.data);
-    } catch (error) {
-      console.error("Error fetching cities:", error);
-      Alert.alert("Error", "Failed to load cities");
-    } finally {
+      setCities(CITIES);
       setLoadingCities(false);
     }
-  };
+  }, [visible]);
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));

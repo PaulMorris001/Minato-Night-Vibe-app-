@@ -14,7 +14,7 @@ import { City } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
 import { AnimatedListCard, LoadingScreen } from "@/components/shared";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { BASE_URL } from "@/constants/constants";
+import { CITIES } from "@/constants/constants";
 
 export default function BestsPage() {
   const router = useRouter();
@@ -25,7 +25,8 @@ export default function BestsPage() {
 
   useEffect(() => {
     checkAuthStatus();
-    fetchCities();
+    setCities(CITIES);
+    setLoading(false);
 
     Animated.timing(headerAnim, {
       toValue: 1,
@@ -39,23 +40,6 @@ export default function BestsPage() {
     setIsLoggedIn(!!token);
   };
 
-  const fetchCities = async () => {
-    try {
-      const response = await fetch(`${BASE_URL}/cities`);
-      const data = await response.json();
-
-      if (response.ok) {
-        setCities(Array.isArray(data) ? data : []);
-      } else {
-        console.error("Failed to fetch cities:", data.message);
-      }
-    } catch (error) {
-      console.error("Fetch cities error:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleCreateGuide = () => {
     if (isLoggedIn) {
       router.push("/guide/create" as any);
@@ -64,10 +48,10 @@ export default function BestsPage() {
     }
   };
 
-  const handleCityPress = (cityId: string, cityName: string) => {
+  const handleCityPress = (cityName: string) => {
     router.push({
       pathname: "/guide/city/[id]" as any,
-      params: { cityName, cityId },
+      params: { cityName },
     });
   };
 
@@ -144,7 +128,7 @@ export default function BestsPage() {
             title={item.name}
             subtitle={item.state}
             index={index}
-            onPress={() => handleCityPress(item._id, item.name)}
+            onPress={() => handleCityPress(item.name)}
           />
         )}
         showsVerticalScrollIndicator={false}

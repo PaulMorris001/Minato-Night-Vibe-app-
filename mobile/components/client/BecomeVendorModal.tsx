@@ -11,8 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import axios from "axios";
 import { Colors } from "@/constants/colors";
-import { fetchCities, fetchAllVendorTypes } from "@/libs/api";
-import { BASE_URL } from "@/constants/constants";
+import { BASE_URL, CITIES, VENDOR_TYPES } from "@/constants/constants";
 import { City, VendorType } from "@/libs/interfaces";
 import { useRouter } from "expo-router";
 import {
@@ -56,15 +55,9 @@ export default function BecomeVendorModal({
     }
   }, [visible]);
 
-  const loadCitiesAndTypes = async () => {
-    try {
-      const citiesData = await fetchCities();
-      setCities(citiesData);
-      const typesData = await fetchAllVendorTypes();
-      setVendorTypes(typesData);
-    } catch (error) {
-      console.error("Error loading cities/types:", error);
-    }
+  const loadCitiesAndTypes = () => {
+    setCities(CITIES);
+    setVendorTypes(VENDOR_TYPES);
   };
 
   const handleSubmit = async () => {

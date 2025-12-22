@@ -1,5 +1,4 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { fetchVendorTypes } from "@/libs/api";
 import {
   View,
   Text,
@@ -13,6 +12,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { VendorType } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
 import { AnimatedListCard, LoadingScreen } from "@/components/shared";
+import { VENDOR_TYPES } from "@/constants/constants";
 
 export default function VendorTypesPage() {
   const { cityId } = useLocalSearchParams();
@@ -22,17 +22,8 @@ export default function VendorTypesPage() {
   const headerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const loadTypes = async () => {
-      try {
-        const data = await fetchVendorTypes(cityId as string);
-        setTypes(data);
-      } catch (error) {
-        console.error("Error loading vendor types:", error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    loadTypes();
+    setTypes(VENDOR_TYPES);
+    setLoading(false);
 
     Animated.timing(headerAnim, {
       toValue: 1,

@@ -9,23 +9,20 @@ import {
   purchaseGuide,
   getPurchasedGuides,
   getTopics,
-  getGuidesByCity
+  getGuidesByCity,
 } from "../controllers/guide.controller.js";
-import { authenticate } from "../middleware/auth.middleware.js";
+import { authenticate, optionalAuth } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
-// Public routes
-router.get("/topics", getTopics);
+// Public routes - NO authentication required
+router.get("/guides/topics", getTopics);
 router.get("/guides/all", getGuides);
+router.get("/guide/by-city", authenticate, getGuidesByCity);
 
-// Protected user routes
+// Protected user routes - MUST come before /guides/:id to avoid route conflicts
 router.get("/guides/my-guides", authenticate, getUserGuides);
 router.get("/guides/purchased", authenticate, getPurchasedGuides);
-
-// Public city guides - using /city/ prefix to avoid ANY conflict with /guide/
-router.get("/guides/city/:cityId", getGuidesByCity);
-
 
 // Protected guide CRU(D) operations
 router.post("/guides", authenticate, createGuide);
