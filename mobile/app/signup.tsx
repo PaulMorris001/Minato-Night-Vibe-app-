@@ -18,6 +18,7 @@ import { BASE_URL } from "@/constants/constants";
 import * as SecureStore from "expo-secure-store";
 import { FormInput, PrimaryButton } from "@/components/shared";
 import { configureGoogleSignIn, signInWithGoogle } from "@/utils/googleAuth";
+import { logger } from "@/utils/logger";
 
 export default function Signup() {
   const router = useRouter();
@@ -40,11 +41,15 @@ export default function Signup() {
 
     setLoading(true);
     try {
+      logger.info("Attempting signup", { email, username, apiUrl: BASE_URL });
+
       const res = await axios.post(`${BASE_URL}/register`, {
         username,
         email,
         password,
       });
+
+      logger.info("Signup successful", { userId: res.data.user?._id });
 
       const user = res.data.user;
       const token = res.data.token;
@@ -55,10 +60,20 @@ export default function Signup() {
       // Always redirect to home (everyone starts as a client)
       router.replace("/(tabs)/home");
     } catch (error: any) {
+      // Log detailed error information to backend
+      await logger.error("Signup failed", error, {
+        email,
+        username,
+        apiUrl: BASE_URL,
+        statusCode: error.response?.status,
+        responseData: error.response?.data,
+        errorCode: error.code,
+        errorMessage: error.message,
+      });
+
       const errorMessage =
         error.response?.data?.message || "Signup failed. Please try again.";
       Alert.alert("Error", errorMessage);
-      console.error(error.response?.data || error.message);
     } finally {
       setLoading(false);
     }
