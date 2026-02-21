@@ -163,8 +163,17 @@ class ChatService {
     await message.populate('replyTo');
     await message.populate('event');
 
-    // Emit message via Socket.IO to chat participants
+    // Emit message via Socket.IO to the active chat room
     emitNewMessage(chatId.toString(), message);
+
+    // Also deliver to each participant's personal room so they receive
+    // the message even when they're not inside the chat (e.g. on the chats list)
+    const io = getSocketInstance();
+    if (io) {
+      chat.participants.forEach(participantId => {
+        io.to(`user:${participantId.toString()}`).emit("message:new", message);
+      });
+    }
 
     return message;
   }

@@ -71,7 +71,7 @@ export default function ChatsScreen() {
   }, [currentUserId]);
 
   useEffect(() => {
-    socketService.on({
+    socketService.on("chats-screen", {
       onNewMessage: (message) => {
         setChats((prev) =>
           prev.map((chat) => {
@@ -118,7 +118,7 @@ export default function ChatsScreen() {
       },
     });
 
-    return () => socketService.off();
+    return () => socketService.off("chats-screen");
   }, [currentUserId]);
 
   const loadCurrentUser = async () => {

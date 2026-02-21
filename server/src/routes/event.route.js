@@ -8,6 +8,7 @@ import {
   deleteEvent,
   inviteUserByUsername,
   joinEventByShareLink,
+  joinFreePublicEvent,
   getPublicEvents,
   purchaseTicket,
   getUserTickets,
@@ -28,6 +29,9 @@ router.get("/events/public/explore", authenticate, getPublicEvents);
 
 // Get user's purchased tickets
 router.get("/tickets", authenticate, getUserTickets);
+
+// Join a free public event
+router.post("/events/:eventId/join", authenticate, joinFreePublicEvent);
 
 // Purchase a ticket for a public paid event
 router.post("/events/:eventId/purchase", authenticate, purchaseTicket);
