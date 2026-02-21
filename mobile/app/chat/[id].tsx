@@ -83,11 +83,11 @@ export default function ChatScreen() {
     loadChatAndMessages();
     socketService.joinChat(id);
 
-    socketService.on({
+    socketService.on("chat-screen", {
       onNewMessage: (message: Message) => {
         if (message.chat === id) {
           setMessages((prev) => {
-            // prevent duplicates
+            // prevent duplicates (covers both socket delivery and optimistic add)
             if (prev.some((m) => m._id === message._id)) return prev;
             return [...prev, message];
           });
@@ -103,7 +103,7 @@ export default function ChatScreen() {
 
     return () => {
       socketService.leaveChat(id);
-      socketService.off();
+      socketService.off("chat-screen");
     };
   }, [id, currentUserId, loadChatAndMessages]);
 
@@ -112,15 +112,19 @@ export default function ChatScreen() {
 
     try {
       setSending(true);
-      await chatService.sendMessage(id, {
+      const newMessage = await chatService.sendMessage(id, {
         type: "text",
         content: content.trim(),
       });
 
-      // Don't add message locally - socket will handle it
-      // This prevents duplicate messages
+      // Add message to UI immediately so the sender always sees it.
+      // The dedup check in the socket handler prevents it showing twice
+      // if the socket also delivers it.
+      setMessages((prev) => {
+        if (prev.some((m) => m._id === newMessage._id)) return prev;
+        return [...prev, newMessage];
+      });
 
-      // Scroll to bottom
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
@@ -160,13 +164,16 @@ export default function ChatScreen() {
           );
 
           // Send message with Cloudinary URL
-          await chatService.sendMessage(id, {
+          const newImageMessage = await chatService.sendMessage(id, {
             type: "image",
             imageUrl: uploadResult.url,
           });
 
-          // Don't add message locally - socket will handle it
-          // This prevents duplicate messages
+          // Add immediately so the sender sees it without waiting for socket
+          setMessages((prev) => {
+            if (prev.some((m) => m._id === newImageMessage._id)) return prev;
+            return [...prev, newImageMessage];
+          });
 
           setTimeout(() => {
             flatListRef.current?.scrollToEnd({ animated: true });

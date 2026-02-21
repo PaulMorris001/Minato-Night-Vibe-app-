@@ -13,6 +13,7 @@ import {
   ActivityIndicator,
   Platform,
 } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
 import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
@@ -220,6 +221,7 @@ export default function CreateEventModal({
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
+              contentContainerStyle={{ paddingBottom: 8 }}
             >
               {/* Header */}
               <View style={styles.header}>
@@ -415,6 +417,14 @@ export default function CreateEventModal({
                 )}
               </TouchableOpacity>
             </ScrollView>
+
+            {/* Scroll hint: fade at bottom to show more content */}
+            <View pointerEvents="none" style={styles.scrollHint}>
+              <LinearGradient
+                colors={["transparent", Colors.darkBackground]}
+                style={StyleSheet.absoluteFill}
+              />
+            </View>
           </View>
         </TouchableWithoutFeedback>
       </View>
@@ -578,6 +588,15 @@ const styles = StyleSheet.create({
   },
   createButtonDisabled: {
     opacity: 0.6,
+  },
+  scrollHint: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 56,
+    borderBottomLeftRadius: 16,
+    borderBottomRightRadius: 16,
   },
   createButtonText: {
     color: "#fff",

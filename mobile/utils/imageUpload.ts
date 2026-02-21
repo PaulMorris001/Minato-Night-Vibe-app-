@@ -29,8 +29,7 @@ export async function pickImage(): Promise<string | null> {
   // Pick image
   const result = await ImagePicker.launchImageLibraryAsync({
     mediaTypes: ['images'],
-    allowsEditing: true,
-    aspect: [4, 3],
+    allowsEditing: false,
     quality: 0.8, // Compress to reduce file size
   });
 
@@ -81,8 +80,7 @@ export async function takePhoto(): Promise<string | null> {
 
   // Take photo
   const result = await ImagePicker.launchCameraAsync({
-    allowsEditing: true,
-    aspect: [4, 3],
+    allowsEditing: false,
     quality: 0.8,
   });
 

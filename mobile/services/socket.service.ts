@@ -17,37 +17,48 @@ interface SocketEvents {
 
 class SocketService {
   private socket: Socket | null = null;
-  private events: SocketEvents = {};
   private connected = false;
+
+  // Multiple named listeners so screens don't overwrite each other
+  private listeners: Map<string, SocketEvents> = new Map();
+
+  // Track rooms so we can re-join after reconnection
+  private activeRooms: Set<string> = new Set();
+
+  private notify(event: keyof SocketEvents, data: any) {
+    this.listeners.forEach((handlers) => {
+      const fn = handlers[event] as ((d: any) => void) | undefined;
+      fn?.(data);
+    });
+  }
 
   /**
    * Initialize and connect to the socket server
    */
   async connect() {
     try {
-      // Get authentication token
       const token = await SecureStore.getItemAsync("token");
-      if (!token) {
-        // Silently skip connection if not authenticated
-        // User will need to log in first
-        return;
-      }
+      if (!token) return;
 
       console.log("🔌 Connecting to socket server:", config.socketUrl);
 
       this.socket = io(config.socketUrl, {
-        auth: {
-          token,
-        },
+        auth: { token },
         transports: ["websocket"],
         reconnection: true,
-        reconnectionAttempts: 5,
+        reconnectionAttempts: 10,
         reconnectionDelay: 1000,
       });
 
       this.socket.on("connect", () => {
         console.log("✅ Socket connected:", this.socket?.id);
         this.connected = true;
+
+        // Re-join every room we were in before the reconnect
+        this.activeRooms.forEach((chatId) => {
+          this.socket?.emit("chat:join", chatId);
+          console.log(`🔄 Re-joined chat room: ${chatId}`);
+        });
       });
 
       this.socket.on("disconnect", () => {
@@ -63,45 +74,29 @@ class SocketService {
         console.error("Socket error:", error);
       });
 
-      // Listen for new messages
       this.socket.on("message:new", (message) => {
         console.log("📨 New message received:", message._id);
-        if (this.events.onNewMessage) {
-          this.events.onNewMessage(message);
-        }
+        this.notify("onNewMessage", message);
       });
 
-      // Listen for message read receipts
       this.socket.on("message:read", (data) => {
-        if (this.events.onMessageRead) {
-          this.events.onMessageRead(data);
-        }
+        this.notify("onMessageRead", data);
       });
 
-      // Listen for typing indicators
       this.socket.on("typing:start", (data) => {
-        if (this.events.onTypingStart) {
-          this.events.onTypingStart(data);
-        }
+        this.notify("onTypingStart", data);
       });
 
       this.socket.on("typing:stop", (data) => {
-        if (this.events.onTypingStop) {
-          this.events.onTypingStop(data);
-        }
+        this.notify("onTypingStop", data);
       });
 
-      // Listen for online/offline status
       this.socket.on("user:online", (userId) => {
-        if (this.events.onUserOnline) {
-          this.events.onUserOnline(userId);
-        }
+        this.notify("onUserOnline", userId);
       });
 
       this.socket.on("user:offline", (userId) => {
-        if (this.events.onUserOffline) {
-          this.events.onUserOffline(userId);
-        }
+        this.notify("onUserOffline", userId);
       });
     } catch (error) {
       console.error("Socket connection error:", error);
@@ -116,21 +111,20 @@ class SocketService {
       this.socket.disconnect();
       this.socket = null;
       this.connected = false;
+      this.activeRooms.clear();
       console.log("🔌 Socket disconnected");
     }
   }
 
-  /**
-   * Check if socket is connected
-   */
   isConnected(): boolean {
     return this.connected;
   }
 
   /**
-   * Join a chat room
+   * Join a chat room (tracked for reconnection)
    */
   joinChat(chatId: string) {
+    this.activeRooms.add(chatId);
     if (this.socket && this.connected) {
       this.socket.emit("chat:join", chatId);
       console.log(`✅ Joined chat: ${chatId}`);
@@ -141,54 +135,45 @@ class SocketService {
    * Leave a chat room
    */
   leaveChat(chatId: string) {
+    this.activeRooms.delete(chatId);
     if (this.socket && this.connected) {
       this.socket.emit("chat:leave", chatId);
       console.log(`🚪 Left chat: ${chatId}`);
     }
   }
 
-  /**
-   * Send typing indicator
-   */
   sendTyping(chatId: string, isTyping: boolean) {
     if (this.socket && this.connected) {
       this.socket.emit(isTyping ? "typing:start" : "typing:stop", { chatId });
     }
   }
 
-  /**
-   * Mark message as delivered
-   */
   markDelivered(messageId: string) {
     if (this.socket && this.connected) {
       this.socket.emit("message:delivered", { messageId });
     }
   }
 
-  /**
-   * Mark messages as read in a chat
-   */
   markMessagesAsRead(chatId: string, userId: string) {
     if (this.socket && this.connected) {
       this.socket.emit("message:read", { chatId, userId });
-      console.log(`✅ Marked messages as read in chat: ${chatId}`);
     }
   }
 
   /**
-   * Register event listeners
+   * Register event listeners under a unique ID.
+   * Multiple screens can listen simultaneously without overwriting each other.
    */
-  on(events: SocketEvents) {
-    this.events = { ...this.events, ...events };
+  on(id: string, events: SocketEvents) {
+    this.listeners.set(id, events);
   }
 
   /**
-   * Remove event listeners
+   * Remove the listener registered under the given ID.
    */
-  off() {
-    this.events = {};
+  off(id: string) {
+    this.listeners.delete(id);
   }
 }
 
-// Export singleton instance
 export default new SocketService();

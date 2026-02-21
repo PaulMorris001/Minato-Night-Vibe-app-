@@ -121,15 +121,16 @@ export const getEventById = async (req, res) => {
     }
 
     // Check if user has access to this event
-    // Access granted if: creator, invited user, or has a valid ticket
+    // Access granted if: creator, invited user, has a valid ticket, or it's a free public event
     const isCreator = event.createdBy._id.toString() === userId;
     const isInvited = event.invitedUsers.some(user => user._id.toString() === userId);
+    const isFreePublicEvent = event.isPublic && !event.isPaid;
 
     // Check if user has a valid ticket for this event
     const userTicket = await Ticket.findOne({ event: eventId, user: userId, isValid: true });
     const hasTicket = !!userTicket;
 
-    const hasAccess = isCreator || isInvited || hasTicket;
+    const hasAccess = isCreator || isInvited || hasTicket || isFreePublicEvent;
 
     if (!hasAccess) {
       return res.status(403).json({ message: "You don't have access to this event" });
@@ -366,6 +367,44 @@ export const joinEventByShareLink = async (req, res) => {
   }
 };
 
+// Join a free public event
+export const joinFreePublicEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const userId = req.user.id;
+
+    const event = await Event.findById(eventId);
+
+    if (!event) {
+      return res.status(404).json({ message: "Event not found" });
+    }
+
+    if (!event.isPublic) {
+      return res.status(403).json({ message: "This is a private event" });
+    }
+
+    if (event.isPaid) {
+      return res.status(400).json({ message: "This is a paid event. Please purchase a ticket." });
+    }
+
+    if (event.createdBy.toString() === userId) {
+      return res.status(400).json({ message: "You are the creator of this event" });
+    }
+
+    if (event.invitedUsers.includes(userId)) {
+      return res.status(400).json({ message: "You have already joined this event" });
+    }
+
+    event.invitedUsers.push(userId);
+    await event.save();
+
+    res.status(200).json({ message: "Successfully joined the event" });
+  } catch (error) {
+    console.error("Join free event error:", error);
+    res.status(500).json({ message: "Error joining event", error: error.message });
+  }
+};
+
 // Get public events for exploration
 export const getPublicEvents = async (req, res) => {
   try {
@@ -398,7 +437,9 @@ export const getPublicEvents = async (req, res) => {
           const userTicket = await Ticket.findOne({ event: event._id, user: userId, isValid: true });
           eventObj.userHasPurchased = !!userTicket;
         } else {
-          eventObj.userHasPurchased = false;
+          // Free event - check if user has already joined (is in invitedUsers)
+          const hasJoined = event.invitedUsers.some(id => id.toString() === userId);
+          eventObj.userHasPurchased = hasJoined;
         }
 
         return eventObj;
