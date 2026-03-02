@@ -9,7 +9,9 @@ export const savePushToken = async (req, res) => {
     const { token } = req.body;
     if (!token) return res.status(400).json({ message: "token is required" });
 
+    console.log(`[PushToken] Saving token for user ${req.user.id}: ${token?.slice(0, 40)}...`);
     await User.findByIdAndUpdate(req.user.id, { expoPushToken: token });
+    console.log(`[PushToken] Saved successfully`);
     res.status(200).json({ message: "Push token saved" });
   } catch (error) {
     console.error("Save push token error:", error);

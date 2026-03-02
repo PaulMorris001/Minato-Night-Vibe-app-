@@ -181,6 +181,7 @@ class ChatService {
     for (const participantId of chat.participants) {
       if (participantId.toString() === senderId.toString()) continue;
       const recipient = await User.findById(participantId).select("expoPushToken");
+      console.log(`[Chat Push] Recipient ${participantId} push token: ${recipient?.expoPushToken ? "present" : "MISSING"}`);
       if (recipient?.expoPushToken) {
         await sendPushNotification(
           recipient.expoPushToken,
