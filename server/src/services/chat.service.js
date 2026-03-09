@@ -180,11 +180,11 @@ class ChatService {
     const notificationBody = message.type === "image" ? "📷 Photo" : message.content;
     for (const participantId of chat.participants) {
       if (participantId.toString() === senderId.toString()) continue;
-      const recipient = await User.findById(participantId).select("expoPushToken");
-      console.log(`[Chat Push] Recipient ${participantId} push token: ${recipient?.expoPushToken ? "present" : "MISSING"}`);
-      if (recipient?.expoPushToken) {
+      const recipient = await User.findById(participantId).select("fcmToken");
+      console.log(`[Chat Push] Recipient ${participantId} push token: ${recipient?.fcmToken ? "present" : "MISSING"}`);
+      if (recipient?.fcmToken) {
         await sendPushNotification(
-          recipient.expoPushToken,
+          recipient.fcmToken,
           message.sender.username,
           notificationBody,
           { type: "new_message", chatId: chatId.toString() }

@@ -1,6 +1,7 @@
 import { Stack } from "expo-router";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
+import messaging from "@react-native-firebase/messaging";
 import * as Notifications from "expo-notifications";
 import { registerForPushNotifications } from "@/utils/pushNotifications";
 import {
@@ -43,13 +44,28 @@ Sentry.init({
   // spotlight: __DEV__,
 });
 
-// Show notifications even when the app is in the foreground
+// Show notifications when the app is in the foreground
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldShowAlert: true,
     shouldPlaySound: true,
     shouldSetBadge: true,
   }),
+});
+
+// Create Android notification channel at module load so it exists before any push arrives
+if (Platform.OS === "android") {
+  Notifications.setNotificationChannelAsync("default", {
+    name: "Default",
+    importance: Notifications.AndroidImportance.MAX,
+    sound: "default",
+    vibrationPattern: [0, 250, 250, 250],
+  });
+}
+
+// Handle Firebase messages received while app is in the background/quit
+messaging().setBackgroundMessageHandler(async remoteMessage => {
+  console.log("[PushNotif] Background message:", remoteMessage.notification?.title);
 });
 
 // Prevent auto-hiding splash screen
@@ -87,6 +103,23 @@ export default Sentry.wrap(function RootLayout() {
       socketService.disconnect();
     };
   }, [fontsLoaded]);
+
+  useEffect(() => {
+    // Firebase doesn't auto-display notifications in the foreground — do it manually
+    const unsubscribe = messaging().onMessage(async remoteMessage => {
+      console.log("[PushNotif] Foreground message:", remoteMessage.notification?.title, remoteMessage.notification?.body);
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: remoteMessage.notification?.title ?? "",
+          body: remoteMessage.notification?.body ?? "",
+          data: remoteMessage.data ?? {},
+          sound: "default",
+        },
+        trigger: null,
+      });
+    });
+    return unsubscribe;
+  }, []);
 
   // Set navigation bar color for Android
   useEffect(() => {
