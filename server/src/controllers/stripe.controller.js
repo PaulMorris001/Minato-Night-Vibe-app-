@@ -263,9 +263,9 @@ export const confirmGuidePurchase = async (req, res) => {
 
     // Notify the guide author
     const buyer = await User.findById(userId).select("username");
-    const author = await User.findById(guide.author._id).select("expoPushToken");
+    const author = await User.findById(guide.author._id).select("fcmToken");
     await sendPushNotification(
-      author?.expoPushToken,
+      author?.fcmToken,
       "📖 Guide Purchased!",
       `${buyer.username} just bought your guide "${guide.title}"`,
       { type: "guide_sold", guideId }
@@ -326,9 +326,9 @@ export const confirmTicketPurchase = async (req, res) => {
 
     // Notify the event creator
     const buyer = await User.findById(userId).select("username");
-    const creator = await User.findById(event.createdBy).select("expoPushToken");
+    const creator = await User.findById(event.createdBy).select("fcmToken");
     await sendPushNotification(
-      creator?.expoPushToken,
+      creator?.fcmToken,
       "🎟️ New Ticket Sold!",
       `${buyer.username} just bought a ticket to "${event.title}"`,
       { type: "ticket_sold", eventId }

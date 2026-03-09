@@ -1,9 +1,29 @@
 {
-  "installed": {
-    "client_id": "80317886238-bqe4qmih1kktoghl4lvdfrp86hjf3mji.apps.googleusercontent.com",
-    "project_id": "nightvibe-480320",
-    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-    "token_uri": "https://oauth2.googleapis.com/token",
-    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs"
-  }
+  "project_info": {
+    "project_number": "927037209105",
+    "project_id": "nightvibe-89dee",
+    "storage_bucket": "nightvibe-89dee.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:927037209105:android:22979a4f6b639e5ea98fb0",
+        "android_client_info": {
+          "package_name": "com.nightvibe.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjO1rTiTEXebma6zenAzF_EpO0ZTv_djE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
 }

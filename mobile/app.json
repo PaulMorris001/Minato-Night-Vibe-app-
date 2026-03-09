@@ -11,14 +11,19 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.nightvibe.mobile",
+      "googleServicesFile": "./GoogleService-Info.plist",
       "icon": {
         "dark": "./assets/icons/ios-dark.png",
         "light": "./assets/icons/ios-light.png",
         "tinted": "./assets/icons/ios-tinted.png"
+      },
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "package": "com.nightvibe.mobile",
+      "googleServicesFile": "./google-services.json",
       "icon": "./assets/images/android-icon-foreground.png",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icons/adaptive-icon.png",
@@ -34,6 +39,9 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      "./plugins/withFirebaseFix",
       "expo-router",
       [
         "expo-splash-screen",

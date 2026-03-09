@@ -10,7 +10,7 @@ export const savePushToken = async (req, res) => {
     if (!token) return res.status(400).json({ message: "token is required" });
 
     console.log(`[PushToken] Saving token for user ${req.user.id}: ${token?.slice(0, 40)}...`);
-    await User.findByIdAndUpdate(req.user.id, { expoPushToken: token });
+    await User.findByIdAndUpdate(req.user.id, { fcmToken: token });
     console.log(`[PushToken] Saved successfully`);
     res.status(200).json({ message: "Push token saved" });
   } catch (error) {
@@ -24,7 +24,7 @@ export const savePushToken = async (req, res) => {
  */
 export const deletePushToken = async (req, res) => {
   try {
-    await User.findByIdAndUpdate(req.user.id, { expoPushToken: null });
+    await User.findByIdAndUpdate(req.user.id, { fcmToken: null });
     res.status(200).json({ message: "Push token removed" });
   } catch (error) {
     console.error("Delete push token error:", error);

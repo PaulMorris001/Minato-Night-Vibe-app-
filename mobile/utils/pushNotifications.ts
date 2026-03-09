@@ -1,45 +1,32 @@
-import * as Notifications from "expo-notifications";
+import messaging from "@react-native-firebase/messaging";
 import * as Device from "expo-device";
 import * as SecureStore from "expo-secure-store";
 import { BASE_URL } from "@/constants/constants";
 
-/**
- * Request push notification permission, get the Expo push token,
- * and save it to the backend. Safe to call multiple times — no-ops
- * gracefully in Expo Go or if permissions are denied.
- */
 export async function registerForPushNotifications() {
-  console.log("[PushNotif] Starting registration...");
+  console.log("[PushNotif] Starting Firebase registration...");
 
   if (!Device.isDevice) {
     console.log("[PushNotif] Skipped — not a physical device");
     return;
   }
 
-  const { status: existingStatus } = await Notifications.getPermissionsAsync();
-  console.log("[PushNotif] Permission status:", existingStatus);
-  let finalStatus = existingStatus;
+  const authStatus = await messaging().requestPermission();
+  const enabled =
+    authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+    authStatus === messaging.AuthorizationStatus.PROVISIONAL;
 
-  if (existingStatus !== "granted") {
-    const { status } = await Notifications.requestPermissionsAsync();
-    finalStatus = status;
-    console.log("[PushNotif] Requested permission, new status:", finalStatus);
-  }
-
-  if (finalStatus !== "granted") {
+  if (!enabled) {
     console.log("[PushNotif] Permission denied — aborting");
     return;
   }
 
-  let token: string | undefined;
+  let token: string;
   try {
-    const result = await Notifications.getExpoPushTokenAsync({
-      projectId: "a1e5c06d-26a5-4e05-89d9-3b9acf9a3ea4",
-    });
-    token = result.data;
-    console.log("[PushNotif] Got Expo push token:", token);
+    token = await messaging().getToken();
+    console.log("[PushNotif] Got FCM token:", token);
   } catch (err) {
-    console.log("[PushNotif] Could not get push token (Expo Go?):", err);
+    console.error("[PushNotif] Could not get FCM token:", err);
     return;
   }
 
@@ -56,7 +43,7 @@ export async function registerForPushNotifications() {
         },
         body: JSON.stringify({ token }),
       });
-      console.log("[PushNotif] Token saved to backend, status:", res.status);
+      console.log("[PushNotif] FCM token saved to backend, status:", res.status);
     } catch (err) {
       console.error("[PushNotif] Failed to save token to backend:", err);
     }
