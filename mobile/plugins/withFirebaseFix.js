@@ -1,12 +1,15 @@
-const { withDangerousMod } = require("@expo/config-plugins");
+const { withDangerousMod, withAndroidManifest } = require("@expo/config-plugins");
 const path = require("path");
 const fs = require("fs");
 
 /**
- * Injects `use_modular_headers!` into the Podfile so that GoogleUtilities and
+ * iOS: Injects `use_modular_headers!` into the Podfile so GoogleUtilities and
  * FirebaseCoreInternal generate module maps — required by @react-native-firebase.
+ *
+ * Android: Adds tools:replace to resolve the manifest merger conflict between
+ * expo-notifications and @react-native-firebase/messaging on default_notification_color.
  */
-module.exports = function withFirebaseFix(config) {
+function withIosFix(config) {
   return withDangerousMod(config, [
     "ios",
     (config) => {
@@ -16,7 +19,6 @@ module.exports = function withFirebaseFix(config) {
       );
       let podfile = fs.readFileSync(podfilePath, "utf8");
 
-      // Add use_modular_headers! right after the platform declaration
       if (!podfile.includes("use_modular_headers!")) {
         podfile = podfile.replace(
           /^(platform :ios.*)$/m,
@@ -28,4 +30,37 @@ module.exports = function withFirebaseFix(config) {
       return config;
     },
   ]);
+}
+
+function withAndroidFix(config) {
+  return withAndroidManifest(config, (config) => {
+    const manifest = config.modResults;
+
+    // Ensure tools namespace is declared on the root manifest element
+    manifest.manifest.$ = manifest.manifest.$ || {};
+    manifest.manifest.$["xmlns:tools"] = "http://schemas.android.com/tools";
+
+    const application = manifest.manifest.application?.[0];
+    if (!application) return config;
+
+    application["meta-data"] = application["meta-data"] || [];
+
+    const colorMeta = application["meta-data"].find(
+      (m) =>
+        m.$?.["android:name"] ===
+        "com.google.firebase.messaging.default_notification_color"
+    );
+
+    if (colorMeta) {
+      colorMeta.$["tools:replace"] = "android:resource";
+    }
+
+    return config;
+  });
+}
+
+module.exports = function withFirebaseFix(config) {
+  config = withIosFix(config);
+  config = withAndroidFix(config);
+  return config;
 };
