@@ -1,6 +1,16 @@
 .env
-.env.production
+.env.*
 node_modules/
 *.log
 .DS_Store
 *.tmp
+
+# Firebase / Google credentials
+firebase-service-account.json
+google-services.json
+GoogleService-Info.plist
+credentials.json
+*.p8
+*.p12
+*.key
+*.pem
