@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,8 @@ import { useRouter } from "expo-router";
 import { Fonts } from "@/constants/fonts";
 import { scaleFontSize } from "@/utils/responsive";
 import { useFormatPrice } from "@/hooks/useFormatPrice";
+import * as SecureStore from "expo-secure-store";
+import { BASE_URL } from "@/constants/constants";
 
 export interface PublicEvent {
   _id: string;
@@ -28,6 +30,7 @@ export interface PublicEvent {
   ticketsRemaining?: number;
   userHasPurchased?: boolean;
   isCreator?: boolean;
+  isFavorited?: boolean;
   createdBy: {
     _id: string;
     username: string;
@@ -51,6 +54,26 @@ export default function PublicEventCard({
 }: PublicEventCardProps) {
   const router = useRouter();
   const formatPrice = useFormatPrice();
+  const [favorited, setFavorited] = useState(event.isFavorited ?? false);
+  const [togglingFavorite, setTogglingFavorite] = useState(false);
+
+  const toggleFavorite = async () => {
+    if (togglingFavorite) return;
+    setTogglingFavorite(true);
+    const next = !favorited;
+    setFavorited(next);
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      await fetch(`${BASE_URL}/favorites/${event._id}`, {
+        method: next ? "POST" : "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      setFavorited(!next); // revert on error
+    } finally {
+      setTogglingFavorite(false);
+    }
+  };
 
   return (
     <TouchableOpacity
@@ -69,6 +92,18 @@ export default function PublicEventCard({
             <Ionicons name="calendar" size={48} color="rgba(255,255,255,0.5)" />
           </LinearGradient>
         )}
+
+        <TouchableOpacity
+          style={styles.favoriteButton}
+          onPress={(e) => { e.stopPropagation(); toggleFavorite(); }}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name={favorited ? "heart" : "heart-outline"}
+            size={22}
+            color={favorited ? "#ef4444" : "#fff"}
+          />
+        </TouchableOpacity>
 
         <LinearGradient
           colors={["transparent", "rgba(0,0,0,0.9)"]}
@@ -233,6 +268,18 @@ const styles = StyleSheet.create({
     height: "100%",
     justifyContent: "center",
     alignItems: "center",
+  },
+  favoriteButton: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
   },
   eventCardGradient: {
     position: "absolute",

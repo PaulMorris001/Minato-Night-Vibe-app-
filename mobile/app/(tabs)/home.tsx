@@ -21,14 +21,16 @@ import { useRouter } from "expo-router";
 import { Fonts } from "@/constants/fonts";
 import * as ImagePicker from "expo-image-picker";
 import * as SecureStore from "expo-secure-store";
-import { BASE_URL } from "@/constants/constants";
+import { BASE_URL, CITIES } from "@/constants/constants";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import Carousel from "@/components/Carousel";
 import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
 import PublicEventCard, { PublicEvent } from "@/components/shared/PublicEventCard";
+import { useStripePayment } from "@/hooks/useStripePayment";
 
 export default function Home() {
   const router = useRouter();
+  const { payForTicket } = useStripePayment();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -36,6 +38,7 @@ export default function Home() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [publicEvents, setPublicEvents] = useState<PublicEvent[]>([]);
   const [loadingEvents, setLoadingEvents] = useState(false);
+  const [showCityPicker, setShowCityPicker] = useState(false);
   const [eventData, setEventData] = useState({
     title: "",
     date: "",
@@ -304,28 +307,53 @@ export default function Home() {
   };
 
   const handlePurchaseTicket = async (eventId: string, eventTitle: string) => {
+    const result = await payForTicket(eventId);
+    if (!result.success) {
+      if (result.error) Alert.alert("Payment Failed", result.error);
+      return;
+    }
+
+    const token = await SecureStore.getItemAsync("token");
+    const confirmRes = await fetch(`${BASE_URL}/stripe/confirm/ticket/${eventId}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ paymentIntentId: result.paymentIntentId }),
+    });
+
+    if (confirmRes.ok) {
+      Alert.alert("Success!", `You're going to "${eventTitle}"! Check your tickets.`);
+      fetch(`${BASE_URL}/notifications/sold`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "ticket", id: eventId }),
+      }).catch(() => {});
+      fetchPublicEvents();
+    } else {
+      const d = await confirmRes.json();
+      Alert.alert("Error", d.message || "Payment succeeded but ticket could not be issued. Please contact support.");
+    }
+  };
+
+  const handleJoinFreeEvent = async (eventId: string, eventTitle: string) => {
     try {
       const token = await SecureStore.getItemAsync("token");
       if (!token) return;
-
-      const response = await fetch(`${BASE_URL}/events/${eventId}/purchase`, {
+      const response = await fetch(`${BASE_URL}/events/${eventId}/join`, {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await response.json();
-
       if (response.ok) {
-        Alert.alert("Success!", `Successfully purchased ticket for "${eventTitle}"`);
+        Alert.alert("Success!", `You've joined "${eventTitle}"`);
         fetchPublicEvents();
       } else {
-        Alert.alert("Error", data.message || "Failed to purchase ticket");
+        Alert.alert("Error", data.message || "Failed to join event");
       }
     } catch (error) {
-      console.error("Purchase ticket error:", error);
-      Alert.alert("Error", "Failed to purchase ticket");
+      Alert.alert("Error", "Failed to join event");
     }
   };
 
@@ -480,6 +508,7 @@ export default function Home() {
                     key={event._id}
                     event={event}
                     onPurchaseTicket={handlePurchaseTicket}
+                    onJoinFreeEvent={handleJoinFreeEvent}
                   />
                 ))}
               </Carousel>
@@ -717,14 +746,28 @@ export default function Home() {
 
               <View style={styles.inputGroup}>
                 <Text style={styles.inputLabel}>Location *</Text>
+                <TouchableOpacity
+                  style={styles.cityPickerButton}
+                  onPress={() => setShowCityPicker(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="location-outline" size={18} color="#9ca3af" />
+                  <Text style={[styles.cityPickerText, eventData.location && styles.cityPickerTextFilled]}>
+                    {eventData.location || "Pick a city..."}
+                  </Text>
+                  <Ionicons name="chevron-down" size={18} color="#9ca3af" />
+                </TouchableOpacity>
                 <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Downtown Club"
+                  style={[styles.input, { marginTop: 8 }]}
+                  placeholder="Specific venue or address (optional)"
                   placeholderTextColor="#6b7280"
-                  value={eventData.location}
-                  onChangeText={(text) =>
-                    setEventData({ ...eventData, location: text })
-                  }
+                  value={eventData.location.includes(",") ? eventData.location.split(",").slice(1).join(",").trim() : ""}
+                  onChangeText={(text) => {
+                    const cityPart = eventData.location.includes(",")
+                      ? eventData.location.split(",")[0]
+                      : eventData.location;
+                    setEventData({ ...eventData, location: text ? `${cityPart}, ${text}` : cityPart });
+                  }}
                 />
               </View>
 
@@ -954,6 +997,43 @@ export default function Home() {
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
+
+      {/* City Picker Modal */}
+      <Modal
+        visible={showCityPicker}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setShowCityPicker(false)}
+      >
+        <TouchableOpacity
+          style={styles.cityModalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCityPicker(false)}
+        >
+          <View style={styles.cityModalContent}>
+            <View style={styles.cityModalHeader}>
+              <Text style={styles.cityModalTitle}>Select City</Text>
+              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+            {CITIES.map((city) => (
+              <TouchableOpacity
+                key={city._id}
+                style={styles.cityOption}
+                onPress={() => {
+                  setEventData({ ...eventData, location: city.name });
+                  setShowCityPicker(false);
+                }}
+              >
+                <Ionicons name="location" size={18} color="#a855f7" />
+                <Text style={styles.cityOptionText}>{city.name}</Text>
+                <Text style={styles.cityOptionState}>{city.state}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </TouchableOpacity>
       </Modal>
     </>
   );
@@ -1368,5 +1448,68 @@ const styles = StyleSheet.create({
   },
   visibilityOptionTextActive: {
     color: "#a855f7",
+  },
+  cityPickerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#374151",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: "#4b5563",
+    gap: 8,
+  },
+  cityPickerText: {
+    flex: 1,
+    fontSize: 15,
+    fontFamily: Fonts.regular,
+    color: "#6b7280",
+  },
+  cityPickerTextFilled: {
+    color: "#fff",
+  },
+  cityModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-end",
+  },
+  cityModalContent: {
+    backgroundColor: "#1f1f2e",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+    maxHeight: "70%",
+  },
+  cityModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  cityModalTitle: {
+    fontSize: 20,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  cityOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+    gap: 12,
+  },
+  cityOptionText: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: Fonts.medium,
+    color: "#fff",
+  },
+  cityOptionState: {
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
   },
 });

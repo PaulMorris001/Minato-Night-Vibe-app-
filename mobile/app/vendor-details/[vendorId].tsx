@@ -10,6 +10,11 @@ import {
   ActivityIndicator,
   Image,
   ScrollView,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Service } from "@/libs/interfaces";
 import { Ionicons } from "@expo/vector-icons";
@@ -17,6 +22,8 @@ import { Colors } from "@/constants/colors";
 import { LinearGradient } from "expo-linear-gradient";
 import { Fonts } from "@/constants/fonts";
 import { useFormatPrice } from "@/hooks/useFormatPrice";
+import * as SecureStore from "expo-secure-store";
+import { BASE_URL } from "@/constants/constants";
 
 export default function VendorDetails() {
   const { vendorId, vendorName } = useLocalSearchParams();
@@ -24,6 +31,10 @@ export default function VendorDetails() {
   const formatPrice = useFormatPrice();
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bookingService, setBookingService] = useState<Service | null>(null);
+  const [bookingMessage, setBookingMessage] = useState("");
+  const [bookingDate, setBookingDate] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const loadServices = async () => {
@@ -38,6 +49,43 @@ export default function VendorDetails() {
     };
     loadServices();
   }, [vendorId]);
+
+  const handleBookService = async () => {
+    if (!bookingDate.trim()) {
+      Alert.alert("Error", "Please enter your preferred date");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const res = await fetch(`${BASE_URL}/bookings`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          vendorId,
+          serviceId: bookingService?._id,
+          preferredDate: bookingDate,
+          message: bookingMessage,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        Alert.alert("Booking Sent!", "The vendor will get back to you soon.");
+        setBookingService(null);
+        setBookingMessage("");
+        setBookingDate("");
+      } else {
+        Alert.alert("Error", data.message || "Failed to send booking request");
+      }
+    } catch {
+      Alert.alert("Error", "Failed to send booking request");
+    } finally {
+      setSubmitting(false);
+    }
+  };
 
   const getAvailabilityColor = (availability: string) => {
     switch (availability) {
@@ -148,6 +196,24 @@ export default function VendorDetails() {
             )}
           </View>
         )}
+
+        {item.availability === "available" && (
+          <TouchableOpacity
+            style={styles.bookButton}
+            onPress={() => setBookingService(item)}
+            activeOpacity={0.8}
+          >
+            <LinearGradient
+              colors={["#a855f7", "#7c3aed"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.bookGradient}
+            >
+              <Ionicons name="calendar-outline" size={18} color="#fff" />
+              <Text style={styles.bookButtonText}>Book Service</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -201,6 +267,73 @@ export default function VendorDetails() {
           </View>
         }
       />
+
+      {/* Booking Modal */}
+      <Modal
+        visible={!!bookingService}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setBookingService(null)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setBookingService(null)}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Book Service</Text>
+              <TouchableOpacity onPress={() => setBookingService(null)}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalServiceName}>{bookingService?.name}</Text>
+
+            <Text style={styles.inputLabel}>Preferred Date & Time</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="e.g. Dec 25, 2025 at 7pm"
+              placeholderTextColor="#6b7280"
+              value={bookingDate}
+              onChangeText={setBookingDate}
+            />
+
+            <Text style={styles.inputLabel}>Message (optional)</Text>
+            <TextInput
+              style={[styles.modalInput, styles.modalTextArea]}
+              placeholder="Any special requests or details..."
+              placeholderTextColor="#6b7280"
+              value={bookingMessage}
+              onChangeText={setBookingMessage}
+              multiline
+              numberOfLines={4}
+            />
+
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleBookService}
+              disabled={submitting}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={["#a855f7", "#7c3aed"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.submitGradient}
+              >
+                <Text style={styles.submitText}>
+                  {submitting ? "Sending..." : "Send Booking Request"}
+                </Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -413,5 +546,90 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     textAlign: "center",
     lineHeight: 22,
+  },
+  bookButton: {
+    borderRadius: 12,
+    overflow: "hidden",
+    marginTop: 12,
+  },
+  bookGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 12,
+    gap: 8,
+  },
+  bookButtonText: {
+    fontSize: 15,
+    fontFamily: Fonts.semiBold,
+    color: "#fff",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-end",
+  },
+  modalBackdrop: {
+    flex: 1,
+  },
+  modalContent: {
+    backgroundColor: "#1f1f2e",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  modalServiceName: {
+    fontSize: 15,
+    fontFamily: Fonts.medium,
+    color: "#a855f7",
+    marginBottom: 20,
+  },
+  inputLabel: {
+    fontSize: 13,
+    fontFamily: Fonts.semiBold,
+    color: "#9ca3af",
+    marginBottom: 6,
+  },
+  modalInput: {
+    backgroundColor: "#374151",
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontFamily: Fonts.regular,
+    color: "#fff",
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#4b5563",
+  },
+  modalTextArea: {
+    height: 100,
+    textAlignVertical: "top",
+  },
+  submitButton: {
+    borderRadius: 12,
+    overflow: "hidden",
+    marginTop: 4,
+  },
+  submitGradient: {
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  submitText: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    color: "#fff",
   },
 });

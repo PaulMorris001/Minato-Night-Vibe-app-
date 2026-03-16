@@ -1,0 +1,97 @@
+/** @type {import('expo/config').ExpoConfig} */
+module.exports = {
+  name: "Nightvibe",
+  slug: "nightvibe",
+  version: "1.0.0",
+  orientation: "portrait",
+  icon: "./assets/images/ios/icon.png",
+  scheme: "mobile",
+  userInterfaceStyle: "automatic",
+  newArchEnabled: true,
+  ios: {
+    supportsTablet: true,
+    bundleIdentifier: "com.nightvibe.mobile",
+    // In EAS Build, GOOGLE_SERVICES_PLIST is the path to the secret file.
+    // Locally, fall back to the file in the project root.
+    googleServicesFile: process.env.GOOGLE_SERVICES_PLIST || "./GoogleService-Info.plist",
+    icon: {
+      dark: "./assets/icons/ios-dark.png",
+      light: "./assets/icons/ios-light.png",
+      tinted: "./assets/icons/ios-tinted.png",
+    },
+    infoPlist: {
+      ITSAppUsesNonExemptEncryption: false,
+    },
+  },
+  android: {
+    package: "com.nightvibe.mobile",
+    // In EAS Build, GOOGLE_SERVICES_JSON is the path to the secret file.
+    // Locally, fall back to the file in the project root.
+    googleServicesFile: process.env.GOOGLE_SERVICES_JSON || "./google-services.json",
+    icon: "./assets/images/android-icon-foreground.png",
+    adaptiveIcon: {
+      foregroundImage: "./assets/icons/adaptive-icon.png",
+      monochromeImage: "./assets/icons/adaptive-icon.png",
+      background: "#ffffff",
+    },
+    edgeToEdgeEnabled: true,
+    predictiveBackGestureEnabled: false,
+    softwareKeyboardLayoutMode: "pan",
+  },
+  web: {
+    output: "static",
+    favicon: "./assets/images/favicon.png",
+  },
+  plugins: [
+    "@react-native-firebase/app",
+    "@react-native-firebase/messaging",
+    "./plugins/withFirebaseFix",
+    "expo-router",
+    [
+      "expo-splash-screen",
+      {
+        image: "./assets/icons/splash-icon-dark.png",
+        imageWidth: 200,
+        resizeMode: "contain",
+        backgroundColor: "#ffffff",
+        dark: {
+          image: "./assets/icons/splash-icon-light.png",
+          backgroundColor: "#000000",
+        },
+      },
+    ],
+    [
+      "@sentry/react-native/expo",
+      {
+        url: "https://sentry.io/",
+        project: "react-native",
+        organization: "setemi-if",
+        setCommits: false,
+      },
+    ],
+    [
+      "@stripe/stripe-react-native",
+      {
+        merchantIdentifier: "merchant.com.nightvibe.mobile",
+        enableGooglePay: true,
+      },
+    ],
+    [
+      "expo-notifications",
+      {
+        color: "#a855f7",
+      },
+    ],
+  ],
+  experiments: {
+    typedRoutes: true,
+    reactCompiler: true,
+  },
+  extra: {
+    router: {},
+    eas: {
+      projectId: "a1e5c06d-26a5-4e05-89d9-3b9acf9a3ea4",
+    },
+  },
+  owner: "setemiloye1",
+};
