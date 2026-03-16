@@ -91,6 +91,12 @@ export default function GuideDetailPage() {
 
       if (confirmRes.ok) {
         Alert.alert("Success", "Guide unlocked! Enjoy reading.");
+        // Notify guide author that their guide was sold
+        fetch(`${BASE_URL}/notifications/sold`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ type: "guide", id }),
+        }).catch(() => {});
         setHasPurchased(true);
         fetchGuide();
       } else {

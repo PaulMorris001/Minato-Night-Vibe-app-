@@ -109,14 +109,21 @@ export default function Login() {
       let errorMessage = "Login failed. Please try again.";
 
       if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
-        errorMessage = `Cannot connect to server at ${BASE_URL}. Make sure the backend is running.`;
-      } else if (
-        error.code === "ETIMEDOUT" ||
-        error.message.includes("timeout")
-      ) {
-        errorMessage = "Connection timeout. Check your network connection.";
+        errorMessage = `Cannot connect to server. Make sure you're connected to the internet.`;
+      } else if (error.code === "ETIMEDOUT" || error.message.includes("timeout")) {
+        errorMessage = "Connection timed out. Check your network and try again.";
       } else if (error.message.includes("Network Error")) {
-        errorMessage = `Network error. Cannot reach ${BASE_URL}. Check if backend is running and accessible.`;
+        errorMessage = "No internet connection. Please check your network and try again.";
+      } else if (error.response?.status === 401) {
+        errorMessage = "Incorrect email or password. Please try again.";
+      } else if (error.response?.status === 404) {
+        errorMessage = "No account found with that email address. Did you mean to sign up?";
+      } else if (error.response?.status === 403) {
+        errorMessage = "Your account has been suspended. Please contact support.";
+      } else if (error.response?.status === 429) {
+        errorMessage = "Too many login attempts. Please wait a few minutes and try again.";
+      } else if (error.response?.status >= 500) {
+        errorMessage = "Server error. Please try again later.";
       } else if (error.response?.data?.message) {
         errorMessage = error.response.data.message;
       }

@@ -39,7 +39,6 @@ export default function MyGuidesPage() {
         router.replace("/login");
         return;
       }
-
       const response = await fetch(`${BASE_URL}/guides/my-guides`, {
         headers: {
           Authorization: `Bearer ${token}`,

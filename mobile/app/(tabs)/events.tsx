@@ -127,10 +127,11 @@ export default function EventsPage() {
 
   const handleShareEvent = async (event: Event) => {
     try {
-      const shareUrl = `nightvibe://events/share/${event.shareToken}`;
+      const deepLink = `mobile:///event/${event._id}`;
       await Share.share({
-        message: `Join my event: ${event.title}\nDate: ${new Date(event.date).toLocaleDateString()}\nLocation: ${event.location}\n\nJoin here: ${shareUrl}`,
+        message: `Join my event: ${event.title}\nDate: ${new Date(event.date).toLocaleDateString()}\nLocation: ${event.location}\n\nOpen in NightVibe: ${deepLink}`,
         title: event.title,
+        url: deepLink,
       });
     } catch (error) {
       console.error("Share error:", error);

@@ -15,6 +15,7 @@ import uploadRoutes from "./routes/upload.route.js";
 import logRoutes from "./routes/log.route.js";
 import stripeRoutes from "./routes/stripe.route.js";
 import notificationRoutes from "./routes/notification.route.js";
+import favoritesRoutes from "./routes/favorites.route.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -46,6 +47,7 @@ app.use("/api/upload", uploadRoutes);
 app.use("/api/", logRoutes);
 app.use("/api/", stripeRoutes);
 app.use("/api/", notificationRoutes);
+app.use("/api/", favoritesRoutes);
 
 
 // Initialize Socket.IO

@@ -9,6 +9,7 @@ import {
   StatusBar,
   Image,
   ActivityIndicator,
+  Alert,
 } from "react-native";
 import { Tabs, useRouter, useSegments } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -178,7 +179,13 @@ export default function TabsLayout() {
 
       <View style={[styles.divider, isGlassAvailable && styles.glassDivider]} />
 
-      <TouchableOpacity style={styles.menuItem}>
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+          setIsProfileModalVisible(false);
+          router.push("/(tabs)/events");
+        }}
+      >
         <View style={styles.menuIconContainer}>
           <Ionicons name="calendar-outline" size={20} color="#a855f7" />
         </View>
@@ -192,7 +199,13 @@ export default function TabsLayout() {
         />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.menuItem}>
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+          setIsProfileModalVisible(false);
+          router.push("/favorites" as any);
+        }}
+      >
         <View style={styles.menuIconContainer}>
           <Ionicons name="heart-outline" size={20} color="#a855f7" />
         </View>
@@ -226,7 +239,17 @@ export default function TabsLayout() {
         />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.menuItem}>
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+          setIsProfileModalVisible(false);
+          Alert.alert(
+            "Help & Support",
+            "Need help? Reach us at:\n\nsupport@nightvibe.app\n\nOr visit nightvibe.app/help for FAQs and guides.",
+            [{ text: "Got it" }]
+          );
+        }}
+      >
         <View style={styles.menuIconContainer}>
           <Ionicons name="help-circle-outline" size={20} color="#a855f7" />
         </View>

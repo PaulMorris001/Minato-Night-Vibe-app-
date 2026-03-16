@@ -94,8 +94,42 @@ export default function Signup() {
         level: 'error',
       });
 
-      const errorMessage =
-        error.response?.data?.message || "Signup failed. Please try again.";
+      let errorMessage = "Signup failed. Please try again.";
+
+      if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND") {
+        errorMessage = "Cannot connect to server. Make sure you're connected to the internet.";
+      } else if (error.code === "ETIMEDOUT" || error.message.includes("timeout")) {
+        errorMessage = "Connection timed out. Check your network and try again.";
+      } else if (error.message.includes("Network Error")) {
+        errorMessage = "No internet connection. Please check your network and try again.";
+      } else if (error.response?.status === 409) {
+        const msg: string = error.response.data?.message ?? "";
+        if (msg.toLowerCase().includes("username")) {
+          errorMessage = "That username is already taken. Please choose a different one.";
+        } else if (msg.toLowerCase().includes("email")) {
+          errorMessage = "An account with that email already exists. Try logging in instead.";
+        } else {
+          errorMessage = "An account with those details already exists.";
+        }
+      } else if (error.response?.status === 400) {
+        const msg: string = error.response.data?.message ?? "";
+        if (msg.toLowerCase().includes("password")) {
+          errorMessage = "Password is too weak. Use at least 8 characters with a mix of letters and numbers.";
+        } else if (msg.toLowerCase().includes("email")) {
+          errorMessage = "Please enter a valid email address.";
+        } else if (msg.toLowerCase().includes("username")) {
+          errorMessage = "Username can only contain letters, numbers, and underscores.";
+        } else {
+          errorMessage = error.response.data?.message || "Invalid details. Please check your information.";
+        }
+      } else if (error.response?.status === 429) {
+        errorMessage = "Too many signup attempts. Please wait a few minutes and try again.";
+      } else if (error.response?.status >= 500) {
+        errorMessage = "Server error. Please try again later.";
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      }
+
       Alert.alert("Error", errorMessage);
     } finally {
       setLoading(false);

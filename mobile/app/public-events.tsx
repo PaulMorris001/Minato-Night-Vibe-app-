@@ -9,12 +9,14 @@ import {
   ActivityIndicator,
   Alert,
   RefreshControl,
+  ScrollView,
+  TouchableOpacity,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Fonts } from "@/constants/fonts";
 import * as SecureStore from "expo-secure-store";
-import { BASE_URL } from "@/constants/constants";
+import { BASE_URL, CITIES } from "@/constants/constants";
 import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
 import PublicEventCard, { PublicEvent } from "@/components/shared/PublicEventCard";
 import { useStripePayment } from "@/hooks/useStripePayment";
@@ -28,6 +30,7 @@ export default function PublicEventsPage() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [totalEvents, setTotalEvents] = useState(0);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
 
   const EVENTS_PER_PAGE = 10;
 
@@ -43,8 +46,9 @@ export default function PublicEventsPage() {
         return;
       }
 
+      const cityParam = selectedCity ? `&city=${encodeURIComponent(selectedCity)}` : "";
       const response = await fetch(
-        `${BASE_URL}/events/public/explore?page=${pageNum}&limit=${EVENTS_PER_PAGE}`,
+        `${BASE_URL}/events/public/explore?page=${pageNum}&limit=${EVENTS_PER_PAGE}${cityParam}`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -78,8 +82,10 @@ export default function PublicEventsPage() {
   };
 
   useEffect(() => {
-    fetchPublicEvents(1);
-  }, []);
+    setPage(1);
+    setHasMore(true);
+    fetchPublicEvents(1, true);
+  }, [selectedCity]);
 
   const handleRefresh = useCallback(() => {
     setRefreshing(true);
@@ -116,6 +122,12 @@ export default function PublicEventsPage() {
 
     if (confirmRes.ok) {
       Alert.alert("Success!", `You're going to "${eventTitle}"! Check your tickets.`);
+      // Notify event creator that a ticket was sold
+      fetch(`${BASE_URL}/notifications/sold`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "ticket", id: eventId }),
+      }).catch(() => {});
       fetchPublicEvents(1, true);
       setPage(1);
     } else {
@@ -212,6 +224,33 @@ export default function PublicEventsPage() {
           </Text>
         </View>
       </LinearGradient>
+
+      {/* City Filter */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.filterBar}
+      >
+        <TouchableOpacity
+          style={[styles.filterChip, !selectedCity && styles.filterChipActive]}
+          onPress={() => setSelectedCity(null)}
+        >
+          <Text style={[styles.filterChipText, !selectedCity && styles.filterChipTextActive]}>
+            All Cities
+          </Text>
+        </TouchableOpacity>
+        {CITIES.map((city) => (
+          <TouchableOpacity
+            key={city._id}
+            style={[styles.filterChip, selectedCity === city.name && styles.filterChipActive]}
+            onPress={() => setSelectedCity(selectedCity === city.name ? null : city.name)}
+          >
+            <Text style={[styles.filterChipText, selectedCity === city.name && styles.filterChipTextActive]}>
+              {city.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {/* Events List */}
       {loading && page === 1 ? (
@@ -319,5 +358,31 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     textAlign: "center",
     lineHeight: 22,
+  },
+  filterBar: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 8,
+    flexDirection: "row",
+  },
+  filterChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: "#1f1f2e",
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  filterChipActive: {
+    backgroundColor: "#a855f7",
+    borderColor: "#a855f7",
+  },
+  filterChipText: {
+    fontSize: scaleFontSize(13),
+    fontFamily: Fonts.medium,
+    color: "#9ca3af",
+  },
+  filterChipTextActive: {
+    color: "#fff",
   },
 });

@@ -40,6 +40,9 @@ const userSchema = mongoose.Schema({
   stripeAccountId: { type: String },
   stripeOnboardingComplete: { type: Boolean, default: false },
 
+  // Favorited events
+  favorites: [{ type: mongoose.Schema.Types.ObjectId, ref: "event" }],
+
   // FCM push notification token (updated on each app launch)
   fcmToken: { type: String, default: null },
 
