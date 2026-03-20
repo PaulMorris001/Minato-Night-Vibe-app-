@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -96,8 +97,13 @@ export default function TicketsScreen() {
     <LinearGradient colors={["#0f0f1a", "#1a1a2e"]} style={styles.container}>
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>My Tickets</Text>
-          <Text style={styles.headerSubtitle}>Your event tickets</Text>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+            <Ionicons name="arrow-back" size={24} color="#fff" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>My Tickets</Text>
+            <Text style={styles.headerSubtitle}>Your event tickets</Text>
+          </View>
         </View>
 
         <ScrollView
@@ -148,6 +154,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     borderBottomWidth: 1,
     borderBottomColor: "#374151",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  backButton: {
+    padding: 4,
   },
   headerTitle: {
     fontSize: screenWidth > 400 ? 32 : 28,

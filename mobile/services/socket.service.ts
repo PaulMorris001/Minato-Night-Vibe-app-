@@ -13,6 +13,8 @@ interface SocketEvents {
   onTypingStop?: (data: any) => void;
   onUserOnline?: (userId: string) => void;
   onUserOffline?: (userId: string) => void;
+  onGroupUpdated?: (data: { chatId: string; name?: string; groupImage?: string }) => void;
+  onEventInvite?: (data: { eventId: string; eventTitle: string; inviterUsername: string }) => void;
 }
 
 class SocketService {
@@ -97,6 +99,14 @@ class SocketService {
 
       this.socket.on("user:offline", (userId) => {
         this.notify("onUserOffline", userId);
+      });
+
+      this.socket.on("group:updated", (data) => {
+        this.notify("onGroupUpdated", data);
+      });
+
+      this.socket.on("event:invite", (data) => {
+        this.notify("onEventInvite", data);
       });
     } catch (error) {
       console.error("Socket connection error:", error);

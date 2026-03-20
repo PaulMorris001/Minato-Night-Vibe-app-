@@ -13,6 +13,7 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Fonts } from "@/constants/fonts";
 import * as SecureStore from "expo-secure-store";
@@ -217,6 +218,9 @@ export default function PublicEventsPage() {
         colors={["#0f0f1a", "#1a1a2e", "#16213e"]}
         style={styles.header}
       >
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.headerTitle}>Public Events</Text>
           <Text style={styles.headerSubtitle}>
@@ -293,10 +297,15 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight! + 20 : 60,
     paddingBottom: 24,
     paddingHorizontal: getResponsivePadding(),
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 12,
   },
-  headerContent: {
-    alignItems: "center",
+  backButton: {
+    padding: 4,
+    marginBottom: 4,
   },
+  headerContent: {},
   headerTitle: {
     fontSize: scaleFontSize(28),
     fontFamily: Fonts.bold,

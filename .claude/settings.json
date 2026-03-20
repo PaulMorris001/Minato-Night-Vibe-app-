@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/setemi/DEV/NightVibe/**)",
+      "Bash(ls -la /Users/setemi/DEV/NightVibe/mobile/app/\\\\\\(tabs\\\\\\)/*.tsx)",
+      "Bash(find /Users/setemi/DEV/NightVibe/mobile/app -type d -name \"\\(tabs\\)\")"
+    ]
+  }
+}

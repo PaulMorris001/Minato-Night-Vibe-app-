@@ -180,6 +180,54 @@ export const deleteMessage = async (req, res) => {
   }
 };
 
+// Update group chat name and/or image (admins only)
+export const updateGroupChat = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { chatId } = req.params;
+    const { name, groupImage } = req.body;
+
+    const chat = await Chat.findById(chatId);
+    if (!chat) return res.status(404).json({ message: "Chat not found" });
+    if (chat.type !== "group") return res.status(400).json({ message: "Not a group chat" });
+
+    // Only admins can update
+    if (!chat.admins.some(a => a.toString() === userId)) {
+      return res.status(403).json({ message: "Only group admins can update chat details" });
+    }
+
+    if (name && name.trim()) chat.name = name.trim();
+
+    if (groupImage !== undefined) {
+      if (groupImage && groupImage.startsWith("data:image")) {
+        const { uploadBase64Image } = await import("../services/image.service.js");
+        const result = await uploadBase64Image(groupImage, "group_images");
+        chat.groupImage = result.url;
+      } else {
+        chat.groupImage = groupImage;
+      }
+    }
+
+    await chat.save();
+
+    const updated = await Chat.findById(chatId)
+      .populate("participants", "username email profilePicture")
+      .populate("admins", "username email profilePicture");
+
+    // Broadcast update to all participants via socket
+    const { getSocketInstance } = await import("../services/socket.service.js");
+    const io = getSocketInstance();
+    if (io) {
+      io.to(`chat:${chatId}`).emit("group:updated", { chatId, name: chat.name, groupImage: chat.groupImage });
+    }
+
+    res.json({ message: "Group updated", chat: updated });
+  } catch (error) {
+    console.error("Update group chat error:", error);
+    res.status(500).json({ message: "Error updating group chat", error: error.message });
+  }
+};
+
 // Search chats and messages
 export const searchChatsAndMessages = async (req, res) => {
   try {

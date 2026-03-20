@@ -1,8 +1,11 @@
 import Event from "../models/event.model.js";
 import User from "../models/user.model.js";
 import Ticket from "../models/ticket.model.js";
+import Chat from "../models/chat.model.js";
+import Notification from "../models/notification.model.js";
 import ChatService from "../services/chat.service.js";
 import { uploadBase64Image, deleteImage } from "../services/image.service.js";
+import { emitEventInvite } from "../services/socket.service.js";
 
 // Create a new event
 export const createEvent = async (req, res) => {
@@ -78,16 +81,19 @@ export const getUserEvents = async (req, res) => {
     const events = await Event.find({
       $or: [
         { createdBy: userId },
-        { invitedUsers: userId }
+        { invitedUsers: userId },
+        { pendingInvites: userId }
       ],
       isActive: true
     })
       .populate('createdBy', 'username email profilePicture')
       .populate('invitedUsers', 'username email profilePicture')
+      .populate('pendingInvites', 'username email profilePicture')
+      .populate('groupChatId', '_id name groupImage')
       .sort({ date: -1 });
 
-    // Add ticket counts for public paid events
-    const eventsWithTicketInfo = await Promise.all(
+    // Add ticket counts, RSVP info, and userStatus
+    const eventsWithInfo = await Promise.all(
       events.map(async (event) => {
         const eventObj = event.toObject();
         if (event.isPublic && event.isPaid && event.maxGuests > 0) {
@@ -95,11 +101,25 @@ export const getUserEvents = async (req, res) => {
           eventObj.ticketsSold = soldTickets;
           eventObj.ticketsRemaining = event.maxGuests - soldTickets;
         }
+        eventObj.rsvpCount = event.rsvpUsers ? event.rsvpUsers.length : 0;
+        eventObj.userRsvp = event.rsvpUsers ? event.rsvpUsers.some(id => id.toString() === userId) : false;
+
+        // Determine the current user's relationship to this event
+        if (event.createdBy._id.toString() === userId) {
+          eventObj.userStatus = 'creator';
+        } else if (event.invitedUsers.some(u => u._id.toString() === userId)) {
+          eventObj.userStatus = 'accepted';
+        } else if (event.pendingInvites.some(u => u._id.toString() === userId)) {
+          eventObj.userStatus = 'pending';
+        } else {
+          eventObj.userStatus = 'none';
+        }
+
         return eventObj;
       })
     );
 
-    res.status(200).json({ events: eventsWithTicketInfo });
+    res.status(200).json({ events: eventsWithInfo });
   } catch (error) {
     console.error("Get user events error:", error);
     res.status(500).json({ message: "Error fetching events", error: error.message });
@@ -114,29 +134,40 @@ export const getEventById = async (req, res) => {
 
     const event = await Event.findById(eventId)
       .populate('createdBy', 'username email profilePicture')
-      .populate('invitedUsers', 'username email profilePicture');
+      .populate('invitedUsers', 'username email profilePicture')
+      .populate('pendingInvites', 'username email profilePicture')
+      .populate('rsvpUsers', '_id')
+      .populate('groupChatId', '_id name groupImage');
 
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
     }
 
-    // Check if user has access to this event
-    // Access granted if: creator, invited user, has a valid ticket, or it's a free public event
     const isCreator = event.createdBy._id.toString() === userId;
     const isInvited = event.invitedUsers.some(user => user._id.toString() === userId);
+    const isPending = event.pendingInvites.some(user => user._id.toString() === userId);
     const isFreePublicEvent = event.isPublic && !event.isPaid;
-
-    // Check if user has a valid ticket for this event
     const userTicket = await Ticket.findOne({ event: eventId, user: userId, isValid: true });
     const hasTicket = !!userTicket;
 
-    const hasAccess = isCreator || isInvited || hasTicket || isFreePublicEvent;
+    // Pending invitees can view the event so they can decide whether to accept
+    const hasAccess = isCreator || isInvited || isPending || hasTicket || isFreePublicEvent;
 
     if (!hasAccess) {
       return res.status(403).json({ message: "You don't have access to this event" });
     }
 
-    res.status(200).json({ event });
+    const eventObj = event.toObject();
+    eventObj.userRsvp = event.rsvpUsers.some(u => u._id.toString() === userId);
+    eventObj.rsvpCount = event.rsvpUsers.length;
+
+    // Tell the client what this user's relationship to the event is
+    if (isCreator) eventObj.userStatus = 'creator';
+    else if (isInvited) eventObj.userStatus = 'accepted';
+    else if (isPending) eventObj.userStatus = 'pending';
+    else eventObj.userStatus = 'none';
+
+    res.status(200).json({ event: eventObj });
   } catch (error) {
     console.error("Get event error:", error);
     res.status(500).json({ message: "Error fetching event", error: error.message });
@@ -276,56 +307,145 @@ export const inviteUserByUsername = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Check if user is already invited
-    if (event.invitedUsers.includes(userToInvite._id)) {
-      return res.status(400).json({ message: "User already invited" });
-    }
-
     // Check if user is the creator
     if (event.createdBy.toString() === userToInvite._id.toString()) {
       return res.status(400).json({ message: "Cannot invite the event creator" });
     }
 
-    event.invitedUsers.push(userToInvite._id);
+    // Check if user is already confirmed or already has a pending invite
+    const alreadyConfirmed = event.invitedUsers.some(id => id.toString() === userToInvite._id.toString());
+    const alreadyPending = event.pendingInvites.some(id => id.toString() === userToInvite._id.toString());
+    if (alreadyConfirmed || alreadyPending) {
+      return res.status(400).json({ message: alreadyConfirmed ? "User has already accepted this event" : "User already has a pending invite" });
+    }
+
+    // Add to pendingInvites — they must accept before being added to invitedUsers
+    event.pendingInvites.push(userToInvite._id);
     await event.save();
 
     const updatedEvent = await Event.findById(eventId)
       .populate('createdBy', 'username email profilePicture')
-      .populate('invitedUsers', 'username email profilePicture');
+      .populate('invitedUsers', 'username email profilePicture')
+      .populate('pendingInvites', 'username email profilePicture');
 
-    // Send event invitation notification via chat
+    // Send invitation notification and real-time socket event
     try {
-      // Get or create direct chat between inviter and invitee
-      const chat = await ChatService.getOrCreateDirectChat(userId, userToInvite._id.toString());
-
-      // Format the event date
-      const eventDate = new Date(event.date);
-      const formattedDate = eventDate.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
+      const inviter = await User.findById(userId).select('username');
+      await Notification.create({
+        user: userToInvite._id,
+        type: 'event_invite',
+        title: 'Event Invitation',
+        body: `${inviter?.username || 'Someone'} invited you to "${event.title}"`,
+        data: { eventId: event._id.toString() },
       });
-
-      // Send event invitation message
-      await ChatService.sendMessage(chat._id, userId, {
-        type: 'event',
-        content: `📅 You've been invited to "${event.title}"\n📍 ${event.location}\n🕐 ${formattedDate}`,
-        eventId: event._id
+      // Notify the invited user in real-time so their Events tab updates immediately
+      emitEventInvite(userToInvite._id.toString(), {
+        eventId: event._id.toString(),
+        eventTitle: event.title,
+        inviterUsername: inviter?.username || 'Someone',
       });
-    } catch (chatError) {
-      console.error("Error sending chat notification:", chatError);
-      // Don't fail the invitation if chat notification fails
+    } catch (notifError) {
+      console.error("Error sending invite notification:", notifError);
     }
 
     res.status(200).json({
-      message: "User invited successfully",
-      event: updatedEvent
+      message: "Invite sent — waiting for user to accept",
+      event: updatedEvent,
     });
   } catch (error) {
     console.error("Invite user error:", error);
     res.status(500).json({ message: "Error inviting user", error: error.message });
+  }
+};
+
+// Respond to an event invite (accept or decline)
+export const respondToInvite = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { status } = req.body; // "accepted" | "declined"
+    const userId = req.user.id;
+
+    if (!["accepted", "declined"].includes(status)) {
+      return res.status(400).json({ message: "Status must be 'accepted' or 'declined'" });
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    // Must have a pending invite
+    const isPending = event.pendingInvites.some(id => id.toString() === userId);
+    if (!isPending) {
+      return res.status(400).json({ message: "No pending invite found for this event" });
+    }
+
+    // Remove from pendingInvites regardless of response
+    event.pendingInvites = event.pendingInvites.filter(id => id.toString() !== userId);
+
+    if (status === "accepted") {
+      // Add to confirmed attendees
+      event.invitedUsers.push(userId);
+
+      // Add to event group chat (create if doesn't exist yet)
+      try {
+        const user = await User.findById(userId).select('username');
+        if (!event.groupChatId) {
+          // Create group chat with creator + this user
+          const groupChat = await ChatService.createGroupChat(
+            event.title,
+            [event.createdBy.toString(), userId],
+            event.createdBy.toString(),
+            event.image || ""
+          );
+          event.groupChatId = groupChat._id;
+        } else {
+          const groupChat = await Chat.findById(event.groupChatId);
+          if (groupChat && !groupChat.participants.some(p => p.toString() === userId)) {
+            groupChat.participants.push(userId);
+            groupChat.unreadCount.set(userId, 0);
+            groupChat.isArchived.set(userId, false);
+            groupChat.isMuted.set(userId, false);
+            await groupChat.save();
+            await ChatService.sendMessage(event.groupChatId, userId, {
+              type: 'system',
+              content: `${user?.username || 'Someone'} joined the group`
+            });
+          }
+        }
+      } catch (chatErr) {
+        console.error("Group chat error on invite accept:", chatErr);
+      }
+
+      // Notify the event creator
+      try {
+        const user = await User.findById(userId).select('username');
+        await Notification.create({
+          user: event.createdBy,
+          type: 'invite_accepted',
+          title: 'Invite Accepted',
+          body: `${user?.username || 'Someone'} accepted your invite to "${event.title}"`,
+          data: { eventId: event._id.toString() },
+        });
+      } catch (notifErr) {
+        console.error("Notification error on invite accept:", notifErr);
+      }
+    }
+    // On decline: nothing extra needed, user is just removed from pendingInvites
+
+    await event.save();
+
+    const updatedEvent = await Event.findById(eventId)
+      .populate('createdBy', 'username email profilePicture')
+      .populate('invitedUsers', 'username email profilePicture')
+      .populate('pendingInvites', 'username email profilePicture')
+      .populate('groupChatId', '_id name groupImage');
+
+    res.json({
+      message: status === "accepted" ? "You've joined the event!" : "Invite declined",
+      event: updatedEvent,
+    });
+  } catch (error) {
+    console.error("Respond to invite error:", error);
+    res.status(500).json({ message: "Error responding to invite", error: error.message });
   }
 };
 
@@ -527,6 +647,46 @@ export const getUserTickets = async (req, res) => {
   } catch (error) {
     console.error("Get user tickets error:", error);
     res.status(500).json({ message: "Error fetching tickets", error: error.message });
+  }
+};
+
+// RSVP to an event (going / not_going)
+export const rsvpEvent = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { status } = req.body; // "going" | "not_going"
+    const userId = req.user.id;
+
+    if (!["going", "not_going"].includes(status)) {
+      return res.status(400).json({ message: "Status must be 'going' or 'not_going'" });
+    }
+
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+
+    // Must be invited (or creator) to RSVP
+    const isCreator = event.createdBy.toString() === userId;
+    const isInvited = event.invitedUsers.some(id => id.toString() === userId);
+    const isTicketHolder = await Ticket.findOne({ event: eventId, user: userId, isValid: true });
+    const isFreePublic = event.isPublic && !event.isPaid;
+
+    if (!isCreator && !isInvited && !isTicketHolder && !isFreePublic) {
+      return res.status(403).json({ message: "You must be invited to RSVP" });
+    }
+
+    const alreadyRsvp = event.rsvpUsers.some(id => id.toString() === userId);
+
+    if (status === "going") {
+      if (!alreadyRsvp) event.rsvpUsers.push(userId);
+    } else {
+      event.rsvpUsers = event.rsvpUsers.filter(id => id.toString() !== userId);
+    }
+
+    await event.save();
+    res.json({ message: status === "going" ? "You're marked as going!" : "RSVP removed", rsvpCount: event.rsvpUsers.length });
+  } catch (error) {
+    console.error("RSVP error:", error);
+    res.status(500).json({ message: "Error updating RSVP", error: error.message });
   }
 };
 

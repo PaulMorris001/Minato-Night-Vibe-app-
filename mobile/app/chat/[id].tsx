@@ -10,6 +10,9 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Modal,
+  TextInput,
+  ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -24,6 +27,7 @@ import socketService from "@/services/socket.service";
 import * as SecureStore from "expo-secure-store";
 import { capitalize } from "@/libs/helpers";
 import { uploadImage } from "@/utils/imageUpload";
+import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
 
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -32,6 +36,10 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [settingsVisible, setSettingsVisible] = useState(false);
+  const [editGroupName, setEditGroupName] = useState("");
+  const [editGroupImage, setEditGroupImage] = useState<string | null>(null);
+  const [savingGroup, setSavingGroup] = useState(false);
   const flatListRef = useRef<FlatList>(null);
 
   const loadCurrentUser = async () => {
@@ -101,9 +109,22 @@ export default function ChatScreen() {
       },
     });
 
+    socketService.on("chat-screen-group", {
+      onGroupUpdated: (data) => {
+        if (data.chatId === id) {
+          setChat((prev) =>
+            prev
+              ? { ...prev, name: data.name ?? prev.name, groupImage: data.groupImage ?? prev.groupImage }
+              : prev
+          );
+        }
+      },
+    });
+
     return () => {
       socketService.leaveChat(id);
       socketService.off("chat-screen");
+      socketService.off("chat-screen-group");
     };
   }, [id, currentUserId, loadChatAndMessages]);
 
@@ -188,6 +209,62 @@ export default function ChatScreen() {
       Alert.alert("Error", "Failed to send image");
     } finally {
       setSending(false);
+    }
+  };
+
+  const openGroupSettings = () => {
+    if (!chat || chat.type !== "group") return;
+    setEditGroupName(chat.name || "");
+    setEditGroupImage(chat.groupImage || null);
+    setSettingsVisible(true);
+  };
+
+  const pickGroupImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setEditGroupImage(result.assets[0].uri);
+      }
+    } catch (error) {
+      Alert.alert("Error", "Failed to pick image");
+    }
+  };
+
+  const saveGroupSettings = async () => {
+    if (!chat) return;
+    setSavingGroup(true);
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const updates: { name?: string; groupImage?: string } = {};
+
+      if (editGroupName.trim() && editGroupName.trim() !== chat.name) {
+        updates.name = editGroupName.trim();
+      }
+
+      // If a new local image was picked, upload it first
+      if (editGroupImage && editGroupImage !== chat.groupImage) {
+        if (!token) throw new Error("No auth token");
+        const uploadResult = await uploadImage(editGroupImage, "group_images", token);
+        updates.groupImage = uploadResult.url;
+      }
+
+      if (Object.keys(updates).length === 0) {
+        setSettingsVisible(false);
+        return;
+      }
+
+      const updatedChat = await chatService.updateGroupChat(chat._id, updates);
+      setChat(updatedChat);
+      setSettingsVisible(false);
+    } catch (error: any) {
+      Alert.alert("Error", error.message || "Failed to save changes");
+    } finally {
+      setSavingGroup(false);
     }
   };
 
@@ -287,15 +364,14 @@ export default function ChatScreen() {
               </View>
             </View>
 
-            <TouchableOpacity
-              style={styles.moreButton}
-              onPress={() => {
-                // Future: Open chat settings
-                Alert.alert("Coming Soon", "Chat settings");
-              }}
-            >
-              <Ionicons name="ellipsis-vertical" size={24} color="#fff" />
-            </TouchableOpacity>
+            {chat?.type === "group" && (
+              <TouchableOpacity
+                style={styles.moreButton}
+                onPress={openGroupSettings}
+              >
+                <Ionicons name="settings-outline" size={22} color="#fff" />
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Messages List */}
@@ -326,6 +402,94 @@ export default function ChatScreen() {
           />
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Group Settings Modal */}
+      <Modal
+        visible={settingsVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setSettingsVisible(false)}
+      >
+        <View style={styles.settingsOverlay}>
+          <TouchableOpacity
+            style={styles.settingsBackdrop}
+            activeOpacity={1}
+            onPress={() => setSettingsVisible(false)}
+          />
+          <View style={styles.settingsSheet}>
+            {/* Modal header */}
+            <View style={styles.settingsHeader}>
+              <Text style={styles.settingsTitle}>Group Settings</Text>
+              <TouchableOpacity onPress={() => setSettingsVisible(false)}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.settingsBody}>
+              {/* Group image picker */}
+              <TouchableOpacity style={styles.groupImagePicker} onPress={pickGroupImage}>
+                {editGroupImage ? (
+                  <Image source={{ uri: editGroupImage }} style={styles.groupImagePreview} />
+                ) : (
+                  <View style={styles.groupImagePlaceholder}>
+                    <Ionicons name="people" size={36} color="#6b7280" />
+                  </View>
+                )}
+                <View style={styles.groupImageOverlay}>
+                  <Ionicons name="camera" size={18} color="#fff" />
+                  <Text style={styles.groupImageOverlayText}>Change Photo</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Group name input */}
+              <Text style={styles.settingsLabel}>Group Name</Text>
+              <TextInput
+                style={styles.settingsInput}
+                value={editGroupName}
+                onChangeText={setEditGroupName}
+                placeholder="Enter group name"
+                placeholderTextColor="#6b7280"
+                maxLength={50}
+              />
+
+              {/* Save button */}
+              <TouchableOpacity
+                style={[styles.saveButton, savingGroup && styles.saveButtonDisabled]}
+                onPress={saveGroupSettings}
+                disabled={savingGroup}
+              >
+                {savingGroup ? (
+                  <ActivityIndicator color="#fff" size="small" />
+                ) : (
+                  <Text style={styles.saveButtonText}>Save Changes</Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Participants */}
+              <Text style={[styles.settingsLabel, { marginTop: 24 }]}>
+                Members ({chat?.participants.length ?? 0})
+              </Text>
+              {chat?.participants.map((p) => (
+                <View key={p._id} style={styles.participantRow}>
+                  {p.profilePicture ? (
+                    <Image source={{ uri: p.profilePicture }} style={styles.participantAvatar} />
+                  ) : (
+                    <View style={styles.participantAvatarPlaceholder}>
+                      <Ionicons name="person" size={16} color="#a855f7" />
+                    </View>
+                  )}
+                  <Text style={styles.participantName}>{p.username}</Text>
+                  {chat.admins?.some((a) => a._id === p._id) && (
+                    <View style={styles.adminBadge}>
+                      <Text style={styles.adminBadgeText}>Admin</Text>
+                    </View>
+                  )}
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </LinearGradient>
   );
 }
@@ -423,5 +587,139 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: "#6b7280",
     marginTop: 8,
+  },
+  // Group Settings Modal
+  settingsOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-end",
+  },
+  settingsBackdrop: { flex: 1 },
+  settingsSheet: {
+    backgroundColor: "#1f1f2e",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: "85%",
+  },
+  settingsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+  },
+  settingsTitle: {
+    fontSize: scaleFontSize(18),
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  settingsBody: {
+    padding: 20,
+    paddingBottom: 40,
+  },
+  groupImagePicker: {
+    alignSelf: "center",
+    marginBottom: 24,
+    position: "relative",
+  },
+  groupImagePreview: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "#374151",
+  },
+  groupImagePlaceholder: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "#374151",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  groupImageOverlay: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
+    backgroundColor: "#a855f7",
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  groupImageOverlayText: {
+    fontSize: scaleFontSize(11),
+    fontFamily: Fonts.semiBold,
+    color: "#fff",
+  },
+  settingsLabel: {
+    fontSize: scaleFontSize(13),
+    fontFamily: Fonts.semiBold,
+    color: "#9ca3af",
+    marginBottom: 8,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  settingsInput: {
+    backgroundColor: "#374151",
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: scaleFontSize(15),
+    fontFamily: Fonts.regular,
+    color: "#fff",
+    borderWidth: 1,
+    borderColor: "#4b5563",
+    marginBottom: 16,
+  },
+  saveButton: {
+    backgroundColor: "#a855f7",
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  saveButtonDisabled: { opacity: 0.6 },
+  saveButtonText: {
+    fontSize: scaleFontSize(15),
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  participantRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    gap: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+  },
+  participantAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#374151" },
+  participantAvatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#374151",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  participantName: {
+    flex: 1,
+    fontSize: scaleFontSize(15),
+    fontFamily: Fonts.regular,
+    color: "#fff",
+  },
+  adminBadge: {
+    backgroundColor: "rgba(168,85,247,0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#a855f7",
+  },
+  adminBadgeText: {
+    fontSize: scaleFontSize(11),
+    fontFamily: Fonts.semiBold,
+    color: "#a855f7",
   },
 });
