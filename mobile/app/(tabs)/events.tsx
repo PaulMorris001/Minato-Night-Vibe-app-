@@ -26,6 +26,7 @@ import { BASE_URL } from "@/constants/constants";
 import { Fonts } from "@/constants/fonts";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
+import socketService from "@/services/socket.service";
 
 interface Event {
   _id: string;
@@ -41,6 +42,7 @@ interface Event {
   maxGuests?: number;
   ticketsSold?: number;
   ticketsRemaining?: number;
+  userStatus: "creator" | "accepted" | "pending" | "none";
   createdBy: {
     _id: string;
     username: string;
@@ -48,6 +50,12 @@ interface Event {
     profilePicture?: string;
   };
   invitedUsers: {
+    _id: string;
+    username: string;
+    email: string;
+    profilePicture?: string;
+  }[];
+  pendingInvites: {
     _id: string;
     username: string;
     email: string;
@@ -71,6 +79,7 @@ export default function EventsPage() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [respondingInvite, setRespondingInvite] = useState<string | null>(null);
   const [editData, setEditData] = useState({
     title: "",
     date: "",
@@ -110,24 +119,59 @@ export default function EventsPage() {
     }
   };
 
-  useEffect(() => {
-    fetchEvents();
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
       fetchEvents();
     }, [])
   );
 
+  // Re-fetch events immediately when this user receives a new invite via socket
+  useEffect(() => {
+    socketService.on("events-tab", {
+      onEventInvite: () => {
+        fetchEvents();
+      },
+    });
+    return () => socketService.off("events-tab");
+  }, []);
+
   const onRefresh = () => {
     setRefreshing(true);
     fetchEvents();
   };
 
+  const handleRespondInvite = async (eventId: string, status: "accepted" | "declined") => {
+    setRespondingInvite(eventId);
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const response = await fetch(`${BASE_URL}/events/${eventId}/respond-invite`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        // Refresh list to reflect change
+        fetchEvents();
+        Alert.alert(
+          status === "accepted" ? "Joined!" : "Declined",
+          status === "accepted"
+            ? "You've joined the event."
+            : "Invite declined."
+        );
+      } else {
+        Alert.alert("Error", data.message || "Could not respond to invite");
+      }
+    } catch {
+      Alert.alert("Error", "Failed to respond to invite");
+    } finally {
+      setRespondingInvite(null);
+    }
+  };
+
   const handleShareEvent = async (event: Event) => {
     try {
-      const deepLink = `mobile:///event/${event._id}`;
+      const deepLink = `mobile://share/${event.shareToken}`;
       await Share.share({
         message: `Join my event: ${event.title}\nDate: ${new Date(event.date).toLocaleDateString()}\nLocation: ${event.location}\n\nOpen in NightVibe: ${deepLink}`,
         title: event.title,
@@ -544,17 +588,89 @@ export default function EventsPage() {
             <View style={styles.emptyState}>
               <Text style={styles.emptyStateText}>Loading events...</Text>
             </View>
-          ) : events.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="calendar-outline" size={64} color="#6b7280" />
-              <Text style={styles.emptyStateTitle}>No events yet</Text>
-              <Text style={styles.emptyStateText}>
-                Create your first event from the home page
-              </Text>
-            </View>
-          ) : (
-            events.map(renderEvent)
-          )}
+          ) : (() => {
+            const pending = events.filter(e => e.userStatus === "pending");
+            const myEvents = events.filter(e => e.userStatus !== "pending");
+            return (
+              <>
+                {/* ── Pending Invites ── */}
+                {pending.length > 0 && (
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Pending Invites</Text>
+                    {pending.map(event => {
+                      const eventDate = new Date(event.date);
+                      const isResponding = respondingInvite === event._id;
+                      return (
+                        <TouchableOpacity
+                          key={event._id}
+                          style={styles.pendingCard}
+                          onPress={() => handleEventPress(event._id)}
+                          activeOpacity={0.8}
+                        >
+                          {event.image ? (
+                            <Image source={{ uri: event.image }} style={styles.pendingImage} />
+                          ) : (
+                            <View style={styles.pendingImagePlaceholder}>
+                              <Ionicons name="calendar-outline" size={28} color="#6b7280" />
+                            </View>
+                          )}
+                          <View style={styles.pendingContent}>
+                            <Text style={styles.pendingTitle} numberOfLines={1}>{event.title}</Text>
+                            <Text style={styles.pendingMeta}>
+                              {event.createdBy.username} · {eventDate.toLocaleDateString()}
+                            </Text>
+                            <Text style={styles.pendingMeta} numberOfLines={1}>{event.location}</Text>
+                            <View style={styles.pendingActions}>
+                              <TouchableOpacity
+                                style={[styles.pendingBtn, styles.acceptBtn]}
+                                onPress={(e) => { e.stopPropagation(); handleRespondInvite(event._id, "accepted"); }}
+                                disabled={isResponding}
+                              >
+                                {isResponding ? (
+                                  <ActivityIndicator size="small" color="#fff" />
+                                ) : (
+                                  <>
+                                    <Ionicons name="checkmark" size={15} color="#fff" />
+                                    <Text style={styles.acceptBtnText}>Accept</Text>
+                                  </>
+                                )}
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.pendingBtn, styles.declineBtn]}
+                                onPress={(e) => { e.stopPropagation(); handleRespondInvite(event._id, "declined"); }}
+                                disabled={isResponding}
+                              >
+                                <Ionicons name="close" size={15} color="#ef4444" />
+                                <Text style={styles.declineBtnText}>Decline</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {/* ── My Events & Attending ── */}
+                {myEvents.length === 0 && pending.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Ionicons name="calendar-outline" size={64} color="#6b7280" />
+                    <Text style={styles.emptyStateTitle}>No events yet</Text>
+                    <Text style={styles.emptyStateText}>
+                      Create your first event from the home page
+                    </Text>
+                  </View>
+                ) : myEvents.length > 0 ? (
+                  <View style={styles.section}>
+                    {pending.length > 0 && (
+                      <Text style={styles.sectionTitle}>My Events</Text>
+                    )}
+                    {myEvents.map(renderEvent)}
+                  </View>
+                ) : null}
+              </>
+            );
+          })()}
         </ScrollView>
         </SafeAreaView>
       </LinearGradient>
@@ -948,6 +1064,72 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     textAlign: "center",
   },
+  // ── Section headings ──
+  section: { marginBottom: 8 },
+  sectionTitle: {
+    fontSize: scaleFontSize(13),
+    fontFamily: Fonts.semiBold,
+    color: "#9ca3af",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 12,
+    marginTop: 4,
+  },
+  // ── Pending invite card ──
+  pendingCard: {
+    flexDirection: "row",
+    backgroundColor: "#1f1f2e",
+    borderRadius: 16,
+    marginBottom: 12,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "#a855f7",
+  },
+  pendingImage: {
+    width: 90,
+    height: "100%",
+    resizeMode: "cover",
+  },
+  pendingImagePlaceholder: {
+    width: 90,
+    backgroundColor: "#374151",
+    justifyContent: "center",
+    alignItems: "center",
+    minHeight: 110,
+  },
+  pendingContent: {
+    flex: 1,
+    padding: 12,
+  },
+  pendingTitle: {
+    fontSize: scaleFontSize(15),
+    fontFamily: Fonts.bold,
+    color: "#fff",
+    marginBottom: 4,
+  },
+  pendingMeta: {
+    fontSize: scaleFontSize(12),
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
+    marginBottom: 2,
+  },
+  pendingActions: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 10,
+  },
+  pendingBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  acceptBtn: { backgroundColor: "#a855f7" },
+  acceptBtnText: { fontSize: scaleFontSize(13), fontFamily: Fonts.semiBold, color: "#fff" },
+  declineBtn: { backgroundColor: "rgba(239,68,68,0.1)", borderWidth: 1, borderColor: "#ef4444" },
+  declineBtnText: { fontSize: scaleFontSize(13), fontFamily: Fonts.semiBold, color: "#ef4444" },
   eventCard: {
     backgroundColor: "#1f1f2e",
     borderRadius: 16,

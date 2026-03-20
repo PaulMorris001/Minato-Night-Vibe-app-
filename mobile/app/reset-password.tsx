@@ -81,6 +81,9 @@ export default function ResetPassword() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.content}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
         <View style={styles.header}>
           <View style={styles.iconContainer}>
             <Ionicons name="key" size={48} color="#a855f7" />
@@ -187,6 +190,13 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     padding: getResponsivePadding(),
+  },
+  backButton: {
+    position: "absolute",
+    top: 16,
+    left: getResponsivePadding(),
+    padding: 4,
+    zIndex: 10,
   },
   header: {
     alignItems: "center",

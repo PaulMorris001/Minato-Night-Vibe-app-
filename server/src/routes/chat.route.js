@@ -8,7 +8,8 @@ import {
   getChatMessages,
   markMessagesAsRead,
   deleteMessage,
-  searchChatsAndMessages
+  searchChatsAndMessages,
+  updateGroupChat
 } from "../controllers/chat.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 
@@ -27,6 +28,9 @@ router.post("/chats/group", authenticate, createGroupChat);
 
 // Get specific chat
 router.get("/chats/:chatId", authenticate, getChatById);
+
+// Update group chat name / image (admins only)
+router.put("/chats/:chatId", authenticate, updateGroupChat);
 
 // Search chats and messages
 router.get("/chats/search", authenticate, searchChatsAndMessages);

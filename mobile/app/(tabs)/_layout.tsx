@@ -284,6 +284,18 @@ export default function TabsLayout() {
           <Text style={styles.logoText}>NightVibe</Text>
           <View style={styles.navbarActions}>
             <TouchableOpacity
+              onPress={() => router.push("/notifications" as any)}
+              style={styles.ticketButton}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={["#374151", "#1f2937"]}
+                style={styles.ticketGradient}
+              >
+                <Ionicons name="notifications-outline" size={20} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
               onPress={() => router.push("/tickets" as any)}
               style={styles.ticketButton}
               activeOpacity={0.7}

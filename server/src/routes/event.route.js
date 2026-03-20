@@ -7,12 +7,14 @@ import {
   updateEvent,
   deleteEvent,
   inviteUserByUsername,
+  respondToInvite,
   joinEventByShareLink,
   joinFreePublicEvent,
   getPublicEvents,
   purchaseTicket,
   getUserTickets,
-  getEventTicketSales
+  getEventTicketSales,
+  rsvpEvent
 } from "../controllers/event.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 
@@ -51,8 +53,14 @@ router.put("/events/:eventId", authenticate, updateEvent);
 // Delete an event
 router.delete("/events/:eventId", authenticate, deleteEvent);
 
+// RSVP to an event
+router.post("/events/:eventId/rsvp", authenticate, rsvpEvent);
+
 // Invite user by username
 router.post("/events/:eventId/invite", authenticate, inviteUserByUsername);
+
+// Respond to an invite (accept or decline)
+router.post("/events/:eventId/respond-invite", authenticate, respondToInvite);
 
 // Join event via share link
 router.post("/events/share/:shareToken/join", authenticate, joinEventByShareLink);

@@ -145,6 +145,18 @@ export const emitMessageRead = (chatId, userId) => {
 };
 
 /**
+ * Emit event invite to a specific user
+ *
+ * @param {string} userId - User ID to notify
+ * @param {object} data - { eventId, eventTitle, inviterUsername }
+ */
+export const emitEventInvite = (userId, data) => {
+  if (socketInstance) {
+    socketInstance.to(`user:${userId}`).emit("event:invite", data);
+  }
+};
+
+/**
  * Check if user is online
  *
  * @param {string} userId - User ID to check

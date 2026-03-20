@@ -133,8 +133,13 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Settings</Text>
-        <Text style={styles.headerSubtitle}>Manage your account preferences</Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <View>
+          <Text style={styles.headerTitle}>Settings</Text>
+          <Text style={styles.headerSubtitle}>Manage your account preferences</Text>
+        </View>
       </View>
 
       {/* Profile Picture Section */}
@@ -267,7 +272,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Preferences</Text>
 
-        <TouchableOpacity style={styles.preferenceItem}>
+        <TouchableOpacity style={styles.preferenceItem} onPress={() => router.push("/notifications" as any)}>
           <View style={styles.preferenceLeft}>
             <Ionicons name="notifications-outline" size={22} color="#e5e7eb" />
             <Text style={styles.preferenceText}>Notifications</Text>
@@ -275,7 +280,7 @@ export default function SettingsScreen() {
           <Ionicons name="chevron-forward" size={20} color="#6b7280" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.preferenceItem}>
+        <TouchableOpacity style={styles.preferenceItem} onPress={() => router.push("/privacy" as any)}>
           <View style={styles.preferenceLeft}>
             <Ionicons name="lock-closed-outline" size={22} color="#e5e7eb" />
             <Text style={styles.preferenceText}>Privacy</Text>
@@ -310,6 +315,12 @@ const styles = StyleSheet.create({
   header: {
     padding: 24,
     paddingTop: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  backButton: {
+    padding: 4,
   },
   headerTitle: {
     fontSize: 32,

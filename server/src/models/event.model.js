@@ -14,8 +14,14 @@ const eventSchema = mongoose.Schema({
     required: true
   },
 
-  // Invited users (for private events)
+  // Confirmed attendees (accepted the invite or joined via link/purchase)
   invitedUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "user"
+  }],
+
+  // Users who have been invited but have not yet responded
+  pendingInvites: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "user"
   }],
@@ -28,8 +34,21 @@ const eventSchema = mongoose.Schema({
   ticketPrice: { type: Number, default: 0 },
   maxGuests: { type: Number, default: 0 },
 
+  // Group chat for this event (auto-created when first user is invited)
+  groupChatId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "chat",
+    default: null
+  },
+
   // Shareable link token
   shareToken: { type: String, unique: true, sparse: true },
+
+  // RSVP: users who confirmed attendance
+  rsvpUsers: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "user"
+  }],
 
   // Event status
   isActive: { type: Boolean, default: true }

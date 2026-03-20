@@ -250,6 +250,34 @@ class ChatService {
   }
 
   /**
+   * Update group chat name and/or image (admin only)
+   */
+  async updateGroupChat(
+    chatId: string,
+    updates: { name?: string; groupImage?: string }
+  ): Promise<Chat> {
+    try {
+      const headers = await this.getAuthHeader();
+      const response = await fetch(`${BASE_URL}/chats/${chatId}`, {
+        method: "PUT",
+        headers,
+        body: JSON.stringify(updates),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.message || "Failed to update group chat");
+      }
+
+      const data = await response.json();
+      return data.chat;
+    } catch (error) {
+      console.error("Update group chat error:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Search chats and messages
    */
   async search(query: string): Promise<{
