@@ -11,6 +11,9 @@
       },
       "ios": {
         "simulator": false
+      },
+      "env": {
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51T4n9gAQi5IiU4TsAuK1pOtwYNHq7r5B1ai4CnletaEnyy8QhLjhCpiJvjs40ou5lbNkEO7wLjQAsXZ5ovGyKYeQ00gACGZRBX"
       }
     },
     "preview": {
@@ -23,7 +26,8 @@
         "distribution": "internal"
       },
       "env": {
-        "SENTRY_SKIP_AUTO_RELEASE": "true"
+        "SENTRY_SKIP_AUTO_RELEASE": "true",
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51T4n9gAQi5IiU4TsAuK1pOtwYNHq7r5B1ai4CnletaEnyy8QhLjhCpiJvjs40ou5lbNkEO7wLjQAsXZ5ovGyKYeQ00gACGZRBX"
       }
     },
     "production": {
@@ -33,6 +37,9 @@
       },
       "ios": {
         "distribution": "store"
+      },
+      "env": {
+        "EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY": "pk_test_51T4n9gAQi5IiU4TsAuK1pOtwYNHq7r5B1ai4CnletaEnyy8QhLjhCpiJvjs40ou5lbNkEO7wLjQAsXZ5ovGyKYeQ00gACGZRBX"
       }
     }
   },

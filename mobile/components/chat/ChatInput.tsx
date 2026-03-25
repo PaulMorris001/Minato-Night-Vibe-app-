@@ -4,7 +4,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
@@ -33,9 +32,6 @@ export default function ChatInput({
   };
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
       <View style={styles.container}>
         {onImagePick && (
           <TouchableOpacity
@@ -79,7 +75,6 @@ export default function ChatInput({
           />
         </TouchableOpacity>
       </View>
-    </KeyboardAvoidingView>
   );
 }
 

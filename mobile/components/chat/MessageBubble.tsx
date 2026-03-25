@@ -10,6 +10,7 @@ interface MessageBubbleProps {
   isOwnMessage: boolean;
   showSender?: boolean;
   onLongPress?: () => void;
+  onImagePress?: (imageUrl: string) => void;
 }
 
 export default function MessageBubble({
@@ -17,6 +18,7 @@ export default function MessageBubble({
   isOwnMessage,
   showSender = false,
   onLongPress,
+  onImagePress,
 }: MessageBubbleProps) {
   const router = useRouter();
 
@@ -77,11 +79,16 @@ export default function MessageBubble({
         return (
           <View>
             {message.imageUrl && (
-              <Image
-                source={{ uri: message.imageUrl }}
-                style={styles.messageImage}
-                resizeMode="cover"
-              />
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => onImagePress?.(message.imageUrl!)}
+              >
+                <Image
+                  source={{ uri: message.imageUrl }}
+                  style={styles.messageImage}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
             )}
             {message.content && (
               <Text
