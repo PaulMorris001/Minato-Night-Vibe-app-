@@ -16,6 +16,8 @@ import logRoutes from "./routes/log.route.js";
 import stripeRoutes from "./routes/stripe.route.js";
 import notificationRoutes from "./routes/notification.route.js";
 import favoritesRoutes from "./routes/favorites.route.js";
+import adminRoutes from "./routes/admin.route.js";
+
 
 const app = express();
 const httpServer = createServer(app);
@@ -37,6 +39,7 @@ app.get('/health', (req, res) => {
   });
 });
 
+app.use("/api/", adminRoutes);
 app.use("/api/", authRoutes);
 app.use("/api/", vendorRoutes);
 app.use("/api/", serviceRoutes);

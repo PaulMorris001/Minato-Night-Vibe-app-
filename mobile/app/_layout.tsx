@@ -1,4 +1,4 @@
-import { Stack } from "expo-router";
+import { Stack, router } from "expo-router";
 import React, { useEffect } from "react";
 import { Platform } from "react-native";
 import messaging from "@react-native-firebase/messaging";
@@ -106,7 +106,7 @@ export default Sentry.wrap(function RootLayout() {
 
   useEffect(() => {
     // Firebase doesn't auto-display notifications in the foreground — do it manually
-    const unsubscribe = messaging().onMessage(async remoteMessage => {
+    const unsubscribeForeground = messaging().onMessage(async remoteMessage => {
       console.log("[PushNotif] Foreground message:", remoteMessage.notification?.title, remoteMessage.notification?.body);
       await Notifications.scheduleNotificationAsync({
         content: {
@@ -118,7 +118,38 @@ export default Sentry.wrap(function RootLayout() {
         trigger: null,
       });
     });
-    return unsubscribe;
+
+    // Handle tap on an expo-scheduled notification (foreground case)
+    const notifSub = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data as any;
+      if (data?.type === "new_message" && data?.chatId) {
+        router.push(`/chat/${data.chatId}` as any);
+      }
+    });
+
+    // Handle tap on FCM notification when app was in the background
+    const unsubscribeBackground = messaging().onNotificationOpenedApp(remoteMessage => {
+      const data = remoteMessage.data as any;
+      if (data?.type === "new_message" && data?.chatId) {
+        router.push(`/chat/${data.chatId}` as any);
+      }
+    });
+
+    // Handle tap that cold-starts the app from a quit state
+    messaging().getInitialNotification().then(remoteMessage => {
+      if (remoteMessage) {
+        const data = remoteMessage.data as any;
+        if (data?.type === "new_message" && data?.chatId) {
+          router.push(`/chat/${data.chatId}` as any);
+        }
+      }
+    });
+
+    return () => {
+      unsubscribeForeground();
+      notifSub.remove();
+      unsubscribeBackground();
+    };
   }, []);
 
   // Set navigation bar color for Android

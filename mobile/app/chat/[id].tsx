@@ -36,6 +36,7 @@ export default function ChatScreen() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string>("");
+  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [settingsVisible, setSettingsVisible] = useState(false);
   const [editGroupName, setEditGroupName] = useState("");
   const [editGroupImage, setEditGroupImage] = useState<string | null>(null);
@@ -306,6 +307,7 @@ export default function ChatScreen() {
         message={item}
         isOwnMessage={isOwnMessage}
         showSender={showAvatar}
+        onImagePress={(url) => setSelectedImage(url)}
       />
     );
   };
@@ -325,7 +327,7 @@ export default function ChatScreen() {
       <SafeAreaView style={styles.safeArea} edges={["top"]}>
         <KeyboardAvoidingView
           style={styles.keyboardView}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
           keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
         >
           {/* Header */}
@@ -402,6 +404,33 @@ export default function ChatScreen() {
           />
         </KeyboardAvoidingView>
       </SafeAreaView>
+
+      {/* Full-screen Image Viewer */}
+      <Modal
+        visible={!!selectedImage}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setSelectedImage(null)}
+        statusBarTranslucent
+      >
+        <View style={styles.imageViewerOverlay}>
+          <SafeAreaView style={styles.imageViewerSafe} edges={["top"]}>
+            <TouchableOpacity
+              style={styles.imageViewerClose}
+              onPress={() => setSelectedImage(null)}
+            >
+              <Ionicons name="arrow-back" size={24} color="#fff" />
+            </TouchableOpacity>
+          </SafeAreaView>
+          {selectedImage && (
+            <Image
+              source={{ uri: selectedImage }}
+              style={styles.imageViewerImage}
+              resizeMode="contain"
+            />
+          )}
+        </View>
+      </Modal>
 
       {/* Group Settings Modal */}
       <Modal
@@ -587,6 +616,32 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: "#6b7280",
     marginTop: 8,
+  },
+  // Full-screen image viewer
+  imageViewerOverlay: {
+    flex: 1,
+    backgroundColor: "#000",
+    justifyContent: "center",
+  },
+  imageViewerSafe: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+  },
+  imageViewerClose: {
+    margin: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  imageViewerImage: {
+    width: "100%",
+    height: "100%",
   },
   // Group Settings Modal
   settingsOverlay: {
