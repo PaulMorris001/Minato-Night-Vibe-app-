@@ -41,6 +41,7 @@ export default function Home() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [publicEvents, setPublicEvents] = useState<PublicEvent[]>([]);
+  const [hasMorePublicEvents, setHasMorePublicEvents] = useState(false);
   const [highlights, setHighlights] = useState<{ trending: PublicEvent[]; upcoming: PublicEvent[] }>({ trending: [], upcoming: [] });
   const [loadingEvents, setLoadingEvents] = useState(false);
   const [loadingHighlights, setLoadingHighlights] = useState(false);
@@ -81,7 +82,9 @@ export default function Home() {
 
       const data = await response.json();
       if (response.ok) {
-        setPublicEvents(data.events || []);
+        const events = data.events || [];
+        setPublicEvents(events);
+        setHasMorePublicEvents(events.length === 10 && (data.total ?? 0) > 10);
       }
     } catch (error) {
       console.error("Fetch public events error:", error);
@@ -671,16 +674,28 @@ export default function Home() {
               <ActivityIndicator size="large" color="#a855f7" />
             </View>
           ) : publicEvents.length > 0 ? (
-            <Carousel itemWidth={320} gap={16}>
-              {publicEvents.map((event) => (
-                <PublicEventCard
-                  key={event._id}
-                  event={event}
-                  onPurchaseTicket={handlePurchaseTicket}
-                  onJoinFreeEvent={handleJoinFreeEvent}
-                />
-              ))}
-            </Carousel>
+            <>
+              <Carousel itemWidth={320} gap={16}>
+                {publicEvents.map((event) => (
+                  <PublicEventCard
+                    key={event._id}
+                    event={event}
+                    onPurchaseTicket={handlePurchaseTicket}
+                    onJoinFreeEvent={handleJoinFreeEvent}
+                  />
+                ))}
+              </Carousel>
+              {hasMorePublicEvents && (
+                <TouchableOpacity
+                  style={styles.seeAllBtn}
+                  onPress={() => router.push("/public-events" as any)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={styles.seeAllText}>See All Events</Text>
+                  <Ionicons name="arrow-forward" size={14} color="#a855f7" />
+                </TouchableOpacity>
+              )}
+            </>
           ) : (
             <View style={styles.emptySectionContainer}>
               <Ionicons name="calendar-outline" size={36} color="#4b5563" />
@@ -1736,5 +1751,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Fonts.regular,
     color: "#9ca3af",
+  },
+  seeAllBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 12,
+    paddingVertical: 10,
+  },
+  seeAllText: {
+    color: "#a855f7",
+    fontFamily: Fonts.semiBold,
+    fontSize: 14,
   },
 });

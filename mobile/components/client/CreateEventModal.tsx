@@ -9,12 +9,12 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   ScrollView,
+  FlatList,
   Alert,
   ActivityIndicator,
   Platform,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Picker } from "@react-native-picker/picker";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
@@ -60,6 +60,7 @@ export default function CreateEventModal({
   const [eventImage, setEventImage] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showCityPicker, setShowCityPicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   useEffect(() => {
@@ -209,6 +210,7 @@ export default function CreateEventModal({
   };
 
   return (
+    <>
     <Modal
       animationType="slide"
       transparent={true}
@@ -290,29 +292,26 @@ export default function CreateEventModal({
 
               {/* Location/City */}
               <Text style={styles.label}>Location *</Text>
-              {loadingCities ? (
-                <View style={styles.loadingPicker}>
-                  <ActivityIndicator size="small" color={Colors.primary} />
-                  <Text style={styles.loadingText}>Loading cities...</Text>
-                </View>
-              ) : (
-                <View style={styles.pickerContainer}>
-                  <Picker
-                    selectedValue={formData.location}
-                    onValueChange={(value) => handleInputChange("location", value)}
-                    style={styles.picker}
-                  >
-                    <Picker.Item label="Select a city" value="" />
-                    {cities.map((city) => (
-                      <Picker.Item
-                        key={city._id}
-                        label={`${city.name}, ${city.state}`}
-                        value={city.name}
-                      />
-                    ))}
-                  </Picker>
-                </View>
-              )}
+              <TouchableOpacity
+                style={styles.cityPickerButton}
+                onPress={() => setShowCityPicker(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="location-outline" size={18} color="#a855f7" />
+                <Text
+                  style={[
+                    styles.cityPickerText,
+                    !formData.location && styles.cityPickerPlaceholder,
+                  ]}
+                >
+                  {formData.location
+                    ? cities.find((c) => c.name === formData.location)
+                      ? `${cities.find((c) => c.name === formData.location)!.name}, ${cities.find((c) => c.name === formData.location)!.state}`
+                      : formData.location
+                    : "Select a city"}
+                </Text>
+                <Ionicons name="chevron-down" size={16} color="#6b7280" />
+              </TouchableOpacity>
 
               {/* Description */}
               <Text style={styles.label}>Description</Text>
@@ -429,6 +428,64 @@ export default function CreateEventModal({
         </TouchableWithoutFeedback>
       </View>
     </Modal>
+
+    {/* City Picker Modal — sibling to avoid nested Modal issues on iOS */}
+    <Modal
+      visible={showCityPicker}
+      transparent
+      animationType="slide"
+      onRequestClose={() => setShowCityPicker(false)}
+    >
+      <TouchableOpacity
+        style={styles.cityModalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowCityPicker(false)}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.cityModalSheet}
+          onPress={() => {}}
+        >
+          <View style={styles.cityModalHeader}>
+            <Text style={styles.cityModalTitle}>Select City</Text>
+            <TouchableOpacity onPress={() => setShowCityPicker(false)}>
+              <Ionicons name="close" size={24} color="#fff" />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={cities}
+            keyExtractor={(item) => item._id}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={[
+                  styles.cityItem,
+                  formData.location === item.name && styles.cityItemSelected,
+                ]}
+                onPress={() => {
+                  handleInputChange("location", item.name);
+                  setShowCityPicker(false);
+                }}
+              >
+                <Text
+                  style={[
+                    styles.cityItemText,
+                    formData.location === item.name && styles.cityItemTextSelected,
+                  ]}
+                >
+                  {item.name}, {item.state}
+                </Text>
+                {formData.location === item.name && (
+                  <Ionicons name="checkmark" size={18} color="#a855f7" />
+                )}
+              </TouchableOpacity>
+            )}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={{ paddingBottom: 20 }}
+          />
+        </TouchableOpacity>
+      </TouchableOpacity>
+    </Modal>
+    </>
   );
 }
 
@@ -511,17 +568,73 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: "top",
   },
-  pickerContainer: {
+  cityPickerButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
     borderWidth: 1,
     borderColor: "#374151",
     borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
     backgroundColor: "#1f1f2e",
     marginBottom: 8,
-    overflow: "hidden",
   },
-  picker: {
+  cityPickerText: {
+    flex: 1,
+    fontSize: scaleFontSize(16),
+    fontFamily: Fonts.regular,
     color: "#fff",
+  },
+  cityPickerPlaceholder: {
+    color: "#999",
+  },
+  cityModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
+  },
+  cityModalSheet: {
     backgroundColor: "#1f1f2e",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "60%",
+    paddingTop: 8,
+  },
+  cityModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+  },
+  cityModalTitle: {
+    fontSize: scaleFontSize(18),
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  cityItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+  },
+  cityItemSelected: {
+    backgroundColor: "rgba(168, 85, 247, 0.08)",
+  },
+  cityItemText: {
+    fontSize: scaleFontSize(16),
+    fontFamily: Fonts.regular,
+    color: "#e5e7eb",
+  },
+  cityItemTextSelected: {
+    color: "#a855f7",
+    fontFamily: Fonts.semiBold,
   },
   loadingPicker: {
     flexDirection: "row",

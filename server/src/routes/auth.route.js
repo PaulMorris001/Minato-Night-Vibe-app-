@@ -7,6 +7,8 @@ import {
   becomeVendor,
   updateProfilePicture,
   searchUsers,
+  getUserById,
+  getUserEvents,
   googleAuth,
   forgotPassword,
   verifyOTP,
@@ -32,5 +34,7 @@ router.put("/profile/picture", authenticate, updateProfilePicture);
 router.post("/become-vendor", authenticate, becomeVendor);
 router.put("/vendor/profile", authenticate, updateVendorProfile);
 router.get("/users/search", authenticate, searchUsers);
+router.get("/users/:userId/events", authenticate, getUserEvents);
+router.get("/users/:userId", authenticate, getUserById);
 
 export default router;

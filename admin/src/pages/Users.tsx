@@ -10,7 +10,7 @@ import PageShell from "../components/ui/PageShell";
 import { ConfirmModal } from "../components/ui/Modal";
 import { colors } from "../constants/colors";
 
-const LIMIT = 20;
+const LIMIT = 10;
 
 export default function Users() {
   const [users, setUsers] = useState<AdminUser[]>([]);

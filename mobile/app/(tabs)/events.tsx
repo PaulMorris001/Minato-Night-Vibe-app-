@@ -76,10 +76,15 @@ export default function EventsPage() {
   const [inviteUsername, setInviteUsername] = useState("");
   const [searchedUsers, setSearchedUsers] = useState<any[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
+  const [inviteTab, setInviteTab] = useState<"people" | "vendors">("people");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [respondingInvite, setRespondingInvite] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [total, setTotal] = useState(0);
   const [editData, setEditData] = useState({
     title: "",
     date: "",
@@ -89,7 +94,9 @@ export default function EventsPage() {
     isPublic: false,
   });
 
-  const fetchEvents = async () => {
+  const PAGE_LIMIT = 10;
+
+  const fetchEvents = async (pageNum = 1, isRefresh = false) => {
     try {
       const token = await SecureStore.getItemAsync("token");
       if (!token) {
@@ -97,16 +104,23 @@ export default function EventsPage() {
         return;
       }
 
-      const response = await fetch(`${BASE_URL}/events`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
+      const response = await fetch(
+        `${BASE_URL}/events?page=${pageNum}&limit=${PAGE_LIMIT}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
 
       const data = await response.json();
 
       if (response.ok) {
-        setEvents(data.events || []);
+        const incoming = data.events || [];
+        if (isRefresh || pageNum === 1) {
+          setEvents(incoming);
+        } else {
+          setEvents((prev) => [...prev, ...incoming]);
+        }
+        setTotal(data.total ?? incoming.length);
+        setPage(pageNum);
+        setHasMore(incoming.length === PAGE_LIMIT);
       } else {
         Alert.alert("Error", data.message || "Failed to fetch events");
       }
@@ -116,12 +130,19 @@ export default function EventsPage() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setLoadingMore(false);
     }
+  };
+
+  const loadMore = () => {
+    if (!hasMore || loadingMore) return;
+    setLoadingMore(true);
+    fetchEvents(page + 1);
   };
 
   useFocusEffect(
     useCallback(() => {
-      fetchEvents();
+      fetchEvents(1, true);
     }, [])
   );
 
@@ -129,7 +150,7 @@ export default function EventsPage() {
   useEffect(() => {
     socketService.on("events-tab", {
       onEventInvite: () => {
-        fetchEvents();
+        fetchEvents(1, true);
       },
     });
     return () => socketService.off("events-tab");
@@ -137,7 +158,7 @@ export default function EventsPage() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchEvents();
+    fetchEvents(1, true);
   };
 
   const handleRespondInvite = async (eventId: string, status: "accepted" | "declined") => {
@@ -152,7 +173,7 @@ export default function EventsPage() {
       const data = await response.json();
       if (response.ok) {
         // Refresh list to reflect change
-        fetchEvents();
+        fetchEvents(1, true);
         Alert.alert(
           status === "accepted" ? "Joined!" : "Declined",
           status === "accepted"
@@ -276,7 +297,7 @@ export default function EventsPage() {
   };
 
   useEffect(() => {
-    const searchUsers = async (query: string) => {
+    const searchMutualFollows = async (query: string) => {
       if (query.trim().length < 2) {
         setSearchedUsers([]);
         return;
@@ -286,7 +307,7 @@ export default function EventsPage() {
         setSearchingUsers(true);
         const token = await SecureStore.getItemAsync("token");
         const response = await fetch(
-          `${BASE_URL}/users/search?query=${encodeURIComponent(query)}`,
+          `${BASE_URL}/follow/mutual?query=${encodeURIComponent(query)}`,
           {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -297,15 +318,20 @@ export default function EventsPage() {
         const data = await response.json();
         if (response.ok) {
           // Filter out users that are already invited or are the creator
-          const filteredUsers = data.users.filter(
-            (user: any) =>
-              user.id !== selectedEvent?.createdBy._id &&
-              !selectedEvent?.invitedUsers.some((invitedUser) => invitedUser._id === user.id)
+          const filteredUsers = (data.users || []).filter(
+            (user: any) => {
+              const uid = user.id || user._id;
+              return (
+                uid !== selectedEvent?.createdBy._id &&
+                !selectedEvent?.invitedUsers.some((invitedUser) => invitedUser._id === uid) &&
+                !selectedEvent?.pendingInvites.some((pending) => pending._id === uid)
+              );
+            }
           );
           setSearchedUsers(filteredUsers);
         }
       } catch (error) {
-        console.error("Error searching users:", error);
+        console.error("Error searching mutual follows:", error);
       } finally {
         setSearchingUsers(false);
       }
@@ -313,7 +339,7 @@ export default function EventsPage() {
 
     if (inviteUsername.trim().length >= 2) {
       const debounce = setTimeout(() => {
-        searchUsers(inviteUsername);
+        searchMutualFollows(inviteUsername);
       }, 300);
       return () => clearTimeout(debounce);
     } else {
@@ -345,7 +371,7 @@ export default function EventsPage() {
       if (response.ok) {
         Alert.alert("Success", "Event updated successfully");
         setIsEditModalVisible(false);
-        fetchEvents();
+        fetchEvents(1, true);
       } else {
         Alert.alert("Error", data.message || "Failed to update event");
       }
@@ -379,7 +405,8 @@ export default function EventsPage() {
         setIsInviteModalVisible(false);
         setInviteUsername("");
         setSearchedUsers([]);
-        fetchEvents();
+        setInviteTab("people");
+        fetchEvents(1, true);
       } else {
         Alert.alert("Error", data.message || "Failed to invite user");
       }
@@ -412,7 +439,7 @@ export default function EventsPage() {
 
               if (response.ok) {
                 Alert.alert("Success", "Event deleted successfully");
-                fetchEvents();
+                fetchEvents(1, true);
               } else {
                 Alert.alert("Error", data.message || "Failed to delete event");
               }
@@ -668,6 +695,27 @@ export default function EventsPage() {
                     {myEvents.map(renderEvent)}
                   </View>
                 ) : null}
+
+                {/* ── Load More ── */}
+                {hasMore && (
+                  <TouchableOpacity
+                    style={styles.loadMoreBtn}
+                    onPress={loadMore}
+                    disabled={loadingMore}
+                    activeOpacity={0.7}
+                  >
+                    {loadingMore ? (
+                      <ActivityIndicator size="small" color="#a855f7" />
+                    ) : (
+                      <Text style={styles.loadMoreText}>Load More</Text>
+                    )}
+                  </TouchableOpacity>
+                )}
+                {!hasMore && events.length > 0 && (
+                  <Text style={styles.allLoadedText}>
+                    {total} event{total !== 1 ? "s" : ""} total
+                  </Text>
+                )}
               </>
             );
           })()}
@@ -936,9 +984,31 @@ export default function EventsPage() {
               </TouchableOpacity>
             </View>
 
+            {/* People / Vendors tab toggle */}
+            <View style={styles.inviteTabRow}>
+              <TouchableOpacity
+                style={[styles.inviteTabBtn, inviteTab === "people" && styles.inviteTabBtnActive]}
+                onPress={() => setInviteTab("people")}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.inviteTabText, inviteTab === "people" && styles.inviteTabTextActive]}>
+                  People
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.inviteTabBtn, inviteTab === "vendors" && styles.inviteTabBtnActive]}
+                onPress={() => setInviteTab("vendors")}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.inviteTabText, inviteTab === "vendors" && styles.inviteTabTextActive]}>
+                  Vendors
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.modalBody}>
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Search User</Text>
+                <Text style={styles.inputLabel}>Search {inviteTab === "vendors" ? "Vendor" : "User"}</Text>
                 <View style={styles.searchInputContainer}>
                   <Ionicons
                     name="search"
@@ -948,7 +1018,7 @@ export default function EventsPage() {
                   />
                   <TextInput
                     style={styles.searchInputInModal}
-                    placeholder="Enter username or email..."
+                    placeholder={inviteTab === "vendors" ? "Enter vendor name..." : "Enter username or email..."}
                     placeholderTextColor="#6b7280"
                     value={inviteUsername}
                     onChangeText={setInviteUsername}
@@ -964,7 +1034,9 @@ export default function EventsPage() {
               )}
 
               <FlatList
-                data={searchedUsers}
+                data={searchedUsers.filter((u) =>
+                  inviteTab === "vendors" ? u.isVendor === true : u.isVendor !== true
+                )}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
                   <TouchableOpacity
@@ -984,12 +1056,12 @@ export default function EventsPage() {
                     <View style={styles.userSearchInfo}>
                       <Text style={styles.userSearchName}>{item.username}</Text>
                       <Text style={styles.userSearchEmail}>
-                        {item.isVendor && item.businessName
+                        {inviteTab === "vendors" && item.businessName
                           ? item.businessName
                           : item.email}
                       </Text>
                     </View>
-                    {item.isVendor && (
+                    {item.isVendor && inviteTab === "vendors" && (
                       <View style={styles.vendorBadge}>
                         <Text style={styles.vendorBadgeText}>Vendor</Text>
                       </View>
@@ -1000,7 +1072,9 @@ export default function EventsPage() {
                   !searchingUsers && inviteUsername.length >= 2 ? (
                     <View style={styles.emptyUserSearchContainer}>
                       <Ionicons name="people-outline" size={48} color="#6b7280" />
-                      <Text style={styles.emptyUserSearchText}>No users found</Text>
+                      <Text style={styles.emptyUserSearchText}>
+                        No {inviteTab === "vendors" ? "vendors" : "users"} found
+                      </Text>
                     </View>
                   ) : !searchingUsers && inviteUsername.length < 2 ? (
                     <View style={styles.emptyUserSearchContainer}>
@@ -1426,6 +1500,32 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     color: "#fff",
   },
+  inviteTabRow: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginTop: 4,
+    marginBottom: 4,
+    backgroundColor: "#1f1f2e",
+    borderRadius: 10,
+    padding: 3,
+  },
+  inviteTabBtn: {
+    flex: 1,
+    paddingVertical: 8,
+    alignItems: "center",
+    borderRadius: 8,
+  },
+  inviteTabBtnActive: {
+    backgroundColor: "#a855f7",
+  },
+  inviteTabText: {
+    fontSize: scaleFontSize(14),
+    fontFamily: Fonts.semiBold,
+    color: "#6b7280",
+  },
+  inviteTabTextActive: {
+    color: "#fff",
+  },
   emptyUserSearchContainer: {
     paddingVertical: 60,
     alignItems: "center",
@@ -1484,5 +1584,30 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: "#9ca3af",
     marginTop: 2,
+  },
+  loadMoreBtn: {
+    marginTop: 12,
+    marginBottom: 24,
+    alignSelf: "center",
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "#a855f7",
+    minWidth: 140,
+    alignItems: "center",
+  },
+  loadMoreText: {
+    color: "#a855f7",
+    fontFamily: Fonts.semiBold,
+    fontSize: scaleFontSize(14),
+  },
+  allLoadedText: {
+    textAlign: "center",
+    color: "#6b7280",
+    fontFamily: Fonts.regular,
+    fontSize: scaleFontSize(12),
+    marginTop: 8,
+    marginBottom: 24,
   },
 });

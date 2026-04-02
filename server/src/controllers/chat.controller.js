@@ -38,7 +38,8 @@ export const getOrCreateDirectChat = async (req, res) => {
     });
   } catch (error) {
     console.error("Get/Create direct chat error:", error);
-    res.status(500).json({ message: "Error creating chat", error: error.message });
+    const status = error.statusCode || 500;
+    res.status(status).json({ message: error.message || "Error creating chat" });
   }
 };
 
@@ -132,8 +133,8 @@ export const sendMessage = async (req, res) => {
 
     const message = await ChatService.sendMessage(chatId, userId, messageData);
 
-    // Invalidate all participants' chat lists (last message + unread counts change)
-    invalidateCachePattern('user_chats_');
+    // Only invalidate sender's cache — recipients get real-time updates via socket
+    invalidateCache(`user_chats_${userId}`);
     res.status(201).json({
       message: "Message sent successfully",
       data: message

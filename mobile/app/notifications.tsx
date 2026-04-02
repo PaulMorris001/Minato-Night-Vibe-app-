@@ -45,6 +45,7 @@ function notifIcon(type: string) {
     case "event_invite": return "mail";
     case "invite_accepted": return "checkmark-circle";
     case "event_update": return "calendar";
+    case "new_follower": return "person-add";
     default: return "notifications";
   }
 }
@@ -101,10 +102,19 @@ export default function NotificationsScreen() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  const handleNotifPress = (item: Notification) => {
+    markRead(item._id);
+    if (item.type === "new_follower" && item.data?.followerId) {
+      router.push({ pathname: "/user-profile", params: { userId: item.data.followerId } } as any);
+    } else if (item.type === "event_invite" && item.data?.eventId) {
+      router.push({ pathname: "/event/[id]", params: { id: item.data.eventId } } as any);
+    }
+  };
+
   const renderItem = ({ item }: { item: Notification }) => (
     <TouchableOpacity
       style={[styles.notifItem, !item.read && styles.notifItemUnread]}
-      onPress={() => markRead(item._id)}
+      onPress={() => handleNotifPress(item)}
       activeOpacity={0.7}
     >
       <View style={[styles.notifIcon, !item.read && styles.notifIconUnread]}>

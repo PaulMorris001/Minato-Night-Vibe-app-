@@ -157,6 +157,18 @@ export const emitEventInvite = (userId, data) => {
 };
 
 /**
+ * Emit follow event to a specific user
+ *
+ * @param {string} userId - User ID to notify
+ * @param {object} data - { followerId, followerUsername, followerProfilePicture, isMutual }
+ */
+export const emitFollowEvent = (userId, data) => {
+  if (socketInstance) {
+    socketInstance.to(`user:${userId}`).emit("follow:new", data);
+  }
+};
+
+/**
  * Check if user is online
  *
  * @param {string} userId - User ID to check

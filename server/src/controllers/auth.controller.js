@@ -7,6 +7,8 @@ import User from "../models/user.model.js";
 import { Vendor } from "../models/vendor.model.js";
 import { uploadBase64Image, deleteImage } from "../services/image.service.js";
 import { generateOTP, sendPasswordResetOTP, sendPasswordResetSuccessEmail } from "../services/email.service.js";
+import Follow from "../models/follow.model.js";
+import Event from "../models/event.model.js";
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -276,7 +278,18 @@ export async function getProfile(req, res) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.json({ user });
+    const [followersCount, followingCount] = await Promise.all([
+      Follow.countDocuments({ following: req.user.id }),
+      Follow.countDocuments({ follower: req.user.id }),
+    ]);
+
+    res.json({
+      user: {
+        ...user.toObject(),
+        followersCount,
+        followingCount,
+      },
+    });
   } catch (error) {
     res.status(400).json({ message: "Error fetching profile", details: error.message });
   }
@@ -346,20 +359,71 @@ export async function searchUsers(req, res) {
       ]
     })
       .select("_id username email profilePicture isVendor businessName")
-      .limit(20);
+      .limit(20)
+      .lean();
+
+    // Batch follow status lookup
+    const userIds = users.map((u) => u._id);
+    const [outgoing, incoming] = await Promise.all([
+      Follow.find({ follower: req.user.id, following: { $in: userIds } }).lean(),
+      Follow.find({ follower: { $in: userIds }, following: req.user.id }).lean(),
+    ]);
+    const followingSet = new Set(outgoing.map((f) => f.following.toString()));
+    const followedBySet = new Set(incoming.map((f) => f.follower.toString()));
 
     res.json({
-      users: users.map(user => ({
-        id: user._id,
-        username: user.username,
-        email: user.email,
-        profilePicture: user.profilePicture,
-        isVendor: user.isVendor,
-        businessName: user.businessName
-      }))
+      users: users.map(user => {
+        const isFollowing = followingSet.has(user._id.toString());
+        const isFollowedBy = followedBySet.has(user._id.toString());
+        return {
+          id: user._id,
+          username: user.username,
+          email: user.email,
+          profilePicture: user.profilePicture,
+          isVendor: user.isVendor,
+          businessName: user.businessName,
+          isFollowing,
+          isFollowedBy,
+          isMutual: isFollowing && isFollowedBy,
+        };
+      })
     });
   } catch (error) {
     res.status(400).json({ message: "Error searching users", details: error.message });
+  }
+}
+
+// Get user by ID (public profile)
+export async function getUserById(req, res) {
+  try {
+    const user = await User.findById(req.params.userId)
+      .select("_id username email profilePicture isVendor businessName")
+      .lean();
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    res.json({ user: { ...user, id: user._id } });
+  } catch (error) {
+    res.status(400).json({ message: "Error fetching user", details: error.message });
+  }
+}
+
+// Get public events created by a user
+export async function getUserEvents(req, res) {
+  try {
+    const events = await Event.find({
+      createdBy: req.params.userId,
+      isPublic: true,
+      isActive: true,
+    })
+      .sort({ date: -1 })
+      .limit(20)
+      .lean();
+    res.json({ events });
+  } catch (error) {
+    res.status(400).json({ message: "Error fetching user events", details: error.message });
   }
 }
 

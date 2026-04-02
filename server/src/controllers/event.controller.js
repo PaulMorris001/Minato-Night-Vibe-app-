@@ -7,6 +7,7 @@ import ChatService from "../services/chat.service.js";
 import { uploadBase64Image, deleteImage } from "../services/image.service.js";
 import { emitEventInvite } from "../services/socket.service.js";
 import { setCache, getCache, invalidateCache, invalidateCachePattern } from "../utils/cache.js";
+import { areMutualFollows } from "../utils/followCheck.js";
 
 // Create a new event
 export const createEvent = async (req, res) => {
@@ -80,20 +81,30 @@ export const createEvent = async (req, res) => {
 export const getUserEvents = async (req, res) => {
   try {
     const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
 
-    const events = await Event.find({
+    const query = {
       $or: [
         { createdBy: userId },
         { invitedUsers: userId },
         { pendingInvites: userId }
       ],
       isActive: true
-    })
-      .populate('createdBy', 'username email profilePicture')
-      .populate('invitedUsers', 'username email profilePicture')
-      .populate('pendingInvites', 'username email profilePicture')
-      .populate('groupChatId', '_id name groupImage')
-      .sort({ date: -1 });
+    };
+
+    const [events, total] = await Promise.all([
+      Event.find(query)
+        .populate('createdBy', 'username email profilePicture')
+        .populate('invitedUsers', 'username email profilePicture')
+        .populate('pendingInvites', 'username email profilePicture')
+        .populate('groupChatId', '_id name groupImage')
+        .sort({ date: -1 })
+        .skip(skip)
+        .limit(limit),
+      Event.countDocuments(query),
+    ]);
 
     // Add ticket counts, RSVP info, and userStatus
     const eventsWithInfo = await Promise.all(
@@ -122,7 +133,7 @@ export const getUserEvents = async (req, res) => {
       })
     );
 
-    res.status(200).json({ events: eventsWithInfo });
+    res.status(200).json({ events: eventsWithInfo, total, page, limit });
   } catch (error) {
     console.error("Get user events error:", error);
     res.status(500).json({ message: "Error fetching events", error: error.message });
@@ -321,6 +332,12 @@ export const inviteUserByUsername = async (req, res) => {
     // Check if user is the creator
     if (event.createdBy.toString() === userToInvite._id.toString()) {
       return res.status(400).json({ message: "Cannot invite the event creator" });
+    }
+
+    // Only mutual follows can be invited
+    const isMutual = await areMutualFollows(userId, userToInvite._id.toString());
+    if (!isMutual) {
+      return res.status(403).json({ message: "You can only invite users who mutually follow you" });
     }
 
     // Check if user is already confirmed or already has a pending invite
