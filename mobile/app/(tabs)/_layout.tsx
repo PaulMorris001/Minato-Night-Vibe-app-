@@ -183,6 +183,26 @@ export default function TabsLayout() {
         style={styles.menuItem}
         onPress={() => {
           setIsProfileModalVisible(false);
+          router.push("/messages" as any);
+        }}
+      >
+        <View style={styles.menuIconContainer}>
+          <Ionicons name="chatbubbles-outline" size={20} color="#a855f7" />
+        </View>
+        <Text style={[styles.menuItemText, isGlassAvailable && styles.glassText]}>
+          Messages
+        </Text>
+        <Ionicons
+          name="chevron-forward"
+          size={20}
+          color={isGlassAvailable ? "#fff" : "#4b5563"}
+        />
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.menuItem}
+        onPress={() => {
+          setIsProfileModalVisible(false);
           router.push("/(tabs)/events");
         }}
       >
@@ -293,6 +313,18 @@ export default function TabsLayout() {
                 style={styles.ticketGradient}
               >
                 <Ionicons name="notifications-outline" size={20} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => router.push("/messages" as any)}
+              style={styles.ticketButton}
+              activeOpacity={0.7}
+            >
+              <LinearGradient
+                colors={["#374151", "#1f2937"]}
+                style={styles.ticketGradient}
+              >
+                <Ionicons name="chatbubbles-outline" size={20} color="#fff" />
               </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity
@@ -448,12 +480,12 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="chats"
+          name="profile"
           options={{
-            title: "Chats",
+            title: "Profile",
             tabBarIcon: ({ focused, color }) => (
               <Ionicons
-                name={focused ? "chatbubbles" : "chatbubbles-outline"}
+                name={focused ? "person" : "person-outline"}
                 size={20}
                 color={color}
               />

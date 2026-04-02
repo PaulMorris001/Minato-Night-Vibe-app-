@@ -1,52 +1,84 @@
-import client from "./client";
-import type { Stats, AdminUser, AdminVendor, AdminEvent, AdminGuide, City, VendorType, AnalyticsLog, AnalyticsSummary } from "../types";
+import client, { cachedGet, bustCache } from "./client";
+import type {
+  Stats,
+  AdminUser,
+  AdminVendor,
+  AdminEvent,
+  AdminGuide,
+  City,
+  VendorType,
+  AnalyticsLog,
+  AnalyticsSummary,
+} from "../types";
 
 export const adminApi = {
   login: (username: string, password: string) =>
     client.post<{ token: string }>("/admin/login", { username, password }),
 
-  getStats: () => client.get<Stats>("/admin/stats"),
+  getStats: () => cachedGet<Stats>("/admin/stats"),
 
   // Users
   getUsers: (params?: { search?: string; page?: number; limit?: number }) =>
-    client.get<{ users: AdminUser[]; total: number; page: number; limit: number }>("/admin/users", { params }),
-  deleteUser: (id: string) => client.delete(`/admin/users/${id}`),
+    cachedGet<{ users: AdminUser[]; total: number; page: number; limit: number }>(
+      "/admin/users",
+      { params }
+    ),
+  deleteUser: (id: string) =>
+    client.delete(`/admin/users/${id}`).then((r) => { bustCache("/admin/users"); bustCache("/admin/stats"); return r; }),
 
-  // Vendors (from Vendor collection)
+  // Vendors
   getVendors: (params?: { search?: string; page?: number; limit?: number }) =>
-    client.get<{ vendors: AdminVendor[]; total: number; page: number; limit: number }>("/admin/vendors", { params }),
+    cachedGet<{ vendors: AdminVendor[]; total: number; page: number; limit: number }>(
+      "/admin/vendors",
+      { params }
+    ),
   toggleVendorVerified: (id: string) =>
-    client.patch<{ verified: boolean }>(`/admin/vendors/${id}/verify`),
-  deleteVendor: (id: string) => client.delete(`/admin/vendors/${id}`),
+    client.patch<{ verified: boolean }>(`/admin/vendors/${id}/verify`).then((r) => { bustCache("/admin/vendors"); return r; }),
+  deleteVendor: (id: string) =>
+    client.delete(`/admin/vendors/${id}`).then((r) => { bustCache("/admin/vendors"); bustCache("/admin/stats"); return r; }),
 
   // Cities
-  getCities: () => client.get<City[]>("/admin/cities"),
+  getCities: () => cachedGet<City[]>("/admin/cities"),
   createCity: (data: { name: string; state: string }) =>
-    client.post<City>("/admin/cities", data),
-  deleteCity: (id: string) => client.delete(`/admin/cities/${id}`),
+    client.post<City>("/admin/cities", data).then((r) => { bustCache("/admin/cities"); return r; }),
+  deleteCity: (id: string) =>
+    client.delete(`/admin/cities/${id}`).then((r) => { bustCache("/admin/cities"); return r; }),
 
   // Vendor Types
-  getVendorTypes: () => client.get<VendorType[]>("/admin/vendor-types"),
+  getVendorTypes: () => cachedGet<VendorType[]>("/admin/vendor-types"),
   createVendorType: (data: { name: string; icon: string }) =>
-    client.post<VendorType>("/admin/vendor-types", data),
-  deleteVendorType: (id: string) => client.delete(`/admin/vendor-types/${id}`),
+    client.post<VendorType>("/admin/vendor-types", data).then((r) => { bustCache("/admin/vendor-types"); return r; }),
+  deleteVendorType: (id: string) =>
+    client.delete(`/admin/vendor-types/${id}`).then((r) => { bustCache("/admin/vendor-types"); return r; }),
 
   // Events
   getEvents: (params?: { search?: string; page?: number; limit?: number }) =>
-    client.get<{ events: AdminEvent[]; total: number; page: number; limit: number }>("/admin/events", { params }),
+    cachedGet<{ events: AdminEvent[]; total: number; page: number; limit: number }>(
+      "/admin/events",
+      { params }
+    ),
   toggleEventActive: (id: string) =>
-    client.patch<{ isActive: boolean }>(`/admin/events/${id}/toggle`),
-  deleteEvent: (id: string) => client.delete(`/admin/events/${id}`),
+    client.patch<{ isActive: boolean }>(`/admin/events/${id}/toggle`).then((r) => { bustCache("/admin/events"); return r; }),
+  deleteEvent: (id: string) =>
+    client.delete(`/admin/events/${id}`).then((r) => { bustCache("/admin/events"); bustCache("/admin/stats"); return r; }),
 
   // Guides
   getGuides: (params?: { search?: string; page?: number; limit?: number }) =>
-    client.get<{ guides: AdminGuide[]; total: number; page: number; limit: number }>("/admin/guides", { params }),
+    cachedGet<{ guides: AdminGuide[]; total: number; page: number; limit: number }>(
+      "/admin/guides",
+      { params }
+    ),
   toggleGuideActive: (id: string) =>
-    client.patch<{ isActive: boolean }>(`/admin/guides/${id}/toggle`),
-  deleteGuide: (id: string) => client.delete(`/admin/guides/${id}`),
+    client.patch<{ isActive: boolean }>(`/admin/guides/${id}/toggle`).then((r) => { bustCache("/admin/guides"); return r; }),
+  deleteGuide: (id: string) =>
+    client.delete(`/admin/guides/${id}`).then((r) => { bustCache("/admin/guides"); bustCache("/admin/stats"); return r; }),
 
-  // Analytics
-  getAnalyticsSummary: () => client.get<AnalyticsSummary>("/admin/analytics/summary"),
+  // Analytics (shorter TTL — data changes frequently)
+  getAnalyticsSummary: () =>
+    cachedGet<AnalyticsSummary>("/admin/analytics/summary", { ttl: 30_000 }),
   getAnalyticsEvents: (params?: { event?: string; page?: number; limit?: number }) =>
-    client.get<{ logs: AnalyticsLog[]; total: number; page: number; limit: number }>("/admin/analytics/events", { params }),
+    cachedGet<{ logs: AnalyticsLog[]; total: number; page: number; limit: number }>(
+      "/admin/analytics/events",
+      { params, ttl: 30_000 }
+    ),
 };

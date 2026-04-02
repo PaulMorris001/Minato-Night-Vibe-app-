@@ -134,6 +134,8 @@ export default Sentry.wrap(function RootLayout() {
         const data = remoteMessage.data as any;
         if (data?.type === "new_message" && data?.chatId) {
           router.push(`/chat/${data.chatId}` as any);
+        } else if (data?.type === "new_follower" && data?.followerId) {
+          router.push({ pathname: "/user-profile", params: { userId: data.followerId } } as any);
         }
       });
 
@@ -143,6 +145,8 @@ export default Sentry.wrap(function RootLayout() {
           const data = remoteMessage.data as any;
           if (data?.type === "new_message" && data?.chatId) {
             router.push(`/chat/${data.chatId}` as any);
+          } else if (data?.type === "new_follower" && data?.followerId) {
+            router.push({ pathname: "/user-profile", params: { userId: data.followerId } } as any);
           }
         }
       });
@@ -155,6 +159,8 @@ export default Sentry.wrap(function RootLayout() {
       const data = response.notification.request.content.data as any;
       if (data?.type === "new_message" && data?.chatId) {
         router.push(`/chat/${data.chatId}` as any);
+      } else if (data?.type === "new_follower" && data?.followerId) {
+        router.push({ pathname: "/user-profile", params: { userId: data.followerId } } as any);
       }
     });
 

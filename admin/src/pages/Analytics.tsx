@@ -43,7 +43,7 @@ export default function Analytics() {
   const [filterEvent, setFilterEvent] = useState("");
   const [loadingSummary, setLoadingSummary] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(true);
-  const limit = 20;
+  const limit = 10;
 
   useEffect(() => {
     adminApi.getAnalyticsSummary()

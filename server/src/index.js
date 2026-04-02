@@ -17,6 +17,7 @@ import stripeRoutes from "./routes/stripe.route.js";
 import notificationRoutes from "./routes/notification.route.js";
 import favoritesRoutes from "./routes/favorites.route.js";
 import adminRoutes from "./routes/admin.route.js";
+import followRoutes from "./routes/follow.route.js";
 
 
 const app = express();
@@ -51,6 +52,7 @@ app.use("/api/", logRoutes);
 app.use("/api/", stripeRoutes);
 app.use("/api/", notificationRoutes);
 app.use("/api/", favoritesRoutes);
+app.use("/api/", followRoutes);
 
 
 // Initialize Socket.IO

@@ -4,6 +4,7 @@ import User from "../models/user.model.js";
 import { emitNewMessage, getSocketInstance } from "./socket.service.js";
 import { uploadBase64Image, deleteImage } from "./image.service.js";
 import { sendPushNotification } from "./notification.service.js";
+import { areMutualFollows } from "../utils/followCheck.js";
 
 /**
  * Chat Service - Business logic layer for chat operations
@@ -28,6 +29,14 @@ class ChatService {
       });
 
     if (!chat) {
+      // Only mutual follows can start new direct chats
+      const isMutual = await areMutualFollows(userId1, userId2);
+      if (!isMutual) {
+        const error = new Error("You can only chat with mutual follows. Both users must follow each other.");
+        error.statusCode = 403;
+        throw error;
+      }
+
       // Create new chat
       chat = new Chat({
         type: 'direct',

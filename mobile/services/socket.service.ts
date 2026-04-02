@@ -15,6 +15,7 @@ interface SocketEvents {
   onUserOffline?: (userId: string) => void;
   onGroupUpdated?: (data: { chatId: string; name?: string; groupImage?: string }) => void;
   onEventInvite?: (data: { eventId: string; eventTitle: string; inviterUsername: string }) => void;
+  onFollowNew?: (data: { followerId: string; followerUsername: string; followerProfilePicture: string; isMutual: boolean }) => void;
 }
 
 class SocketService {
@@ -107,6 +108,10 @@ class SocketService {
 
       this.socket.on("event:invite", (data) => {
         this.notify("onEventInvite", data);
+      });
+
+      this.socket.on("follow:new", (data) => {
+        this.notify("onFollowNew", data);
       });
     } catch (error) {
       console.error("Socket connection error:", error);
