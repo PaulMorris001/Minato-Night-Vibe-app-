@@ -18,7 +18,7 @@ import { GUIDE_TOPICS, GuideSection, City, Guide } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
 import { BASE_URL } from "@/constants/constants";
 import { Picker } from "@react-native-picker/picker";
-import { CITIES } from "@/constants/constants";
+import { fetchCities } from "@/libs/api";
 
 export default function CreateGuidePage() {
   const [guide, setGuide] = useState<Guide>();
@@ -31,12 +31,16 @@ export default function CreateGuidePage() {
     { title: "", rank: 1, description: "" },
   ]);
   const [loading, setLoading] = useState(false);
+  const [cities, setCities] = useState<City[]>([]);
 
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
   useEffect(() => {
     fetchGuide();
+    fetchCities()
+      .then((data) => { if (Array.isArray(data) && data.length > 0) setCities(data); })
+      .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
@@ -75,7 +79,7 @@ export default function CreateGuidePage() {
       setDescription(guide.description);
       setPrice(guide.price.toString());
       // Find the city ID from the city name
-      const matchedCity = CITIES.find((c) => c.name === guide.city);
+      const matchedCity = cities.find((c) => c.name === guide.city);
       setCity(matchedCity?._id || "");
       setTopic(guide.topic);
       setSections(guide.sections);
@@ -176,7 +180,7 @@ export default function CreateGuidePage() {
       }
 
       // Find the selected city to get name and state
-      const selectedCity = CITIES.find((c) => c._id === city);
+      const selectedCity = cities.find((c) => c._id === city);
       if (!selectedCity) {
         Alert.alert("Error", "Please select a valid city");
         setLoading(false);
@@ -323,7 +327,7 @@ export default function CreateGuidePage() {
               dropdownIconColor="#fff"
             >
               <Picker.Item label="Select a city..." value="" />
-              {CITIES.map((c) => (
+              {cities.map((c) => (
                 <Picker.Item
                   key={c._id}
                   label={`${c.name}, ${c.state}`}

@@ -16,7 +16,8 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import { GUIDE_TOPICS, GuideSection, City } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
-import { BASE_URL, CITIES } from "@/constants/constants";
+import { BASE_URL } from "@/constants/constants";
+import { fetchCities } from "@/libs/api";
 import { Picker } from "@react-native-picker/picker";
 
 export default function CreateGuidePage() {
@@ -34,10 +35,11 @@ export default function CreateGuidePage() {
   const [cities, setCities] = useState<City[]>([]);
   const [loadingCities, setLoadingCities] = useState(true);
 
-  // Load static cities on component mount
   useEffect(() => {
-    setCities(CITIES);
-    setLoadingCities(false);
+    fetchCities()
+      .then((data) => { if (Array.isArray(data) && data.length > 0) setCities(data); })
+      .catch(() => {})
+      .finally(() => setLoadingCities(false));
   }, []);
 
   const addSection = () => {

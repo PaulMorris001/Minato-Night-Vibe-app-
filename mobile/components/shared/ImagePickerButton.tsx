@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
-  Alert,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { Ionicons } from "@expo/vector-icons";
@@ -37,18 +36,11 @@ export default function ImagePickerButton({
   const pickImage = async () => {
     if (disabled) return;
 
-    // Request permission
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (permissionResult.granted === false) {
-      Alert.alert("Permission Required", "Please allow access to your photos to upload an image.");
-      return;
-    }
-
-    // Determine aspect ratio - only used if allowsEditing is true
+    // PHPickerViewController (iOS 14+) handles permissions itself — no pre-request needed.
+    // Calling requestMediaLibraryPermissionsAsync() from inside a Modal crashes the iOS simulator
+    // because it tries to present a native alert from a transparent modal context.
     const aspectRatio = aspect || (shape === "circle" ? [1, 1] : [16, 9]);
 
-    // Launch image picker - allowsEditing defaults to false to let users pick full images
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsEditing,

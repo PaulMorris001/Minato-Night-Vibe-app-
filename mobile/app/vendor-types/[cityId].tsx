@@ -12,13 +12,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { VendorType } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
 import { AnimatedListCard, LoadingScreen } from "@/components/shared";
-import { VENDOR_TYPES } from "@/constants/constants";
 import { fetchVendorTypes } from "@/libs/api";
 
 export default function VendorTypesPage() {
   const { cityId } = useLocalSearchParams();
   const router = useRouter();
-  const [types, setTypes] = useState<VendorType[]>(VENDOR_TYPES);
+  const [types, setTypes] = useState<VendorType[]>([]);
   const [loading, setLoading] = useState(true);
   const headerAnim = useRef(new Animated.Value(0)).current;
 

@@ -6,13 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   StatusBar,
-  Platform,
   Animated,
-  Modal,
-  TextInput,
   Alert,
-  KeyboardAvoidingView,
-  Image,
   RefreshControl,
   AppState,
   Dimensions,
@@ -21,26 +16,22 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { Fonts } from "@/constants/fonts";
-import * as ImagePicker from "expo-image-picker";
 import * as SecureStore from "expo-secure-store";
-import { BASE_URL, CITIES } from "@/constants/constants";
-import DateTimePicker from "@react-native-community/datetimepicker";
+import { BASE_URL } from "@/constants/constants";
+import { fetchCities } from "@/libs/api";
+import { City } from "@/libs/interfaces";
 import Carousel from "@/components/Carousel";
+import CreateEventModal from "@/components/client/CreateEventModal";
 import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
 import PublicEventCard, { PublicEvent } from "@/components/shared/PublicEventCard";
 import EventCardSkeleton from "@/components/skeletons/EventCardSkeleton";
 import { useStripePayment } from "@/hooks/useStripePayment";
-import { uploadImage } from "@/utils/imageUpload";
 import { trackEvent } from "@/utils/analytics";
 
 export default function Home() {
   const router = useRouter();
   const { payForTicket } = useStripePayment();
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [selectedDate, setSelectedDate] = useState(new Date());
   const [publicEvents, setPublicEvents] = useState<PublicEvent[]>([]);
   const [hasMorePublicEvents, setHasMorePublicEvents] = useState(false);
   const [highlights, setHighlights] = useState<{ trending: PublicEvent[]; upcoming: PublicEvent[] }>({ trending: [], upcoming: [] });
@@ -48,19 +39,8 @@ export default function Home() {
   const [loadingHighlights, setLoadingHighlights] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
-  const [showCityPicker, setShowCityPicker] = useState(false);
+  const [cities, setCities] = useState<City[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [eventData, setEventData] = useState({
-    title: "",
-    date: "",
-    location: "",
-    image: "",
-    description: "",
-    isPublic: false,
-    isPaid: false,
-    ticketPrice: "",
-    maxGuests: "",
-  });
 
   // Animation values
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -162,6 +142,9 @@ export default function Home() {
     // Initial data fetch
     fetchPublicEvents(null);
     fetchHighlights();
+    fetchCities()
+      .then((data) => { if (Array.isArray(data) && data.length > 0) setCities(data); })
+      .catch(() => {});
 
     // Background auto-refresh every 30s
     intervalRef.current = setInterval(() => {
@@ -180,196 +163,6 @@ export default function Home() {
       subscription.remove();
     };
   }, []);
-
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: false,
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setEventData({ ...eventData, image: result.assets[0].uri });
-    }
-  };
-
-  const onDateChange = (event: any, date?: Date) => {
-    try {
-      // Handle dismissal on Android
-      if (Platform.OS === 'android') {
-        setShowDatePicker(false);
-
-        // If user cancelled or no date, don't update
-        if (!event || event.type === 'dismissed' || !date) {
-          return;
-        }
-
-        // On Android, after selecting date, show time picker
-        if (date) {
-          setSelectedDate(date);
-          setShowTimePicker(true);
-        }
-        return;
-      }
-
-      // On iOS, handle dismissal
-      if (event && event.type === 'dismissed') {
-        setShowDatePicker(false);
-        return;
-      }
-
-      // Update the selected date (iOS only - handles both date and time)
-      if (date) {
-        setSelectedDate(date);
-        setEventData({ ...eventData, date: date.toISOString() });
-      }
-    } catch (error) {
-      console.error('Date picker error:', error);
-      setShowDatePicker(false);
-    }
-  };
-
-  const onTimeChange = (event: any, date?: Date) => {
-    try {
-      setShowTimePicker(false);
-
-      // If user cancelled or no date, don't update
-      if (!event || event.type === 'dismissed' || !date) {
-        return;
-      }
-
-      // Combine the selected date with the new time
-      if (date) {
-        const updatedDate = new Date(selectedDate);
-        updatedDate.setHours(date.getHours());
-        updatedDate.setMinutes(date.getMinutes());
-        setSelectedDate(updatedDate);
-        setEventData({ ...eventData, date: updatedDate.toISOString() });
-      }
-    } catch (error) {
-      console.error('Time picker error:', error);
-      setShowTimePicker(false);
-    }
-  };
-
-  const formatDisplayDate = (dateString: string) => {
-    if (!dateString) return "Select date and time";
-    const date = new Date(dateString);
-    return date.toLocaleString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  };
-
-  const handleCreateEvent = async () => {
-    if (!eventData.title || !eventData.date || !eventData.location) {
-      Alert.alert("Error", "Please fill in required fields (Title, Date, Location)");
-      return;
-    }
-
-    if (eventData.isPublic && eventData.isPaid) {
-      if (!eventData.ticketPrice || parseFloat(eventData.ticketPrice) <= 0) {
-        Alert.alert("Error", "Please enter a valid ticket price");
-        return;
-      }
-      if (!eventData.maxGuests || parseInt(eventData.maxGuests) <= 0) {
-        Alert.alert("Error", "Please enter a valid number of max guests");
-        return;
-      }
-    }
-
-    setIsLoading(true);
-    try {
-      const token = await SecureStore.getItemAsync("token");
-
-      if (!token) {
-        Alert.alert("Error", "Please log in to create an event");
-        setIsModalVisible(false);
-        router.push("/login");
-        return;
-      }
-
-      let imageUrl = eventData.image;
-      if (imageUrl && (imageUrl.startsWith("file://") || imageUrl.startsWith("content://"))) {
-        const uploadResult = await uploadImage(imageUrl, "events", token);
-        imageUrl = uploadResult.url;
-      }
-
-      const payload = {
-        ...eventData,
-        image: imageUrl,
-        ticketPrice: eventData.isPaid ? parseFloat(eventData.ticketPrice) : 0,
-        maxGuests: eventData.isPaid ? parseInt(eventData.maxGuests) : 0,
-      };
-
-      const response = await fetch(`${BASE_URL}/events`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        trackEvent("event_created", { isPublic: eventData.isPublic, isPaid: eventData.isPaid });
-        Alert.alert(
-          "Event Created!",
-          `Your event "${eventData.title}" has been created successfully.`,
-          [
-            {
-              text: "View Events",
-              onPress: () => {
-                setEventData({
-                  title: "",
-                  date: "",
-                  location: "",
-                  image: "",
-                  description: "",
-                  isPublic: false,
-                  isPaid: false,
-                  ticketPrice: "",
-                  maxGuests: "",
-                });
-                setIsModalVisible(false);
-                router.push("/(tabs)/events");
-              },
-            },
-            {
-              text: "OK",
-              onPress: () => {
-                setEventData({
-                  title: "",
-                  date: "",
-                  location: "",
-                  image: "",
-                  description: "",
-                  isPublic: false,
-                  isPaid: false,
-                  ticketPrice: "",
-                  maxGuests: "",
-                });
-                setIsModalVisible(false);
-                fetchPublicEvents();
-              },
-            },
-          ]
-        );
-      } else {
-        Alert.alert("Error", data.message || "Failed to create event");
-      }
-    } catch (error) {
-      console.error("Create event error:", error);
-      Alert.alert("Error", "Failed to create event. Please try again.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   const handlePurchaseTicket = async (eventId: string, eventTitle: string) => {
     const result = await payForTicket(eventId);
@@ -422,7 +215,6 @@ export default function Home() {
       Alert.alert("Error", "Failed to join event");
     }
   };
-
 
   const AnimatedFeatureCard = ({
     icon,
@@ -650,7 +442,7 @@ export default function Home() {
                 All
               </Text>
             </TouchableOpacity>
-            {CITIES.map((city) => (
+            {cities.map((city) => (
               <TouchableOpacity
                 key={city._id}
                 style={[styles.cityChip, selectedCity === city.name && styles.cityChipActive]}
@@ -762,378 +554,11 @@ export default function Home() {
         </TouchableOpacity>
       </Animated.View>
 
-      {/* Create Event Modal */}
-      <Modal
+      <CreateEventModal
         visible={isModalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setIsModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          style={styles.modalOverlay}
-        >
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Create Event</Text>
-              <TouchableOpacity
-                onPress={() => setIsModalVisible(false)}
-                style={styles.closeButton}
-              >
-                <Ionicons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView
-              style={styles.modalBody}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Event Title *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g., Birthday Party"
-                  placeholderTextColor="#6b7280"
-                  value={eventData.title}
-                  onChangeText={(text) =>
-                    setEventData({ ...eventData, title: text })
-                  }
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Date & Time *</Text>
-                <TouchableOpacity
-                  style={styles.datePickerButton}
-                  onPress={() => setShowDatePicker(true)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="calendar-outline" size={20} color="#a855f7" />
-                  <Text style={styles.datePickerText}>
-                    {formatDisplayDate(eventData.date)}
-                  </Text>
-                </TouchableOpacity>
-                {showDatePicker && Platform.OS === 'ios' && (
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="datetime"
-                    display="spinner"
-                    onChange={onDateChange}
-                    minimumDate={new Date()}
-                    themeVariant="dark"
-                  />
-                )}
-                {showDatePicker && Platform.OS === 'android' && (
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="date"
-                    display="spinner"
-                    onChange={onDateChange}
-                    minimumDate={new Date()}
-                  />
-                )}
-                {showTimePicker && Platform.OS === 'android' && (
-                  <DateTimePicker
-                    value={selectedDate}
-                    mode="time"
-                    display="spinner"
-                    onChange={onTimeChange}
-                    is24Hour={false}
-                  />
-                )}
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Location *</Text>
-                <TouchableOpacity
-                  style={styles.cityPickerButton}
-                  onPress={() => setShowCityPicker(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="location-outline" size={18} color="#9ca3af" />
-                  <Text style={[styles.cityPickerText, eventData.location && styles.cityPickerTextFilled]}>
-                    {eventData.location || "Pick a city..."}
-                  </Text>
-                  <Ionicons name="chevron-down" size={18} color="#9ca3af" />
-                </TouchableOpacity>
-                <TextInput
-                  style={[styles.input, { marginTop: 8 }]}
-                  placeholder="Specific venue or address (optional)"
-                  placeholderTextColor="#6b7280"
-                  value={eventData.location.includes(",") ? eventData.location.split(",").slice(1).join(",").trim() : ""}
-                  onChangeText={(text) => {
-                    const cityPart = eventData.location.includes(",")
-                      ? eventData.location.split(",")[0]
-                      : eventData.location;
-                    setEventData({ ...eventData, location: text ? `${cityPart}, ${text}` : cityPart });
-                  }}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Event Image</Text>
-                <TouchableOpacity
-                  style={styles.imagePickerButton}
-                  onPress={pickImage}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={["#667eea", "#764ba2"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.imagePickerGradient}
-                  >
-                    <Ionicons name="image-outline" size={20} color="white" />
-                    <Text style={styles.imagePickerText}>
-                      {eventData.image ? "Change Image" : "Pick an Image"}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                {eventData.image ? (
-                  <View style={styles.imagePreviewContainer}>
-                    <Image
-                      source={{ uri: eventData.image }}
-                      style={styles.imagePreview}
-                    />
-                    <TouchableOpacity
-                      style={styles.removeImageButton}
-                      onPress={() =>
-                        setEventData({ ...eventData, image: "" })
-                      }
-                    >
-                      <Ionicons name="close-circle" size={24} color="#ef4444" />
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Description</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea]}
-                  placeholder="Describe your event..."
-                  placeholderTextColor="#6b7280"
-                  value={eventData.description}
-                  onChangeText={(text) =>
-                    setEventData({ ...eventData, description: text })
-                  }
-                  multiline
-                  numberOfLines={4}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Event Visibility</Text>
-                <View style={styles.visibilityOptions}>
-                  <TouchableOpacity
-                    style={[
-                      styles.visibilityOption,
-                      !eventData.isPublic && styles.visibilityOptionActive,
-                    ]}
-                    onPress={() =>
-                      setEventData({ ...eventData, isPublic: false, isPaid: false })
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name="lock-closed"
-                      size={20}
-                      color={!eventData.isPublic ? "#a855f7" : "#6b7280"}
-                    />
-                    <Text
-                      style={[
-                        styles.visibilityOptionText,
-                        !eventData.isPublic && styles.visibilityOptionTextActive,
-                      ]}
-                    >
-                      Private
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    style={[
-                      styles.visibilityOption,
-                      eventData.isPublic && styles.visibilityOptionActive,
-                    ]}
-                    onPress={() => setEventData({ ...eventData, isPublic: true })}
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons
-                      name="globe"
-                      size={20}
-                      color={eventData.isPublic ? "#a855f7" : "#6b7280"}
-                    />
-                    <Text
-                      style={[
-                        styles.visibilityOptionText,
-                        eventData.isPublic && styles.visibilityOptionTextActive,
-                      ]}
-                    >
-                      Public
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {eventData.isPublic && (
-                <>
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Pricing</Text>
-                    <View style={styles.visibilityOptions}>
-                      <TouchableOpacity
-                        style={[
-                          styles.visibilityOption,
-                          !eventData.isPaid && styles.visibilityOptionActive,
-                        ]}
-                        onPress={() =>
-                          setEventData({
-                            ...eventData,
-                            isPaid: false,
-                            ticketPrice: "",
-                            maxGuests: "",
-                          })
-                        }
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons
-                          name="gift"
-                          size={20}
-                          color={!eventData.isPaid ? "#10b981" : "#6b7280"}
-                        />
-                        <Text
-                          style={[
-                            styles.visibilityOptionText,
-                            !eventData.isPaid && styles.visibilityOptionTextActive,
-                          ]}
-                        >
-                          Free
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[
-                          styles.visibilityOption,
-                          eventData.isPaid && styles.visibilityOptionActive,
-                        ]}
-                        onPress={() => setEventData({ ...eventData, isPaid: true })}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons
-                          name="card"
-                          size={20}
-                          color={eventData.isPaid ? "#a855f7" : "#6b7280"}
-                        />
-                        <Text
-                          style={[
-                            styles.visibilityOptionText,
-                            eventData.isPaid && styles.visibilityOptionTextActive,
-                          ]}
-                        >
-                          Paid
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {eventData.isPaid && (
-                    <>
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Ticket Price ($) *</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="e.g., 25"
-                          placeholderTextColor="#6b7280"
-                          value={eventData.ticketPrice}
-                          onChangeText={(text) =>
-                            setEventData({ ...eventData, ticketPrice: text })
-                          }
-                          keyboardType="decimal-pad"
-                        />
-                      </View>
-
-                      <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Max Guests *</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="e.g., 100"
-                          placeholderTextColor="#6b7280"
-                          value={eventData.maxGuests}
-                          onChangeText={(text) =>
-                            setEventData({ ...eventData, maxGuests: text })
-                          }
-                          keyboardType="number-pad"
-                        />
-                      </View>
-                    </>
-                  )}
-                </>
-              )}
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => setIsModalVisible(false)}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.createButton}
-                onPress={handleCreateEvent}
-                disabled={isLoading}
-              >
-                <LinearGradient
-                  colors={["#a855f7", "#7c3aed"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.createButtonGradient}
-                >
-                  <Text style={styles.createButtonText}>
-                    {isLoading ? "Creating..." : "Create Event"}
-                  </Text>
-                </LinearGradient>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* City Picker Modal */}
-      <Modal
-        visible={showCityPicker}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowCityPicker(false)}
-      >
-        <TouchableOpacity
-          style={styles.cityModalOverlay}
-          activeOpacity={1}
-          onPress={() => setShowCityPicker(false)}
-        >
-          <View style={styles.cityModalContent}>
-            <View style={styles.cityModalHeader}>
-              <Text style={styles.cityModalTitle}>Select City</Text>
-              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
-                <Ionicons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            {CITIES.map((city) => (
-              <TouchableOpacity
-                key={city._id}
-                style={styles.cityOption}
-                onPress={() => {
-                  setEventData({ ...eventData, location: city.name });
-                  setShowCityPicker(false);
-                }}
-              >
-                <Ionicons name="location" size={18} color="#a855f7" />
-                <Text style={styles.cityOptionText}>{city.name}</Text>
-                <Text style={styles.cityOptionState}>{city.state}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </TouchableOpacity>
-      </Modal>
+        onClose={() => setIsModalVisible(false)}
+        onEventCreated={() => fetchPublicEvents(selectedCity)}
+      />
     </>
   );
 }
@@ -1147,11 +572,10 @@ const styles = StyleSheet.create({
     flexGrow: 1,
   },
   heroSection: {
-    paddingTop: Platform.OS === "android" ? StatusBar.currentHeight! + 40 : 80,
     paddingHorizontal: getResponsivePadding(),
     position: "relative",
     overflow: "hidden",
-    height: Dimensions.get('window').height,
+    height: Dimensions.get('window').height - 195,
     justifyContent: "center",
   },
   heroContent: {
@@ -1309,144 +733,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    justifyContent: "flex-end",
-  },
-  modalContent: {
-    backgroundColor: "#1f1f2e",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    maxHeight: "90%",
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: "#374151",
-  },
-  modalTitle: {
-    fontSize: scaleFontSize(24),
-    fontFamily: Fonts.bold,
-    color: "#fff",
-  },
-  closeButton: {
-    padding: 4,
-  },
-  modalBody: {
-    padding: 20,
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  inputLabel: {
-    fontSize: scaleFontSize(14),
-    fontFamily: Fonts.semiBold,
-    color: "#e5e7eb",
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: "#374151",
-    borderRadius: 12,
-    padding: 14,
-    fontSize: scaleFontSize(16),
-    fontFamily: Fonts.regular,
-    color: "#fff",
-    borderWidth: 1,
-    borderColor: "#4b5563",
-  },
-  textArea: {
-    minHeight: 100,
-    textAlignVertical: "top",
-  },
-  modalFooter: {
-    flexDirection: "row",
-    padding: 20,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: "#374151",
-  },
-  cancelButton: {
-    flex: 1,
-    backgroundColor: "#374151",
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-  },
-  cancelButtonText: {
-    color: "#9ca3af",
-    fontSize: scaleFontSize(16),
-    fontFamily: Fonts.semiBold,
-  },
-  createButton: {
-    flex: 1,
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  createButtonGradient: {
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  createButtonText: {
-    color: "white",
-    fontSize: scaleFontSize(16),
-    fontFamily: Fonts.bold,
-  },
-  imagePickerButton: {
-    borderRadius: 12,
-    overflow: "hidden",
-    marginTop: 4,
-  },
-  imagePickerGradient: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    gap: 8,
-  },
-  imagePickerText: {
-    color: "white",
-    fontSize: scaleFontSize(14),
-    fontFamily: Fonts.semiBold,
-  },
-  imagePreviewContainer: {
-    marginTop: 12,
-    position: "relative",
-    borderRadius: 12,
-    overflow: "hidden",
-  },
-  imagePreview: {
-    width: "100%",
-    height: 180,
-    borderRadius: 12,
-  },
-  removeImageButton: {
-    position: "absolute",
-    top: 8,
-    right: 8,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-    borderRadius: 12,
-  },
-  datePickerButton: {
-    backgroundColor: "#374151",
-    borderRadius: 12,
-    padding: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    borderWidth: 1,
-    borderColor: "#4b5563",
-  },
-  datePickerText: {
-    fontSize: scaleFontSize(16),
-    fontFamily: Fonts.regular,
-    color: "#fff",
-    flex: 1,
-  },
   exploreSection: {
     paddingVertical: 50,
     backgroundColor: "#0f0f1a",
@@ -1515,98 +801,6 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     alignItems: "center",
     justifyContent: "center",
-  },
-  visibilityOptions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  visibilityOption: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    backgroundColor: "#374151",
-    borderWidth: 2,
-    borderColor: "transparent",
-  },
-  visibilityOptionActive: {
-    borderColor: "#a855f7",
-    backgroundColor: "rgba(168, 85, 247, 0.1)",
-  },
-  visibilityOptionText: {
-    fontSize: scaleFontSize(15),
-    fontFamily: Fonts.semiBold,
-    color: "#9ca3af",
-  },
-  visibilityOptionTextActive: {
-    color: "#a855f7",
-  },
-  cityPickerButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#374151",
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: "#4b5563",
-    gap: 8,
-  },
-  cityPickerText: {
-    flex: 1,
-    fontSize: 15,
-    fontFamily: Fonts.regular,
-    color: "#6b7280",
-  },
-  cityPickerTextFilled: {
-    color: "#fff",
-  },
-  cityModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "flex-end",
-  },
-  cityModalContent: {
-    backgroundColor: "#1f1f2e",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: 40,
-    maxHeight: "70%",
-  },
-  cityModalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  cityModalTitle: {
-    fontSize: 20,
-    fontFamily: Fonts.bold,
-    color: "#fff",
-  },
-  cityOption: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: "#374151",
-    gap: 12,
-  },
-  cityOptionText: {
-    flex: 1,
-    fontSize: 16,
-    fontFamily: Fonts.medium,
-    color: "#fff",
-  },
-  cityOptionState: {
-    fontSize: 13,
-    fontFamily: Fonts.regular,
-    color: "#9ca3af",
   },
   seeAllBtn: {
     flexDirection: "row",

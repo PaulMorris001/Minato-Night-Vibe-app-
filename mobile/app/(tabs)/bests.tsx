@@ -15,7 +15,7 @@ import { Fonts } from "@/constants/fonts";
 import { AnimatedListCard } from "@/components/shared";
 import UserListItemSkeleton from "@/components/skeletons/UserListItemSkeleton";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { CITIES } from "@/constants/constants";
+import { fetchCities } from "@/libs/api";
 import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
 
 export default function BestsPage() {
@@ -27,8 +27,10 @@ export default function BestsPage() {
 
   useEffect(() => {
     checkAuthStatus();
-    setCities(CITIES);
-    setLoading(false);
+    fetchCities()
+      .then((data) => { if (Array.isArray(data) && data.length > 0) setCities(data); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
 
     Animated.timing(headerAnim, {
       toValue: 1,

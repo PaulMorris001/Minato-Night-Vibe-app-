@@ -9,7 +9,6 @@ import {
   Keyboard,
   TouchableWithoutFeedback,
   ScrollView,
-  FlatList,
   Alert,
   ActivityIndicator,
   Platform,
@@ -19,12 +18,14 @@ import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import axios from "axios";
-import { BASE_URL, CITIES } from "@/constants/constants";
+import { BASE_URL } from "@/constants/constants";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { ImagePickerButton } from "@/components/shared";
 import { uploadImage } from "@/utils/imageUpload";
 import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
+import { fetchCities } from "@/libs/api";
+
 
 interface City {
   _id: string;
@@ -45,7 +46,6 @@ export default function CreateEventModal({
 }: CreateEventModalProps) {
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState<City[]>([]);
-  const [loadingCities, setLoadingCities] = useState(true);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -65,10 +65,18 @@ export default function CreateEventModal({
 
   useEffect(() => {
     if (visible) {
-      setCities(CITIES);
-      setLoadingCities(false);
+      loadCitiesAndTypes();
     }
   }, [visible]);
+  
+  const loadCitiesAndTypes = async () => {
+    try {
+      const [c] = await Promise.all([fetchCities()]);
+      if (Array.isArray(c) && c.length > 0) setCities(c);
+    } catch {
+      // Fall back to static constants silently
+    }
+  };
 
   const handleInputChange = (field: string, value: string | boolean) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -208,9 +216,10 @@ export default function CreateEventModal({
       setLoading(false);
     }
   };
+  
+  
 
   return (
-    <>
     <Modal
       animationType="slide"
       transparent={true}
@@ -294,7 +303,7 @@ export default function CreateEventModal({
               <Text style={styles.label}>Location *</Text>
               <TouchableOpacity
                 style={styles.cityPickerButton}
-                onPress={() => setShowCityPicker(true)}
+                onPress={() => setShowCityPicker((v) => !v)}
                 activeOpacity={0.7}
               >
                 <Ionicons name="location-outline" size={18} color="#a855f7" />
@@ -305,13 +314,47 @@ export default function CreateEventModal({
                   ]}
                 >
                   {formData.location
-                    ? cities.find((c) => c.name === formData.location)
-                      ? `${cities.find((c) => c.name === formData.location)!.name}, ${cities.find((c) => c.name === formData.location)!.state}`
-                      : formData.location
+                    ? (() => {
+                        const match = cities.find((c) => c.name === formData.location);
+                        return match ? `${match.name}, ${match.state}` : formData.location;
+                      })()
                     : "Select a city"}
                 </Text>
-                <Ionicons name="chevron-down" size={16} color="#6b7280" />
+                <Ionicons
+                  name={showCityPicker ? "chevron-up" : "chevron-down"}
+                  size={16}
+                  color="#6b7280"
+                />
               </TouchableOpacity>
+              {showCityPicker && (
+                <View style={styles.cityDropdown}>
+                  {cities.map((item) => (
+                    <TouchableOpacity
+                      key={item._id}
+                      style={[
+                        styles.cityItem,
+                        formData.location === item.name && styles.cityItemSelected,
+                      ]}
+                      onPress={() => {
+                        handleInputChange("location", item.name);
+                        setShowCityPicker(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.cityItemText,
+                          formData.location === item.name && styles.cityItemTextSelected,
+                        ]}
+                      >
+                        {item.name}, {item.state}
+                      </Text>
+                      {formData.location === item.name && (
+                        <Ionicons name="checkmark" size={18} color="#a855f7" />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
 
               {/* Description */}
               <Text style={styles.label}>Description</Text>
@@ -428,64 +471,6 @@ export default function CreateEventModal({
         </TouchableWithoutFeedback>
       </View>
     </Modal>
-
-    {/* City Picker Modal — sibling to avoid nested Modal issues on iOS */}
-    <Modal
-      visible={showCityPicker}
-      transparent
-      animationType="slide"
-      onRequestClose={() => setShowCityPicker(false)}
-    >
-      <TouchableOpacity
-        style={styles.cityModalOverlay}
-        activeOpacity={1}
-        onPress={() => setShowCityPicker(false)}
-      >
-        <TouchableOpacity
-          activeOpacity={1}
-          style={styles.cityModalSheet}
-          onPress={() => {}}
-        >
-          <View style={styles.cityModalHeader}>
-            <Text style={styles.cityModalTitle}>Select City</Text>
-            <TouchableOpacity onPress={() => setShowCityPicker(false)}>
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={cities}
-            keyExtractor={(item) => item._id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={[
-                  styles.cityItem,
-                  formData.location === item.name && styles.cityItemSelected,
-                ]}
-                onPress={() => {
-                  handleInputChange("location", item.name);
-                  setShowCityPicker(false);
-                }}
-              >
-                <Text
-                  style={[
-                    styles.cityItemText,
-                    formData.location === item.name && styles.cityItemTextSelected,
-                  ]}
-                >
-                  {item.name}, {item.state}
-                </Text>
-                {formData.location === item.name && (
-                  <Ionicons name="checkmark" size={18} color="#a855f7" />
-                )}
-              </TouchableOpacity>
-            )}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={{ paddingBottom: 20 }}
-          />
-        </TouchableOpacity>
-      </TouchableOpacity>
-    </Modal>
-    </>
   );
 }
 
@@ -589,31 +574,13 @@ const styles = StyleSheet.create({
   cityPickerPlaceholder: {
     color: "#999",
   },
-  cityModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "flex-end",
-  },
-  cityModalSheet: {
+  cityDropdown: {
+    borderWidth: 1,
+    borderColor: "#374151",
+    borderRadius: 8,
     backgroundColor: "#1f1f2e",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    maxHeight: "60%",
-    paddingTop: 8,
-  },
-  cityModalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#374151",
-  },
-  cityModalTitle: {
-    fontSize: scaleFontSize(18),
-    fontFamily: Fonts.bold,
-    color: "#fff",
+    marginBottom: 8,
+    overflow: "hidden",
   },
   cityItem: {
     flexDirection: "row",
@@ -635,22 +602,6 @@ const styles = StyleSheet.create({
   cityItemTextSelected: {
     color: "#a855f7",
     fontFamily: Fonts.semiBold,
-  },
-  loadingPicker: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: 12,
-    borderWidth: 1,
-    borderColor: "#374151",
-    borderRadius: 8,
-    backgroundColor: "#1f1f2e",
-    marginBottom: 8,
-  },
-  loadingText: {
-    marginLeft: 8,
-    fontSize: scaleFontSize(14),
-    fontFamily: Fonts.regular,
-    color: "#9ca3af",
   },
   checkboxContainer: {
     flexDirection: "row",
