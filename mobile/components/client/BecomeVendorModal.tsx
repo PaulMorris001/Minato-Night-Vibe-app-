@@ -11,7 +11,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import axios from "axios";
 import { Colors } from "@/constants/colors";
-import { BASE_URL, CITIES, VENDOR_TYPES } from "@/constants/constants";
+import { BASE_URL } from "@/constants/constants";
 import { City, VendorType } from "@/libs/interfaces";
 import { useRouter } from "expo-router";
 import {
@@ -36,8 +36,8 @@ export default function BecomeVendorModal({
   const router = useRouter();
   const { setActiveAccount } = useAccount();
   const [loading, setLoading] = useState(false);
-  const [cities, setCities] = useState<City[]>(CITIES);
-  const [vendorTypes, setVendorTypes] = useState<VendorType[]>(VENDOR_TYPES);
+  const [cities, setCities] = useState<City[]>([]);
+  const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
   const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [businessPicture, setBusinessPicture] = useState("");
@@ -67,7 +67,6 @@ export default function BecomeVendorModal({
       // Fall back to static constants silently
     }
   };
-
   const handleSubmit = async () => {
     if (!formData.businessName.trim()) {
       Alert.alert("Error", "Please enter your business name");

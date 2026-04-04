@@ -17,7 +17,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Fonts } from "@/constants/fonts";
 import * as SecureStore from "expo-secure-store";
-import { BASE_URL, CITIES } from "@/constants/constants";
+import { BASE_URL } from "@/constants/constants";
+import { fetchCities } from "@/libs/api";
+import { City } from "@/libs/interfaces";
 import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
 import PublicEventCard, { PublicEvent } from "@/components/shared/PublicEventCard";
 import { useStripePayment } from "@/hooks/useStripePayment";
@@ -33,6 +35,7 @@ export default function PublicEventsPage() {
   const [hasMore, setHasMore] = useState(true);
   const [totalEvents, setTotalEvents] = useState(0);
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [cities, setCities] = useState<City[]>([]);
 
   const EVENTS_PER_PAGE = 10;
 
@@ -82,6 +85,12 @@ export default function PublicEventsPage() {
       setRefreshing(false);
     }
   };
+
+  useEffect(() => {
+    fetchCities()
+      .then((data) => { if (Array.isArray(data) && data.length > 0) setCities(data); })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setPage(1);
@@ -244,7 +253,7 @@ export default function PublicEventsPage() {
             All Cities
           </Text>
         </TouchableOpacity>
-        {CITIES.map((city) => (
+        {cities.map((city) => (
           <TouchableOpacity
             key={city._id}
             style={[styles.filterChip, selectedCity === city.name && styles.filterChipActive]}

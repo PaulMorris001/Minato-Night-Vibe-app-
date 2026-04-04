@@ -16,7 +16,8 @@ import * as SecureStore from "expo-secure-store";
 import axios from "axios";
 import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
-import { BASE_URL, CITIES, VENDOR_TYPES } from "@/constants/constants";
+import { BASE_URL } from "@/constants/constants";
+import { fetchCities, fetchVendorTypes } from "@/libs/api";
 import { City, VendorType } from "@/libs/interfaces";
 import { ImagePickerButton } from "@/components/shared";
 import { uploadImage } from "@/utils/imageUpload";
@@ -70,9 +71,14 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
     }
   };
 
-  const loadCitiesAndTypes = () => {
-    setCities(CITIES);
-    setVendorTypes(VENDOR_TYPES);
+  const loadCitiesAndTypes = async () => {
+    try {
+      const [c, t] = await Promise.all([fetchCities(), fetchVendorTypes()]);
+      if (Array.isArray(c) && c.length > 0) setCities(c);
+      if (Array.isArray(t) && t.length > 0) setVendorTypes(t);
+    } catch {
+      // silently ignore — pickers just stay empty if fetch fails
+    }
   };
 
   const fetchProfile = async () => {
@@ -734,6 +740,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
     maxHeight: "70%",
+    flex: 1,
     paddingBottom: 30,
   },
   modalHeader: {

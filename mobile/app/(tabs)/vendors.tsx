@@ -12,7 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import axios from "axios";
-import { BASE_URL, CITIES } from "@/constants/constants";
+import { BASE_URL } from "@/constants/constants";
 import { fetchCities } from "@/libs/api";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -27,7 +27,7 @@ import { scaleFontSize } from "@/utils/responsive";
 
 export default function VendorsPage() {
   const router = useRouter();
-  const [cities, setCities] = useState<City[]>(CITIES);
+  const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
   const [showVendorModal, setShowVendorModal] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
