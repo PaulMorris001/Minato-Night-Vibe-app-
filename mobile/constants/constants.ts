@@ -13,7 +13,7 @@ const getBaseUrl = () => {
     if (Constants.expoConfig?.hostUri) {
       host = Constants.expoConfig.hostUri.split(":")[0];
     }
-    const port = process.env.EXPO_PUBLIC_API_PORT || "3000";
+    const port = process.env.EXPO_PUBLIC_API_PORT || "3100";
     return `http://${host}:${port}/api`;
   }
 

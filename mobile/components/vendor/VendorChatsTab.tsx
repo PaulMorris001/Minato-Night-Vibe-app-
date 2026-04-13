@@ -362,6 +362,7 @@ export default function VendorChatsTab() {
             <FlatList
               data={searchedUsers}
               keyExtractor={(item) => item.id}
+              keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.userItem}

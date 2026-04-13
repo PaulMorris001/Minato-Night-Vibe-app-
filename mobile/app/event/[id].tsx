@@ -30,6 +30,14 @@ interface User {
   profilePicture?: string;
 }
 
+interface EventVendor {
+  _id: string;
+  name: string;
+  images?: string[];
+  rating?: number;
+  verified?: boolean;
+}
+
 interface Event {
   _id: string;
   title: string;
@@ -44,6 +52,7 @@ interface Event {
   createdBy: User;
   invitedUsers: User[];
   pendingInvites: User[];
+  vendors?: EventVendor[];
   rsvpCount: number;
   userRsvp: boolean;
   groupChatId?: { _id: string; name: string; groupImage?: string } | null;
@@ -72,6 +81,11 @@ export default function EventDetailsPage() {
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [rsvpLoading, setRsvpLoading] = useState(false);
   const [inviteResponding, setInviteResponding] = useState(false);
+  const [vendorSearchVisible, setVendorSearchVisible] = useState(false);
+  const [vendorQuery, setVendorQuery] = useState("");
+  const [vendorResults, setVendorResults] = useState<EventVendor[]>([]);
+  const [searchingVendors, setSearchingVendors] = useState(false);
+  const [addingVendor, setAddingVendor] = useState<string | null>(null);
 
   const fetchEventDetails = async () => {
     try {
@@ -142,11 +156,12 @@ export default function EventDetailsPage() {
 
       const data = await response.json();
       if (response.ok) {
-        // Filter out users that are already invited or are the creator
+        // Filter out creator, already accepted invites, and pending invites
         const filteredUsers = data.users.filter(
           (user: SearchedUser) =>
             user.id !== event?.createdBy._id &&
-            !event?.invitedUsers.some((invitedUser) => invitedUser._id === user.id)
+            !event?.invitedUsers.some((invitedUser) => invitedUser._id === user.id) &&
+            !event?.pendingInvites.some((pending) => pending._id === user.id)
         );
         setSearchedUsers(filteredUsers);
       }
@@ -258,6 +273,63 @@ export default function EventDetailsPage() {
   };
 
   const isCreator = event?.createdBy._id === currentUserId;
+
+  // Vendor search (debounced by useEffect in handleVendorSearch)
+  const handleVendorSearch = async (query: string) => {
+    setVendorQuery(query);
+    if (query.trim().length < 2) { setVendorResults([]); return; }
+    setSearchingVendors(true);
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const res = await fetch(`${BASE_URL}/vendors/search?query=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) setVendorResults(data.vendors || []);
+    } catch {}
+    finally { setSearchingVendors(false); }
+  };
+
+  const handleAddVendor = async (vendorId: string) => {
+    if (!event) return;
+    setAddingVendor(vendorId);
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const res = await fetch(`${BASE_URL}/events/${event._id}/vendors/${vendorId}`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        Alert.alert("Added", "Vendor added to event.");
+        setVendorSearchVisible(false);
+        setVendorQuery("");
+        setVendorResults([]);
+        fetchEventDetails();
+      } else {
+        Alert.alert("Error", data.message || "Failed to add vendor");
+      }
+    } catch { Alert.alert("Error", "Failed to add vendor"); }
+    finally { setAddingVendor(null); }
+  };
+
+  const handleRemoveVendor = async (vendorId: string) => {
+    if (!event) return;
+    Alert.alert("Remove Vendor", "Remove this vendor from the event?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Remove", style: "destructive",
+        onPress: async () => {
+          const token = await SecureStore.getItemAsync("token");
+          await fetch(`${BASE_URL}/events/${event._id}/vendors/${vendorId}`, {
+            method: "DELETE",
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          fetchEventDetails();
+        },
+      },
+    ]);
+  };
 
   if (loading) {
     return (
@@ -506,6 +578,70 @@ export default function EventDetailsPage() {
                 <Text style={styles.emptyText}>No users invited yet</Text>
               )}
             </View>
+
+            {/* Vendors Section */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.detailRow}>
+                  <Ionicons name="briefcase" size={20} color="#a855f7" />
+                  <Text style={styles.sectionTitle}>
+                    Vendors ({event.vendors?.length || 0})
+                  </Text>
+                </View>
+                {isCreator && (
+                  <TouchableOpacity
+                    style={styles.inviteButton}
+                    onPress={() => setVendorSearchVisible(true)}
+                  >
+                    <Ionicons name="add" size={18} color="#fff" />
+                    <Text style={styles.inviteButtonText}>Add Vendor</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {event.vendors && event.vendors.length > 0 ? (
+                event.vendors.map((vendor) => (
+                  <TouchableOpacity
+                    key={vendor._id}
+                    style={styles.userCard}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/vendor-details/[vendorId]",
+                        params: { vendorId: vendor._id, vendorName: vendor.name },
+                      } as any)
+                    }
+                    activeOpacity={0.8}
+                  >
+                    {vendor.images && vendor.images.length > 0 ? (
+                      <Image source={{ uri: vendor.images[0] }} style={styles.userAvatar} />
+                    ) : (
+                      <View style={styles.userAvatarPlaceholder}>
+                        <Ionicons name="briefcase" size={22} color="#a855f7" />
+                      </View>
+                    )}
+                    <View style={styles.userInfo}>
+                      <Text style={styles.userName}>{vendor.name}</Text>
+                      {vendor.rating ? (
+                        <Text style={styles.userEmail}>★ {vendor.rating}</Text>
+                      ) : null}
+                    </View>
+                    {isCreator && (
+                      <TouchableOpacity
+                        onPress={() => handleRemoveVendor(vendor._id)}
+                        style={{ padding: 6 }}
+                      >
+                        <Ionicons name="close-circle-outline" size={20} color="#ef4444" />
+                      </TouchableOpacity>
+                    )}
+                    {vendor.verified && (
+                      <Ionicons name="shield-checkmark" size={16} color="#22c55e" style={{ marginRight: 4 }} />
+                    )}
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <Text style={styles.emptyText}>No vendors added yet</Text>
+              )}
+            </View>
           </View>
         </ScrollView>
       </LinearGradient>
@@ -619,6 +755,109 @@ export default function EventDetailsPage() {
                       <Text style={styles.emptySearchText}>
                         Type at least 2 characters to search
                       </Text>
+                    </View>
+                  ) : null
+                }
+                contentContainerStyle={styles.userListContent}
+                keyboardShouldPersistTaps="handled"
+              />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+      {/* Browse Vendors Modal */}
+      <Modal
+        visible={vendorSearchVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => { setVendorSearchVisible(false); setVendorQuery(""); setVendorResults([]); }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => { setVendorSearchVisible(false); setVendorQuery(""); setVendorResults([]); }}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Browse Vendors</Text>
+              <TouchableOpacity
+                onPress={() => { setVendorSearchVisible(false); setVendorQuery(""); setVendorResults([]); }}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.modalBody}>
+              <View style={styles.searchContainer}>
+                <Ionicons name="search" size={20} color="#6b7280" style={styles.searchIcon} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder="Search vendors by name..."
+                  placeholderTextColor="#6b7280"
+                  value={vendorQuery}
+                  onChangeText={handleVendorSearch}
+                  autoFocus
+                />
+              </View>
+
+              {searchingVendors && (
+                <View style={styles.loadingSearchContainer}>
+                  <ActivityIndicator size="small" color="#a855f7" />
+                </View>
+              )}
+
+              <FlatList
+                data={vendorResults}
+                keyExtractor={(item) => item._id}
+                renderItem={({ item }) => {
+                  const alreadyAdded = event?.vendors?.some(v => v._id === item._id);
+                  return (
+                    <TouchableOpacity
+                      style={styles.searchUserCard}
+                      onPress={() => !alreadyAdded && handleAddVendor(item._id)}
+                      disabled={alreadyAdded || addingVendor === item._id}
+                    >
+                      {item.images && item.images.length > 0 ? (
+                        <Image source={{ uri: item.images[0] }} style={styles.userAvatar} />
+                      ) : (
+                        <View style={styles.userAvatarPlaceholder}>
+                          <Ionicons name="briefcase" size={22} color="#a855f7" />
+                        </View>
+                      )}
+                      <View style={styles.userInfo}>
+                        <Text style={styles.userName}>{item.name}</Text>
+                        {item.rating ? (
+                          <Text style={styles.userEmail}>★ {item.rating}</Text>
+                        ) : null}
+                      </View>
+                      {alreadyAdded ? (
+                        <View style={styles.vendorBadge}>
+                          <Text style={styles.vendorBadgeText}>Added</Text>
+                        </View>
+                      ) : addingVendor === item._id ? (
+                        <ActivityIndicator size="small" color="#a855f7" />
+                      ) : (
+                        <Ionicons name="add-circle-outline" size={24} color="#a855f7" />
+                      )}
+                    </TouchableOpacity>
+                  );
+                }}
+                ListEmptyComponent={
+                  !searchingVendors && vendorQuery.length >= 2 ? (
+                    <View style={styles.emptySearchContainer}>
+                      <Ionicons name="briefcase-outline" size={48} color="#6b7280" />
+                      <Text style={styles.emptySearchText}>No vendors found</Text>
+                    </View>
+                  ) : !searchingVendors && vendorQuery.length < 2 ? (
+                    <View style={styles.emptySearchContainer}>
+                      <Ionicons name="search-outline" size={48} color="#6b7280" />
+                      <Text style={styles.emptySearchText}>Type to search vendors</Text>
                     </View>
                   ) : null
                 }

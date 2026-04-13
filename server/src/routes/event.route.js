@@ -15,7 +15,9 @@ import {
   getUserTickets,
   getEventTicketSales,
   rsvpEvent,
-  getEventHighlights
+  getEventHighlights,
+  addVendorToEvent,
+  removeVendorFromEvent,
 } from "../controllers/event.controller.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 
@@ -68,5 +70,9 @@ router.post("/events/:eventId/respond-invite", authenticate, respondToInvite);
 
 // Join event via share link
 router.post("/events/share/:shareToken/join", authenticate, joinEventByShareLink);
+
+// Vendor management for events (creator only)
+router.post("/events/:eventId/vendors/:vendorId", authenticate, addVendorToEvent);
+router.delete("/events/:eventId/vendors/:vendorId", authenticate, removeVendorFromEvent);
 
 export default router;

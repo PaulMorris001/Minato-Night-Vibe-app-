@@ -148,6 +148,8 @@ export const createTicketPaymentIntent = async (req, res) => {
     const feeCents = Math.round(amountCents * (PLATFORM_FEE_PERCENT / 100));
 
     const seller = event.createdBy;
+    if (!seller) return res.status(400).json({ message: "Event organizer not found" });
+
     const paymentIntentParams = {
       amount: amountCents,
       currency: "usd",
@@ -160,7 +162,7 @@ export const createTicketPaymentIntent = async (req, res) => {
     };
 
     // If seller has completed Stripe Connect onboarding, route funds to them
-    if (seller.stripeAccountId && seller.stripeOnboardingComplete) {
+    if (seller?.stripeAccountId && seller?.stripeOnboardingComplete) {
       paymentIntentParams.application_fee_amount = feeCents;
       paymentIntentParams.transfer_data = { destination: seller.stripeAccountId };
     }
@@ -198,6 +200,8 @@ export const createGuidePaymentIntent = async (req, res) => {
     const feeCents = Math.round(amountCents * (PLATFORM_FEE_PERCENT / 100));
 
     const seller = guide.author;
+    if (!seller) return res.status(400).json({ message: "Guide author not found" });
+
     const paymentIntentParams = {
       amount: amountCents,
       currency: "usd",
@@ -209,7 +213,7 @@ export const createGuidePaymentIntent = async (req, res) => {
       },
     };
 
-    if (seller.stripeAccountId && seller.stripeOnboardingComplete) {
+    if (seller?.stripeAccountId && seller?.stripeOnboardingComplete) {
       paymentIntentParams.application_fee_amount = feeCents;
       paymentIntentParams.transfer_data = { destination: seller.stripeAccountId };
     }

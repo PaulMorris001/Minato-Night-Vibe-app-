@@ -1,6 +1,7 @@
 import Event from "../models/event.model.js";
 import User from "../models/user.model.js";
 import Ticket from "../models/ticket.model.js";
+import { Vendor } from "../models/vendor.model.js";
 import Chat from "../models/chat.model.js";
 import Notification from "../models/notification.model.js";
 import ChatService from "../services/chat.service.js";
@@ -155,7 +156,8 @@ export const getEventById = async (req, res) => {
       .populate('invitedUsers', 'username email profilePicture')
       .populate('pendingInvites', 'username email profilePicture')
       .populate('rsvpUsers', '_id')
-      .populate('groupChatId', '_id name groupImage');
+      .populate('groupChatId', '_id name groupImage')
+      .populate('vendors', 'name images rating verified vendorType city');
 
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
@@ -561,7 +563,7 @@ export const getPublicEvents = async (req, res) => {
     const userId = req.user.id;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
-    const cacheKey = `public_events_${page}_${limit}_${city || ''}_${date || ''}`;
+    const cacheKey = `public_events_${userId}_${page}_${limit}_${city || ''}_${date || ''}`;
     const cached = getCache(cacheKey);
     if (cached) return res.status(200).json(cached);
 
@@ -838,5 +840,58 @@ export const getEventHighlights = async (req, res) => {
   } catch (error) {
     console.error("Get event highlights error:", error);
     res.status(500).json({ message: "Error fetching highlights", error: error.message });
+  }
+};
+
+// Add a vendor to an event (creator only)
+export const addVendorToEvent = async (req, res) => {
+  try {
+    const { eventId, vendorId } = req.params;
+    const userId = req.user.id;
+
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.createdBy.toString() !== userId) {
+      return res.status(403).json({ message: "Only the event creator can add vendors" });
+    }
+
+    const vendor = await Vendor.findById(vendorId);
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
+
+    if (event.vendors.some(v => v.toString() === vendorId)) {
+      return res.status(400).json({ message: "Vendor already added to this event" });
+    }
+
+    event.vendors.push(vendorId);
+    await event.save();
+
+    invalidateCachePattern(`event_detail_${eventId}_`);
+    res.status(200).json({ message: "Vendor added to event" });
+  } catch (error) {
+    console.error("Add vendor to event error:", error);
+    res.status(500).json({ message: "Failed to add vendor" });
+  }
+};
+
+// Remove a vendor from an event (creator only)
+export const removeVendorFromEvent = async (req, res) => {
+  try {
+    const { eventId, vendorId } = req.params;
+    const userId = req.user.id;
+
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.createdBy.toString() !== userId) {
+      return res.status(403).json({ message: "Only the event creator can remove vendors" });
+    }
+
+    event.vendors = event.vendors.filter(v => v.toString() !== vendorId);
+    await event.save();
+
+    invalidateCachePattern(`event_detail_${eventId}_`);
+    res.status(200).json({ message: "Vendor removed from event" });
+  } catch (error) {
+    console.error("Remove vendor from event error:", error);
+    res.status(500).json({ message: "Failed to remove vendor" });
   }
 };

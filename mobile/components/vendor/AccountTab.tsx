@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
@@ -210,7 +212,8 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
+    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Account Settings</Text>
         <TouchableOpacity
@@ -587,6 +590,7 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
 
       <View style={styles.bottomPadding} />
     </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 

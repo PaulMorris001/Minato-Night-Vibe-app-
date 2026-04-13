@@ -360,6 +360,7 @@ export default function MessagesScreen() {
             <FlatList
               data={searchedUsers}
               keyExtractor={(item) => item._id}
+              keyboardShouldPersistTaps="handled"
               renderItem={({ item }) => (
                 <TouchableOpacity
                   style={styles.userItem}

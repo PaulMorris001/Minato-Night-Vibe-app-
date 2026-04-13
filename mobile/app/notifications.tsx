@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -17,6 +17,7 @@ import { BASE_URL } from "@/constants/constants";
 import { Fonts } from "@/constants/fonts";
 import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
 import NotificationItemSkeleton from "@/components/skeletons/NotificationItemSkeleton";
+import * as Notifications from "expo-notifications";
 
 interface Notification {
   _id: string;
@@ -84,6 +85,7 @@ export default function NotificationsScreen() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+      Notifications.setBadgeCountAsync(0);
     } catch {}
   };
 
@@ -104,12 +106,35 @@ export default function NotificationsScreen() {
 
   const unreadCount = notifications.filter((n) => !n.read).length;
 
+  useEffect(() => {
+    Notifications.setBadgeCountAsync(unreadCount);
+  }, [unreadCount]);
+
   const handleNotifPress = (item: Notification) => {
     markRead(item._id);
-    if (item.type === "new_follower" && item.data?.followerId) {
-      router.push({ pathname: "/user-profile", params: { userId: item.data.followerId } } as any);
-    } else if (item.type === "event_invite" && item.data?.eventId) {
-      router.push({ pathname: "/event/[id]", params: { id: item.data.eventId } } as any);
+    switch (item.type) {
+      case "new_follower":
+        if (item.data?.followerId) {
+          router.push({ pathname: "/user-profile", params: { userId: item.data.followerId } } as any);
+        }
+        break;
+      case "event_invite":
+      case "invite_accepted":
+      case "event_update":
+      case "ticket_sold":
+        if (item.data?.eventId) {
+          router.push({ pathname: "/event/[id]", params: { id: item.data.eventId } } as any);
+        }
+        break;
+      case "guide_sold":
+        if (item.data?.guideId) {
+          router.push({ pathname: "/guide/[id]", params: { id: item.data.guideId } } as any);
+        }
+        break;
+      case "verification_approved":
+      case "verification_rejected":
+        router.push("/profile" as any);
+        break;
     }
   };
 

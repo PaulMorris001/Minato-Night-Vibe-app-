@@ -50,6 +50,12 @@ const eventSchema = mongoose.Schema({
     ref: "user"
   }],
 
+  // Vendors attached to this event by the creator
+  vendors: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "vendor"
+  }],
+
   // Event status
   isActive: { type: Boolean, default: true }
 }, {
