@@ -2,6 +2,8 @@ import axios from "axios";
 
 const BASE_URL = import.meta.env.VITE_API_URL || "https://night-vibe.onrender.com/api";
 
+console.log(BASE_URL)
+
 const client = axios.create({ baseURL: BASE_URL });
 
 client.interceptors.request.use((config) => {

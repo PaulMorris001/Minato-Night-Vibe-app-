@@ -87,13 +87,9 @@ export default function ServiceModal({
   };
 
   const pickImage = async () => {
-    const permissionResult = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-    if (permissionResult.granted === false) {
-      Alert.alert("Permission Required", "Please allow access to your photo library");
-      return;
-    }
-
+    // PHPickerViewController (iOS 14+) handles permissions itself — no pre-request needed.
+    // Calling requestMediaLibraryPermissionsAsync() from inside a Modal crashes iOS
+    // because it tries to present a native alert from a modal context.
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
