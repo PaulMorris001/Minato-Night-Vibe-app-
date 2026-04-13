@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { fetchVendorServices } from "@/libs/api";
 import {
@@ -14,6 +14,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { Service } from "@/libs/interfaces";
 import { Ionicons } from "@expo/vector-icons";
@@ -25,16 +26,70 @@ import * as SecureStore from "expo-secure-store";
 import { BASE_URL } from "@/constants/constants";
 import VendorCardSkeleton from "@/components/skeletons/VendorCardSkeleton";
 
+interface Review {
+  _id: string;
+  user: { _id: string; username: string; profilePicture?: string };
+  rating: number;
+  review: string;
+  createdAt: string;
+}
+
+function timeAgo(dateStr: string) {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return "Just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+function StarRow({ rating, size = 16, onPress }: { rating: number; size?: number; onPress?: (r: number) => void }) {
+  return (
+    <View style={{ flexDirection: "row", gap: 4 }}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <TouchableOpacity key={star} onPress={() => onPress?.(star)} disabled={!onPress} activeOpacity={0.7}>
+          <Ionicons
+            name={star <= rating ? "star" : "star-outline"}
+            size={size}
+            color={star <= rating ? "#f59e0b" : "#4b5563"}
+          />
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
 export default function VendorDetails() {
   const { vendorId, vendorName } = useLocalSearchParams();
   const router = useRouter();
   const formatPrice = useFormatPrice();
+
+  // Services
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Booking
   const [bookingService, setBookingService] = useState<Service | null>(null);
   const [bookingMessage, setBookingMessage] = useState("");
   const [bookingDate, setBookingDate] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Reviews + Rating
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [totalReviews, setTotalReviews] = useState(0);
+  const [userReview, setUserReview] = useState<Review | null>(null);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+
+  // Rating modal
+  const [ratingModalVisible, setRatingModalVisible] = useState(false);
+  const [selectedRating, setSelectedRating] = useState(0);
+  const [reviewText, setReviewText] = useState("");
+  const [submittingRating, setSubmittingRating] = useState(false);
+
+  const avgRating = reviews.length > 0
+    ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) * 10) / 10
+    : 0;
 
   useEffect(() => {
     const loadServices = async () => {
@@ -48,7 +103,63 @@ export default function VendorDetails() {
       }
     };
     loadServices();
+    fetchReviews();
   }, [vendorId]);
+
+  const fetchReviews = async () => {
+    setReviewsLoading(true);
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const res = await fetch(`${BASE_URL}/vendors/${vendorId}/reviews`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setReviews(data.reviews || []);
+        setTotalReviews(data.total || 0);
+        if (data.userReview) {
+          setUserReview(data.userReview);
+          setSelectedRating(data.userReview.rating);
+          setReviewText(data.userReview.review || "");
+        }
+      }
+    } catch (error) {
+      console.error("Error loading reviews:", error);
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const handleSubmitRating = async () => {
+    if (selectedRating === 0) {
+      Alert.alert("Error", "Please select a star rating");
+      return;
+    }
+    setSubmittingRating(true);
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const res = await fetch(`${BASE_URL}/vendors/${vendorId}/rate`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ rating: selectedRating, review: reviewText }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        Alert.alert("Thanks!", "Your rating has been saved.");
+        setRatingModalVisible(false);
+        fetchReviews();
+      } else {
+        Alert.alert("Error", data.message || "Failed to submit rating");
+      }
+    } catch {
+      Alert.alert("Error", "Failed to submit rating");
+    } finally {
+      setSubmittingRating(false);
+    }
+  };
 
   const handleBookService = async () => {
     if (!bookingDate.trim()) {
@@ -89,27 +200,19 @@ export default function VendorDetails() {
 
   const getAvailabilityColor = (availability: string) => {
     switch (availability) {
-      case "available":
-        return "#22c55e";
-      case "unavailable":
-        return "#ef4444";
-      case "coming_soon":
-        return "#f59e0b";
-      default:
-        return "#9ca3af";
+      case "available": return "#22c55e";
+      case "unavailable": return "#ef4444";
+      case "coming_soon": return "#f59e0b";
+      default: return "#9ca3af";
     }
   };
 
   const getAvailabilityText = (availability: string) => {
     switch (availability) {
-      case "available":
-        return "Available";
-      case "unavailable":
-        return "Unavailable";
-      case "coming_soon":
-        return "Coming Soon";
-      default:
-        return "Unknown";
+      case "available": return "Available";
+      case "unavailable": return "Unavailable";
+      case "coming_soon": return "Coming Soon";
+      default: return "Unknown";
     }
   };
 
@@ -218,6 +321,56 @@ export default function VendorDetails() {
     </View>
   );
 
+  const ReviewsSection = () => (
+    <View style={styles.reviewsSection}>
+      <View style={styles.reviewsHeader}>
+        <Text style={styles.reviewsTitle}>Reviews ({totalReviews})</Text>
+        <TouchableOpacity
+          style={styles.rateButton}
+          onPress={() => setRatingModalVisible(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="star-outline" size={16} color="#f59e0b" />
+          <Text style={styles.rateButtonText}>
+            {userReview ? "Edit Rating" : "Rate Vendor"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {reviewsLoading ? (
+        <ActivityIndicator color="#a855f7" style={{ marginVertical: 16 }} />
+      ) : reviews.length === 0 ? (
+        <Text style={styles.noReviewsText}>No reviews yet. Be the first!</Text>
+      ) : (
+        reviews.map((review) => (
+          <View key={review._id} style={styles.reviewCard}>
+            <View style={styles.reviewTop}>
+              <View style={styles.reviewUser}>
+                {review.user.profilePicture ? (
+                  <Image source={{ uri: review.user.profilePicture }} style={styles.reviewAvatar} />
+                ) : (
+                  <View style={styles.reviewAvatarPlaceholder}>
+                    <Text style={styles.reviewAvatarLetter}>
+                      {review.user.username?.[0]?.toUpperCase() || "?"}
+                    </Text>
+                  </View>
+                )}
+                <View>
+                  <Text style={styles.reviewUsername}>{review.user.username}</Text>
+                  <Text style={styles.reviewTime}>{timeAgo(review.createdAt)}</Text>
+                </View>
+              </View>
+              <StarRow rating={review.rating} size={14} />
+            </View>
+            {!!review.review && (
+              <Text style={styles.reviewText}>{review.review}</Text>
+            )}
+          </View>
+        ))
+      )}
+    </View>
+  );
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
@@ -241,6 +394,12 @@ export default function VendorDetails() {
             <Text style={styles.subtitle}>
               {services.length} {services.length === 1 ? "Service" : "Services"} Available
             </Text>
+            {totalReviews > 0 && (
+              <View style={styles.ratingRow}>
+                <Ionicons name="star" size={14} color="#f59e0b" />
+                <Text style={styles.ratingText}>{avgRating} ({totalReviews} review{totalReviews !== 1 ? "s" : ""})</Text>
+              </View>
+            )}
           </View>
         </View>
       </LinearGradient>
@@ -265,6 +424,7 @@ export default function VendorDetails() {
             </Text>
           </View>
         }
+        ListFooterComponent={<ReviewsSection />}
       />
 
       {/* Booking Modal */}
@@ -333,6 +493,74 @@ export default function VendorDetails() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      {/* Rating Modal */}
+      <Modal
+        visible={ratingModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setRatingModalVisible(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={styles.modalOverlay}
+        >
+          <TouchableOpacity
+            style={styles.modalBackdrop}
+            activeOpacity={1}
+            onPress={() => setRatingModalVisible(false)}
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>
+                {userReview ? "Edit Rating" : "Rate Vendor"}
+              </Text>
+              <TouchableOpacity onPress={() => setRatingModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#fff" />
+              </TouchableOpacity>
+            </View>
+
+            <Text style={styles.modalServiceName}>{vendorName}</Text>
+
+            <Text style={styles.inputLabel}>Your Rating</Text>
+            <View style={styles.starSelector}>
+              <StarRow rating={selectedRating} size={36} onPress={setSelectedRating} />
+            </View>
+
+            <Text style={styles.inputLabel}>Review (optional)</Text>
+            <TextInput
+              style={[styles.modalInput, styles.modalTextArea]}
+              placeholder="Share your experience..."
+              placeholderTextColor="#6b7280"
+              value={reviewText}
+              onChangeText={setReviewText}
+              multiline
+              numberOfLines={4}
+              maxLength={500}
+            />
+
+            <TouchableOpacity
+              style={[styles.submitButton, selectedRating === 0 && styles.submitButtonDisabled]}
+              onPress={handleSubmitRating}
+              disabled={submittingRating || selectedRating === 0}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={["#f59e0b", "#d97706"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.submitGradient}
+              >
+                {submittingRating ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.submitText}>Submit Rating</Text>
+                )}
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -347,12 +575,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: Colors.darkBackground,
-  },
-  loadingText: {
-    color: "#9ca3af",
-    fontSize: 16,
-    fontFamily: Fonts.regular,
-    marginTop: 12,
   },
   header: {
     paddingTop: 60,
@@ -380,6 +602,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Fonts.regular,
     color: "#9ca3af",
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 4,
+  },
+  ratingText: {
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+    color: "#f59e0b",
   },
   listContent: {
     padding: 16,
@@ -563,6 +796,108 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     color: "#fff",
   },
+  // Reviews section
+  reviewsSection: {
+    marginTop: 8,
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: "#374151",
+  },
+  reviewsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  reviewsTitle: {
+    fontSize: 18,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  rateButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "rgba(245,158,11,0.12)",
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.3)",
+  },
+  rateButtonText: {
+    fontSize: 13,
+    fontFamily: Fonts.semiBold,
+    color: "#f59e0b",
+  },
+  noReviewsText: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#6b7280",
+    textAlign: "center",
+    paddingVertical: 24,
+  },
+  reviewCard: {
+    backgroundColor: "#1f1f2e",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  reviewTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 8,
+  },
+  reviewUser: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  reviewAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#374151",
+  },
+  reviewAvatarPlaceholder: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#374151",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  reviewAvatarLetter: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#fff",
+  },
+  reviewUsername: {
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    color: "#fff",
+  },
+  reviewTime: {
+    fontSize: 11,
+    fontFamily: Fonts.regular,
+    color: "#6b7280",
+    marginTop: 1,
+  },
+  reviewText: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#9ca3af",
+    lineHeight: 20,
+  },
+  // Rating modal specifics
+  starSelector: {
+    alignItems: "center",
+    paddingVertical: 16,
+  },
+  // Modals
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.7)",
@@ -621,6 +956,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
     marginTop: 4,
+  },
+  submitButtonDisabled: {
+    opacity: 0.5,
   },
   submitGradient: {
     paddingVertical: 14,

@@ -5,6 +5,8 @@ import {
   StyleSheet,
   Modal,
   ScrollView,
+  KeyboardAvoidingView,
+  Platform,
   TextInput,
   TouchableOpacity,
   Alert,
@@ -18,6 +20,7 @@ import axios from "axios";
 import { Colors } from "@/constants/colors";
 import { Service } from "@/libs/interfaces";
 import { BASE_URL } from "@/constants/constants";
+import { uploadMultipleImages } from "@/utils/imageUpload";
 
 interface ServiceModalProps {
   visible: boolean;
@@ -95,14 +98,11 @@ export default function ServiceModal({
       mediaTypes: ['images'],
       allowsMultipleSelection: true,
       quality: 0.8,
-      base64: true,
     });
 
     if (!result.canceled && result.assets) {
-      const newImages = result.assets.map(asset =>
-        `data:image/jpeg;base64,${asset.base64}`
-      );
-      setImages([...images, ...newImages].slice(0, 5)); // Max 5 images
+      const newUris = result.assets.map(asset => asset.uri);
+      setImages(prev => [...prev, ...newUris].slice(0, 5)); // Max 5 images
     }
   };
 
@@ -139,6 +139,18 @@ export default function ServiceModal({
         .map((f) => f.trim())
         .filter((f) => f.length > 0);
 
+      // Separate already-uploaded Cloudinary URLs from new local URIs
+      const alreadyUploaded = images.filter(img => img.startsWith("http"));
+      const localUris = images.filter(img => !img.startsWith("http"));
+
+      let uploadedUrls: string[] = [];
+      if (localUris.length > 0) {
+        const results = await uploadMultipleImages(localUris, "nightvibe/services", token!);
+        uploadedUrls = results.map(r => r.url);
+      }
+
+      const finalImages = [...alreadyUploaded, ...uploadedUrls];
+
       // Build request data
       const requestData: any = {
         name: formData.name.trim(),
@@ -148,7 +160,7 @@ export default function ServiceModal({
         currency: formData.currency,
         availability: formData.availability,
         features: featuresArray,
-        images: images,
+        images: finalImages,
       };
 
       // Add duration if provided
@@ -207,7 +219,11 @@ export default function ServiceModal({
           <View style={styles.placeholder} />
         </View>
 
-        <ScrollView style={styles.form} showsVerticalScrollIndicator={false}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={{ flex: 1 }}
+        >
+        <ScrollView style={styles.form} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
           {/* Service Name */}
           <View style={styles.field}>
             <Text style={styles.label}>
@@ -423,6 +439,7 @@ export default function ServiceModal({
 
           <View style={styles.bottomPadding} />
         </ScrollView>
+        </KeyboardAvoidingView>
       </View>
     </Modal>
   );

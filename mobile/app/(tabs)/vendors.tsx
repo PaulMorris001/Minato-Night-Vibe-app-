@@ -202,6 +202,7 @@ export default function VendorsPage() {
         <FlatList
           data={searchResults}
           keyExtractor={(item) => item._id}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.vendorCard}

@@ -339,12 +339,19 @@ export const purchaseGuide = async (req, res) => {
         .json({ message: "You have already purchased this guide" });
     }
 
-    // Add user to purchasedBy array
+    // Paid guides must go through Stripe — reject direct purchase
+    if (guide.price > 0) {
+      return res.status(400).json({
+        message: "This guide requires payment. Use the Stripe checkout flow.",
+      });
+    }
+
+    // Free guide — grant access directly
     guide.purchasedBy.push(userId);
     await guide.save();
 
     res.status(200).json({
-      message: "Guide purchased successfully",
+      message: "Guide accessed successfully",
       guide,
     });
   } catch (error) {

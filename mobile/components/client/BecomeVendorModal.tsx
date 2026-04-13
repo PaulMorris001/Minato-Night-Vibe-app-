@@ -216,7 +216,7 @@ export default function BecomeVendorModal({
         </TouchableOpacity>
         {showTypeDropdown && (
           <View style={styles.dropdown}>
-            <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+            <ScrollView style={styles.dropdownScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
               {vendorTypes.map((type) => (
                 <TouchableOpacity
                   key={type._id}
@@ -289,7 +289,7 @@ export default function BecomeVendorModal({
         </TouchableOpacity>
         {showCityDropdown && (
           <View style={styles.dropdown}>
-            <ScrollView style={styles.dropdownScroll} nestedScrollEnabled>
+            <ScrollView style={styles.dropdownScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
               {cities.map((city) => (
                 <TouchableOpacity
                   key={city._id}

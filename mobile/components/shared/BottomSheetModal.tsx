@@ -55,6 +55,8 @@ export default function BottomSheetModal({
             <ScrollView
               style={styles.body}
               showsVerticalScrollIndicator={showsVerticalScrollIndicator}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
             >
               {children}
             </ScrollView>

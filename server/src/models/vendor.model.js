@@ -19,7 +19,7 @@ const vendorSchema = mongoose.Schema({
     priceRange: { type: Number, required: true },
     rating: { type: Number, default: 0 },
     contact: {
-        phone: { type: String, required: true },
+        phone: { type: String },
         instagram: { type: String },
         website: { type: String },
     },

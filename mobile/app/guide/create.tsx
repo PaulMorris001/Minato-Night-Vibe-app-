@@ -18,7 +18,7 @@ import { GUIDE_TOPICS, GuideSection, City } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
 import { BASE_URL } from "@/constants/constants";
 import { fetchCities } from "@/libs/api";
-import { Picker } from "@react-native-picker/picker";
+import { Colors } from "@/constants/colors";
 
 export default function CreateGuidePage() {
   const router = useRouter();
@@ -34,6 +34,9 @@ export default function CreateGuidePage() {
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState<City[]>([]);
   const [loadingCities, setLoadingCities] = useState(true);
+  const [selectedCity, setSelectedCity] = useState<City | null>(null);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  const [showTopicDropdown, setShowTopicDropdown] = useState(false);
 
   useEffect(() => {
     fetchCities()
@@ -187,7 +190,7 @@ export default function CreateGuidePage() {
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View style={styles.header}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
@@ -200,6 +203,7 @@ export default function CreateGuidePage() {
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
         <View style={styles.inputGroup}>
           <Text style={styles.label}>
@@ -249,29 +253,39 @@ export default function CreateGuidePage() {
             City <Text style={styles.required}>*</Text>
           </Text>
           {loadingCities ? (
-            <View style={[styles.pickerContainer, styles.loadingContainer]}>
-              <ActivityIndicator size="small" color="#a855f7" />
+            <View style={[styles.dropdownButton, styles.loadingContainer]}>
+              <ActivityIndicator size="small" color={Colors.primary} />
               <Text style={styles.loadingText}>Loading cities...</Text>
             </View>
           ) : (
-            <View style={styles.pickerContainer}>
-              <Picker
-                selectedValue={city}
-                onValueChange={setCity}
-                style={styles.picker}
-                dropdownIconColor="#fff"
-                enabled={!loadingCities && cities.length > 0}
+            <>
+              <TouchableOpacity
+                style={styles.dropdownButton}
+                onPress={() => { setShowCityDropdown(!showCityDropdown); setShowTopicDropdown(false); }}
               >
-                <Picker.Item label="Select a city..." value="" />
-                {cities.map((c) => (
-                  <Picker.Item
-                    key={c._id}
-                    label={`${c.name}, ${c.state}`}
-                    value={c._id}
-                  />
-                ))}
-              </Picker>
-            </View>
+                <Text style={[styles.dropdownText, !selectedCity && styles.dropdownPlaceholder]}>
+                  {selectedCity ? `${selectedCity.name}, ${selectedCity.state}` : "Select a city..."}
+                </Text>
+                <Ionicons name={showCityDropdown ? "chevron-up" : "chevron-down"} size={20} color="#9ca3af" />
+              </TouchableOpacity>
+              {showCityDropdown && (
+                <View style={styles.dropdown}>
+                  <ScrollView style={styles.dropdownScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                    {cities.map((c) => (
+                      <TouchableOpacity
+                        key={c._id}
+                        style={[styles.dropdownItem, selectedCity?._id === c._id && styles.dropdownItemSelected]}
+                        onPress={() => { setSelectedCity(c); setCity(c._id); setShowCityDropdown(false); }}
+                      >
+                        <Text style={[styles.dropdownItemText, selectedCity?._id === c._id && styles.dropdownItemTextSelected]}>
+                          {c.name}, {c.state}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </>
           )}
         </View>
 
@@ -279,19 +293,32 @@ export default function CreateGuidePage() {
           <Text style={styles.label}>
             Topic <Text style={styles.required}>*</Text>
           </Text>
-          <View style={styles.pickerContainer}>
-            <Picker
-              selectedValue={topic}
-              onValueChange={setTopic}
-              style={styles.picker}
-              dropdownIconColor="#fff"
-            >
-              <Picker.Item label="Select a topic..." value="" />
-              {GUIDE_TOPICS.map((t) => (
-                <Picker.Item key={t} label={t} value={t} />
-              ))}
-            </Picker>
-          </View>
+          <TouchableOpacity
+            style={styles.dropdownButton}
+            onPress={() => { setShowTopicDropdown(!showTopicDropdown); setShowCityDropdown(false); }}
+          >
+            <Text style={[styles.dropdownText, !topic && styles.dropdownPlaceholder]}>
+              {topic || "Select a topic..."}
+            </Text>
+            <Ionicons name={showTopicDropdown ? "chevron-up" : "chevron-down"} size={20} color="#9ca3af" />
+          </TouchableOpacity>
+          {showTopicDropdown && (
+            <View style={styles.dropdown}>
+              <ScrollView style={styles.dropdownScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+                {GUIDE_TOPICS.map((t) => (
+                  <TouchableOpacity
+                    key={t}
+                    style={[styles.dropdownItem, topic === t && styles.dropdownItemSelected]}
+                    onPress={() => { setTopic(t); setShowTopicDropdown(false); }}
+                  >
+                    <Text style={[styles.dropdownItemText, topic === t && styles.dropdownItemTextSelected]}>
+                      {t}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
         </View>
 
         <View style={styles.sectionsContainer}>
@@ -304,7 +331,7 @@ export default function CreateGuidePage() {
               onPress={addSection}
               disabled={sections.length >= 10}
             >
-              <Ionicons name="add-circle" size={20} color="#a855f7" />
+              <Ionicons name="add-circle" size={20} color={Colors.primary} />
               <Text style={styles.addSectionText}>Add Section</Text>
             </TouchableOpacity>
           </View>
@@ -451,13 +478,6 @@ const styles = StyleSheet.create({
     color: "#6b7280",
     marginTop: 4,
   },
-  pickerContainer: {
-    backgroundColor: "#1f1f2e",
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#374151",
-    overflow: "hidden",
-  },
   loadingContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -470,8 +490,51 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: "#9ca3af",
   },
-  picker: {
+  dropdownButton: {
+    backgroundColor: "#1f1f2e",
+    borderRadius: 8,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#374151",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  dropdownText: {
+    fontSize: 16,
+    fontFamily: Fonts.regular,
     color: "#fff",
+  },
+  dropdownPlaceholder: {
+    color: "#6b7280",
+  },
+  dropdown: {
+    marginTop: 4,
+    backgroundColor: "#1f1f2e",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#374151",
+    maxHeight: 200,
+  },
+  dropdownScroll: {
+    maxHeight: 200,
+  },
+  dropdownItem: {
+    padding: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#374151",
+  },
+  dropdownItemSelected: {
+    backgroundColor: "rgba(168, 85, 247, 0.1)",
+  },
+  dropdownItemText: {
+    fontSize: 16,
+    fontFamily: Fonts.regular,
+    color: "#e5e7eb",
+  },
+  dropdownItemTextSelected: {
+    color: Colors.primary,
+    fontFamily: Fonts.semiBold,
   },
   sectionsContainer: {
     marginTop: 20,
@@ -495,7 +558,7 @@ const styles = StyleSheet.create({
   addSectionText: {
     fontSize: 14,
     fontFamily: Fonts.semiBold,
-    color: "#a855f7",
+    color: Colors.primary,
   },
   sectionCard: {
     backgroundColor: "#1f1f2e",
@@ -514,7 +577,7 @@ const styles = StyleSheet.create({
   sectionNumber: {
     fontSize: 16,
     fontFamily: Fonts.bold,
-    color: "#a855f7",
+    color: Colors.primary,
   },
   removeSectionButton: {
     padding: 4,
@@ -552,7 +615,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#374151",
   },
   publishButton: {
-    backgroundColor: "#a855f7",
+    backgroundColor: Colors.primary,
   },
   buttonText: {
     fontSize: 16,

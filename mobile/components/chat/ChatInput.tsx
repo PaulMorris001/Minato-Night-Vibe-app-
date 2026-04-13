@@ -4,10 +4,10 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Platform,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Fonts } from "@/constants/fonts";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -24,6 +24,7 @@ export default function ChatInput({
   placeholder = "Type a message...",
   disabled = false,
 }: ChatInputProps) {
+  const insets = useSafeAreaInsets();
   const [message, setMessage] = useState("");
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
@@ -67,7 +68,7 @@ export default function ChatInput({
   };
 
   return (
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingBottom: insets.bottom + 8 }]}>
         {onImagePick && (
           <TouchableOpacity
             style={styles.iconButton}
@@ -119,7 +120,6 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     paddingHorizontal: 12,
     paddingVertical: 10,
-    paddingBottom: Platform.OS === "android" ? 32 : 24,
     backgroundColor: "#1f1f2e",
     borderTopWidth: 1,
     borderTopColor: "#374151",

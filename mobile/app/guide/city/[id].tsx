@@ -12,6 +12,7 @@ import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import { Guide, GUIDE_TOPICS } from "@/libs/interfaces";
+import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { BASE_URL } from "@/constants/constants";
 import { useFormatPrice } from "@/hooks/useFormatPrice";
@@ -135,7 +136,7 @@ export default function CityGuidesPage() {
 
       <View style={styles.guideFooter}>
         <View style={styles.topicBadge}>
-          <Ionicons name="pricetag" size={12} color="#a855f7" />
+          <Ionicons name="pricetag" size={12} color={Colors.primary} />
           <Text style={styles.topicText}>{item.topic}</Text>
         </View>
         <View style={styles.statsRow}>
@@ -256,6 +257,7 @@ export default function CityGuidesPage() {
           renderItem={renderTopicFilter}
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.topicFilterList}
+          keyboardShouldPersistTaps="handled"
         />
       </View>
 
@@ -268,6 +270,7 @@ export default function CityGuidesPage() {
           renderItem={renderGuideCard}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}
+          keyboardShouldPersistTaps="handled"
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Ionicons
@@ -356,8 +359,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   priceFilterButtonActive: {
-    backgroundColor: "#a855f7",
-    borderColor: "#a855f7",
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   priceFilterText: {
     fontSize: 14,
@@ -392,8 +395,8 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   topicFilterButtonActive: {
-    backgroundColor: "#a855f7",
-    borderColor: "#a855f7",
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
   },
   topicFilterText: {
     fontSize: 13,
@@ -447,7 +450,7 @@ const styles = StyleSheet.create({
   priceValue: {
     fontSize: 18,
     fontFamily: Fonts.bold,
-    color: "#a855f7",
+    color: Colors.primary,
   },
   guideDescription: {
     fontSize: 14,
@@ -473,7 +476,7 @@ const styles = StyleSheet.create({
   topicText: {
     fontSize: 12,
     fontFamily: Fonts.medium,
-    color: "#a855f7",
+    color: Colors.primary,
   },
   statsRow: {
     flexDirection: "row",

@@ -144,6 +144,7 @@ export default function SearchUsersScreen() {
         <FlatList
           data={users}
           renderItem={renderUserItem}
+          keyboardShouldPersistTaps="handled"
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.listContent}
           ListEmptyComponent={

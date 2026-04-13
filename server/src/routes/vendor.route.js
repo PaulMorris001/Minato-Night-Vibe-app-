@@ -5,7 +5,10 @@ import {
   getVendorsByCityAndType,
   getAllVendorTypes,
   searchVendors,
+  rateVendor,
+  getVendorReviews,
 } from "../controllers/vendors.controller.js";
+import { authenticate } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
 
@@ -14,5 +17,7 @@ router.get("/vendor-types", getAllVendorTypes);
 router.get("/cities/:cityId/vendor-types", getVendorTypesByCity);
 router.get("/cities/:cityId/vendors/:vendorTypeId", getVendorsByCityAndType);
 router.get("/vendors/search", searchVendors);
+router.post("/vendors/:vendorId/rate", authenticate, rateVendor);
+router.get("/vendors/:vendorId/reviews", authenticate, getVendorReviews);
 
 export default router;

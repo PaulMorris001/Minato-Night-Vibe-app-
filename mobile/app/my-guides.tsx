@@ -14,6 +14,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Guide } from "@/libs/interfaces";
+import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
 import { BASE_URL } from "@/constants/constants";
 import { useFormatPrice } from "@/hooks/useFormatPrice";
@@ -150,7 +151,7 @@ export default function MyGuidesPage() {
               router.push(`/guide/edit/${item._id}` as any);
             }}
           >
-            <Ionicons name="create-outline" size={18} color="#a855f7" />
+            <Ionicons name="create-outline" size={18} color={Colors.primary} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.actionButton}
@@ -182,7 +183,7 @@ export default function MyGuidesPage() {
           style={styles.createButton}
           onPress={() => router.push("/guide/create" as any)}
         >
-          <Ionicons name="add-circle-outline" size={24} color="#a855f7" />
+          <Ionicons name="add-circle-outline" size={24} color={Colors.primary} />
         </TouchableOpacity>
       </View>
 
@@ -199,8 +200,8 @@ export default function MyGuidesPage() {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#a855f7"
-              colors={["#a855f7"]}
+              tintColor={Colors.primary}
+              colors={[Colors.primary]}
             />
           }
           ListEmptyComponent={
@@ -346,7 +347,7 @@ const styles = StyleSheet.create({
   priceText: {
     fontSize: 13,
     fontFamily: Fonts.bold,
-    color: "#a855f7",
+    color: Colors.primary,
   },
   actionsRow: {
     flexDirection: "row",
@@ -382,7 +383,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   emptyCreateButton: {
-    backgroundColor: "#a855f7",
+    backgroundColor: Colors.primary,
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
