@@ -22,6 +22,7 @@ import verificationRoutes from "./routes/verification.route.js";
 import bookingRoutes from "./routes/booking.route.js";
 import deleteAccountRoutes from "./routes/deleteAccount.route.js";
 import privacyRoutes from "./routes/privacy.route.js";
+import csaeRoutes from "./routes/csae.route.js";
 
 
 const app = express();
@@ -62,6 +63,7 @@ app.use("/api/", verificationRoutes);
 app.use("/api/", bookingRoutes);
 app.use("/", deleteAccountRoutes);
 app.use("/", privacyRoutes);
+app.use("/", csaeRoutes);
 
 
 // Initialize Socket.IO
