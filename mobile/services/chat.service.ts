@@ -36,7 +36,7 @@ export interface Message {
   content?: string;
   imageUrl?: string;
   event?: any;
-  status: "sent" | "delivered" | "read";
+  status: "sent" | "delivered" | "read" | "sending" | "failed";
   readBy?: Array<{ user: string; readAt: string }>;
   replyTo?: Message;
   isDeleted: boolean;

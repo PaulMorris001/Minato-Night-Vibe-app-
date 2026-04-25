@@ -28,6 +28,7 @@ export default function VendorDashboard() {
   const [stats, setStats] = useState<VendorStats | null>(null);
   const [services, setServices] = useState<Service[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [pendingBookingsCount, setPendingBookingsCount] = useState(0);
 
   useEffect(() => {
     loadInitialData();
@@ -35,8 +36,21 @@ export default function VendorDashboard() {
 
   const loadInitialData = async () => {
     setLoading(true);
-    await Promise.all([fetchStats(), fetchServices()]);
+    await Promise.all([fetchStats(), fetchServices(), fetchPendingCount()]);
     setLoading(false);
+  };
+
+  const fetchPendingCount = async () => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const res = await fetch(`${BASE_URL}/bookings/vendor?status=pending`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setPendingBookingsCount(Array.isArray(data) ? data.length : 0);
+      }
+    } catch {}
   };
 
   const fetchStats = async () => {
@@ -76,17 +90,25 @@ export default function VendorDashboard() {
   const renderTabButton = (
     tab: TabType,
     icon: keyof typeof Ionicons.glyphMap,
-    label: string
+    label: string,
+    badgeCount?: number
   ) => (
     <TouchableOpacity
       style={[styles.tabButton, activeTab === tab && styles.tabButtonActive]}
       onPress={() => setActiveTab(tab)}
     >
-      <Ionicons
-        name={icon}
-        size={24}
-        color={activeTab === tab ? Colors.primary : "#9ca3af"}
-      />
+      <View style={{ position: "relative" }}>
+        <Ionicons
+          name={icon}
+          size={24}
+          color={activeTab === tab ? Colors.primary : "#9ca3af"}
+        />
+        {badgeCount != null && badgeCount > 0 && (
+          <View style={styles.tabBadge}>
+            <Text style={styles.tabBadgeText}>{badgeCount > 99 ? "99+" : badgeCount}</Text>
+          </View>
+        )}
+      </View>
       <Text
         style={[
           styles.tabLabel,
@@ -140,7 +162,7 @@ export default function VendorDashboard() {
       <View style={styles.tabContainer}>
         {renderTabButton("dashboard", "grid-outline", "Dashboard")}
         {renderTabButton("services", "briefcase-outline", "Services")}
-        {renderTabButton("bookings", "calendar-outline", "Bookings")}
+        {renderTabButton("bookings", "calendar-outline", "Bookings", pendingBookingsCount)}
         {renderTabButton("chats", "chatbubbles-outline", "Chats")}
         {renderTabButton("account", "person-outline", "Account")}
       </View>
@@ -202,6 +224,24 @@ const styles = StyleSheet.create({
   tabLabelActive: {
     color: Colors.primary,
     fontWeight: "700",
+  },
+  tabBadge: {
+    position: "absolute",
+    top: -4,
+    right: -6,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: "#EC4899",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 2,
+  },
+  tabBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontWeight: "700",
+    lineHeight: 11,
   },
   content: {
     flex: 1,

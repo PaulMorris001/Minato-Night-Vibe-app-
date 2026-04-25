@@ -3,6 +3,7 @@ import { Link, useRouter } from "expo-router";
 import {
   View,
   Text,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   KeyboardAvoidingView,
@@ -29,6 +30,7 @@ export default function Login() {
   const { setActiveAccount } = useAccount();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [showRolePicker, setShowRolePicker] = useState(false);
@@ -212,14 +214,33 @@ export default function Login() {
             keyboardType="email-address"
           />
 
-          <FormInput
-            label="Password"
-            placeholder="Enter your password"
-            value={password}
-            onChangeText={setPassword}
-            autoCapitalize="none"
-            secureTextEntry
-          />
+          <View style={styles.passwordContainer}>
+            <Text style={styles.passwordLabel}>Password</Text>
+            <View style={styles.passwordRow}>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="Enter your password"
+                placeholderTextColor="#6b7280"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoComplete="password"
+                textContentType="password"
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword((v) => !v)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                style={styles.eyeButton}
+              >
+                <Ionicons
+                  name={showPassword ? "eye-off-outline" : "eye-outline"}
+                  size={20}
+                  color="#6b7280"
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
 
           <TouchableOpacity
             style={styles.forgotPasswordButton}
@@ -359,6 +380,33 @@ const styles = StyleSheet.create({
   },
   form: {
     marginBottom: 30,
+  },
+  passwordContainer: {
+    marginBottom: 4,
+  },
+  passwordLabel: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#e5e7eb",
+    marginBottom: 8,
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1f1f2e",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#374151",
+    paddingHorizontal: 14,
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: "#fff",
+  },
+  eyeButton: {
+    paddingLeft: 8,
   },
   forgotPasswordButton: {
     alignSelf: "flex-end",

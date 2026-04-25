@@ -14,10 +14,12 @@ import {
   Outfit_800ExtraBold,
   Outfit_900Black,
 } from "@expo-google-fonts/outfit";
+import { BricolageGrotesque_800ExtraBold } from "@expo-google-fonts/bricolage-grotesque";
 import * as SplashScreen from "expo-splash-screen";
 import * as NavigationBar from "expo-navigation-bar";
 import { PortalProvider } from "@gorhom/portal";
 import { AccountProvider } from "@/contexts/AccountContext";
+import { UnreadProvider } from "@/contexts/UnreadContext";
 import socketService from "@/services/socket.service";
 import { StripeProvider } from "@stripe/stripe-react-native";
 import { theme } from "@/constants/theme";
@@ -96,6 +98,7 @@ export default Sentry.wrap(function RootLayout() {
     Outfit_700Bold,
     Outfit_800ExtraBold,
     Outfit_900Black,
+    BricolageGrotesque_800ExtraBold,
   });
 
   useEffect(() => {
@@ -209,6 +212,7 @@ export default Sentry.wrap(function RootLayout() {
         merchantIdentifier="merchant.com.nightvibe.mobile"
       >
         <AccountProvider>
+          <UnreadProvider>
           <PortalProvider>
             <StatusBar style="light" />
             <Stack
@@ -220,6 +224,7 @@ export default Sentry.wrap(function RootLayout() {
               }}
             />
           </PortalProvider>
+          </UnreadProvider>
         </AccountProvider>
       </StripeProvider>
     </ErrorBoundary>

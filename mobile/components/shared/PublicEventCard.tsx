@@ -31,6 +31,7 @@ export interface PublicEvent {
   userHasPurchased?: boolean;
   isCreator?: boolean;
   isFavorited?: boolean;
+  userStatus?: "creator" | "accepted" | "pending" | "none";
   rsvpCount?: number;
   createdBy: {
     _id: string;

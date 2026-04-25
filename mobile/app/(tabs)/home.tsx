@@ -5,148 +5,265 @@ import {
   Text,
   TouchableOpacity,
   StyleSheet,
-  StatusBar,
-  Animated,
   Alert,
   RefreshControl,
   AppState,
-  Dimensions,
+  FlatList,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { Image } from "expo-image";
 import { useRouter } from "expo-router";
-import { Fonts } from "@/constants/fonts";
 import * as SecureStore from "expo-secure-store";
 import { BASE_URL } from "@/constants/constants";
-import { fetchCities } from "@/libs/api";
-import { City } from "@/libs/interfaces";
-import Carousel from "@/components/Carousel";
+import { Fonts } from "@/constants/fonts";
 import CreateEventModal from "@/components/client/CreateEventModal";
-import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
 import PublicEventCard, { PublicEvent } from "@/components/shared/PublicEventCard";
-import EventCardSkeleton from "@/components/skeletons/EventCardSkeleton";
 import { useStripePayment } from "@/hooks/useStripePayment";
 import { trackEvent } from "@/utils/analytics";
+
+const C = {
+  bg: "#0B0613",
+  surface: "#1A1030",
+  surfaceHi: "#241540",
+  stroke: "rgba(255,255,255,0.06)",
+  strokeHi: "rgba(255,255,255,0.12)",
+  text: "#F4EEFF",
+  textDim: "rgba(244,238,255,0.64)",
+  textMute: "rgba(244,238,255,0.42)",
+  purple: "#A855F7",
+  purpleDeep: "#7C3AED",
+  pink: "#EC4899",
+  cyan: "#22D3EE",
+  amber: "#F59E0B",
+};
+
+interface Vendor {
+  _id: string;
+  vendorName?: string;
+  businessName?: string;
+  username?: string;
+  category?: string;
+  vendorType?: string;
+  profilePicture?: string;
+  image?: string;
+}
+
+const QUICK_ACTIONS = [
+  { icon: "home-outline" as const, label: "House Party", color: C.purple },
+  { icon: "ticket-outline" as const, label: "Ticketed Event", color: C.pink },
+  { icon: "walk-outline" as const, label: "Bar Crawl", color: C.cyan },
+  { icon: "briefcase-outline" as const, label: "Book Vendor", color: C.amber },
+];
+
+function SectionHeader({ title, subtitle, onAction, actionLabel }: { title: string; subtitle?: string; onAction?: () => void; actionLabel?: string }) {
+  return (
+    <View style={styles.sectionHeader}>
+      <View>
+        <Text style={styles.sectionTitle}>{title}</Text>
+        {subtitle && <Text style={styles.sectionSubtitle}>{subtitle}</Text>}
+      </View>
+      {onAction && actionLabel && (
+        <TouchableOpacity onPress={onAction} activeOpacity={0.7}>
+          <Text style={styles.sectionAction}>{actionLabel}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+function SmallEventCard({
+  event,
+  onPress,
+  onPurchase,
+  onJoin,
+}: {
+  event: PublicEvent;
+  onPress: () => void;
+  onPurchase: (id: string, title: string) => void;
+  onJoin: (id: string, title: string) => void;
+}) {
+  const owned = event.isCreator || event.userHasPurchased || event.userStatus === "accepted";
+
+  return (
+    <TouchableOpacity style={styles.smallCard} onPress={onPress} activeOpacity={0.8}>
+      <LinearGradient colors={["#2D1B69", "#1A1030"]} style={styles.smallCardInner}>
+        <View style={styles.smallCardImageWrap}>
+          {event.image ? (
+            <Image source={{ uri: event.image }} style={styles.smallCardImage} contentFit="cover" />
+          ) : (
+            <View style={[styles.smallCardImage, { backgroundColor: C.surfaceHi, justifyContent: "center", alignItems: "center" }]}>
+              <Ionicons name="calendar" size={24} color={C.purple} />
+            </View>
+          )}
+          {/* Price badge */}
+          <View style={[styles.smallCardBadge, event.isPaid ? styles.smallCardBadgePaid : styles.smallCardBadgeFree]}>
+            <Text style={styles.smallCardBadgeText}>
+              {event.isPaid ? `$${event.ticketPrice ?? ""}` : "FREE"}
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.smallCardContent}>
+          <Text style={styles.smallCardTitle} numberOfLines={2}>{event.title}</Text>
+          <Text style={styles.smallCardDate} numberOfLines={1}>
+            {new Date(event.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </Text>
+
+          {owned ? (
+            <View style={styles.smallCardOwned}>
+              <Ionicons name="checkmark-circle" size={12} color={C.purple} />
+              <Text style={styles.smallCardOwnedText}>
+                {event.isCreator ? "Hosting" : "Going"}
+              </Text>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.smallCardAction, event.isPaid && styles.smallCardActionPaid]}
+              activeOpacity={0.85}
+              onPress={(e) => {
+                e.stopPropagation();
+                if (event.isPaid) {
+                  onPurchase(event._id, event.title);
+                } else {
+                  onJoin(event._id, event.title);
+                }
+              }}
+            >
+              <Text style={styles.smallCardActionText}>
+                {event.isPaid ? "Get Ticket" : "Join Free"}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
+function VendorCard({ vendor, onPress }: { vendor: Vendor; onPress: () => void }) {
+  const name = vendor.vendorName || vendor.businessName || vendor.username || "Vendor";
+  const type = vendor.category || vendor.vendorType || "";
+  return (
+    <TouchableOpacity style={styles.vendorCard} onPress={onPress} activeOpacity={0.8}>
+      <View style={styles.vendorCardImage}>
+        {vendor.profilePicture || vendor.image ? (
+          <Image
+            source={{ uri: vendor.profilePicture || vendor.image }}
+            style={{ width: "100%", height: "100%" }}
+            contentFit="cover"
+          />
+        ) : (
+          <LinearGradient colors={[C.purple, C.purpleDeep]} style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+            <Ionicons name="briefcase" size={28} color="#fff" />
+          </LinearGradient>
+        )}
+      </View>
+      <View style={styles.vendorCardContent}>
+        <Text style={styles.vendorCardName} numberOfLines={1}>{name}</Text>
+        {!!type && <Text style={styles.vendorCardType} numberOfLines={1}>{type}</Text>}
+      </View>
+    </TouchableOpacity>
+  );
+}
 
 export default function Home() {
   const router = useRouter();
   const { payForTicket } = useStripePayment();
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [publicEvents, setPublicEvents] = useState<PublicEvent[]>([]);
-  const [hasMorePublicEvents, setHasMorePublicEvents] = useState(false);
   const [highlights, setHighlights] = useState<{ trending: PublicEvent[]; upcoming: PublicEvent[] }>({ trending: [], upcoming: [] });
-  const [loadingEvents, setLoadingEvents] = useState(false);
-  const [loadingHighlights, setLoadingHighlights] = useState(false);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [username, setUsername] = useState("");
   const [selectedCity, setSelectedCity] = useState<string | null>(null);
-  const [cities, setCities] = useState<City[]>([]);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Animation values
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(50)).current;
-  const scaleAnim = useRef(new Animated.Value(0.9)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+  const getGreeting = () => {
+    const h = new Date().getHours();
+    if (h < 12) return "Morning";
+    if (h < 18) return "Afternoon";
+    return "Evening";
+  };
+
+  const getGreetingEmoji = () => {
+    const h = new Date().getHours();
+    if (h < 12) return "☀️";
+    if (h < 18) return "🌤️";
+    return "🌙";
+  };
 
   const fetchPublicEvents = async (city?: string | null, silent = false) => {
     try {
-      if (!silent) setLoadingEvents(true);
       const token = await SecureStore.getItemAsync("token");
       if (!token) return;
-
       const cityParam = city ? `&city=${encodeURIComponent(city)}` : "";
       const response = await fetch(`${BASE_URL}/events/public/explore?limit=10${cityParam}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await response.json();
       if (response.ok) {
-        const events = data.events || [];
-        setPublicEvents(events);
-        setHasMorePublicEvents(events.length === 10 && (data.total ?? 0) > 10);
+        setPublicEvents(data.events || []);
       }
-    } catch (error) {
-      console.error("Fetch public events error:", error);
-    } finally {
-      setLoadingEvents(false);
-    }
+    } catch {}
   };
 
   const fetchHighlights = async () => {
     try {
-      setLoadingHighlights(true);
       const token = await SecureStore.getItemAsync("token");
       if (!token) return;
-
       const response = await fetch(`${BASE_URL}/events/highlights`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = await response.json();
       if (response.ok) {
         setHighlights({ trending: data.trending || [], upcoming: data.upcoming || [] });
       }
-    } catch (error) {
-      console.error("Fetch highlights error:", error);
-    } finally {
-      setLoadingHighlights(false);
-    }
+    } catch {}
+  };
+
+  const fetchVendors = async () => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) return;
+      const response = await fetch(`${BASE_URL}/vendors/search?query=&limit=10`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setVendors(data.vendors || data || []);
+      }
+    } catch {}
+  };
+
+  const fetchUsername = async () => {
+    try {
+      const userJson = await SecureStore.getItemAsync("user");
+      if (userJson) {
+        const u = JSON.parse(userJson);
+        setUsername(u.username || "");
+        return;
+      }
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) return;
+      const res = await fetch(`${BASE_URL}/profile`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (res.ok) setUsername(data.user?.username || "");
+    } catch {}
   };
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchPublicEvents(selectedCity, true), fetchHighlights()]);
+    await Promise.all([fetchPublicEvents(selectedCity, true), fetchHighlights(), fetchVendors()]);
     setRefreshing(false);
   };
 
   useEffect(() => {
-    // Entrance animations
-    Animated.parallel([
-      Animated.timing(fadeAnim, {
-        toValue: 1,
-        duration: 800,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideAnim, {
-        toValue: 0,
-        tension: 50,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-      Animated.spring(scaleAnim, {
-        toValue: 1,
-        tension: 50,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-    ]).start();
-
-    // Pulse animation for FAB
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
-          toValue: 1.1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(pulseAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    ).start();
-
-    // Initial data fetch
+    fetchUsername();
     fetchPublicEvents(null);
     fetchHighlights();
-    fetchCities()
-      .then((data) => { if (Array.isArray(data) && data.length > 0) setCities(data); })
-      .catch(() => {});
+    fetchVendors();
 
-    // Background auto-refresh every 30s
     intervalRef.current = setInterval(() => {
       fetchPublicEvents(selectedCity, true);
     }, 30000);
@@ -174,10 +291,7 @@ export default function Home() {
     const token = await SecureStore.getItemAsync("token");
     const confirmRes = await fetch(`${BASE_URL}/stripe/confirm/ticket/${eventId}`, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ paymentIntentId: result.paymentIntentId }),
     });
 
@@ -196,6 +310,31 @@ export default function Home() {
     }
   };
 
+  const handleRsvp = async (eventId: string, action: "accept" | "decline") => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) return;
+      const response = await fetch(`${BASE_URL}/events/${eventId}/rsvp`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      if (response.ok) {
+        if (action === "accept") {
+          Alert.alert("You're in!", "RSVP confirmed.");
+        } else {
+          Alert.alert("RSVP declined.");
+        }
+        fetchHighlights();
+      } else {
+        const d = await response.json();
+        Alert.alert("Error", d.message || "Failed to RSVP");
+      }
+    } catch {
+      Alert.alert("Error", "Failed to RSVP");
+    }
+  };
+
   const handleJoinFreeEvent = async (eventId: string, eventTitle: string) => {
     try {
       const token = await SecureStore.getItemAsync("token");
@@ -211,348 +350,301 @@ export default function Home() {
       } else {
         Alert.alert("Error", data.message || "Failed to join event");
       }
-    } catch (error) {
+    } catch {
       Alert.alert("Error", "Failed to join event");
     }
   };
 
-  const AnimatedFeatureCard = ({
-    icon,
-    title,
-    description,
-    gradient,
-    delay,
-    page,
-    onPress,
-  }: {
-    icon: React.ComponentProps<typeof Ionicons>["name"];
-    title: string;
-    description: string;
-    gradient: readonly [string, string];
-    delay: number;
-    page?: string;
-    onPress?: () => void;
-  }) => {
-    const cardFade = useRef(new Animated.Value(0)).current;
-    const cardSlide = useRef(new Animated.Value(30)).current;
-
-    useEffect(() => {
-      Animated.parallel([
-        Animated.timing(cardFade, {
-          toValue: 1,
-          duration: 500,
-          delay,
-          useNativeDriver: true,
-        }),
-        Animated.spring(cardSlide, {
-          toValue: 0,
-          delay,
-          tension: 50,
-          friction: 8,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    }, []);
-
-    return (
-      <Animated.View
-        style={{
-          opacity: cardFade,
-          transform: [{ translateY: cardSlide }],
-        }}
-      >
-        <TouchableOpacity
-          style={styles.featureCard}
-          activeOpacity={0.8}
-          onPress={() => {
-            if (onPress) {
-              onPress();
-            } else if (page) {
-              const target = page.startsWith("/") ? page : `/${page}`;
-              router.push(target as any);
-            }
-          }}
-        >
-          <LinearGradient
-        colors={gradient}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.featureGradient}
-          >
-        <View style={styles.featureIconContainer}>
-          <Ionicons name={icon} size={32} color="white" />
-        </View>
-        <Text style={styles.featureTitle}>{title}</Text>
-        <Text style={styles.featureDescription}>{description}</Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
-    );
-  };
+  const heroEvent = highlights.upcoming[0] || publicEvents[0];
+  const afterThat = highlights.upcoming.slice(1, 6);
+  if (afterThat.length === 0 && publicEvents.length > 0) {
+    afterThat.push(...publicEvents.slice(0, 5));
+  }
 
   return (
     <>
-      <StatusBar barStyle="light-content" />
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#a855f7"
-            colors={["#a855f7"]}
-          />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.purple} colors={[C.purple]} />
         }
         contentContainerStyle={styles.scrollContent}
       >
-        {/* Hero Section */}
-        <LinearGradient
-          colors={["#0f0f1a", "#1a1a2e", "#16213e"]}
-          style={styles.heroSection}
-        >
-          <Animated.View
-            style={[
-              styles.heroContent,
-              {
-                opacity: fadeAnim,
-                transform: [{ translateY: slideAnim }, { scale: scaleAnim }],
-              },
-            ]}
-          >
-            <Text style={styles.logoText}>NightVibe</Text>
-            <Text style={styles.heroTitle}>
-              Plan Epic Nights Out {"\n"}& Unforgettable Parties
-            </Text>
-            <Text style={styles.heroSubtitle}>
-              Discover venues, vendors, and experiences in your city
-            </Text>
-
-            <TouchableOpacity
-              style={styles.ctaButton}
-              activeOpacity={0.8}
-              onPress={() => router.push("/(tabs)/vendors")}
-            >
-              <LinearGradient
-                colors={["#a855f7", "#7c3aed"]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={styles.ctaGradient}
-              >
-                <Text style={styles.ctaText}>Explore Vendors</Text>
-                <Ionicons name="arrow-forward" size={20} color="white" />
-              </LinearGradient>
-            </TouchableOpacity>
-          </Animated.View>
-
-          {/* Decorative elements */}
-          <View style={styles.decorCircle1} />
-          <View style={styles.decorCircle2} />
-        </LinearGradient>
-
-        {/* Trending Now Section */}
-        <View style={styles.exploreSection}>
-          <View style={styles.exploreSectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <Ionicons name="flame" size={20} color="#f97316" style={{ marginRight: 6 }} />
-              <Text style={styles.sectionTitle}>Trending Now</Text>
-            </View>
-          </View>
-          {loadingHighlights ? (
-            <EventCardSkeleton count={3} horizontal />
-          ) : highlights.trending.length > 0 ? (
-            <Carousel itemWidth={300} gap={16}>
-              {highlights.trending.map((event) => (
-                <PublicEventCard
-                  key={event._id}
-                  event={event}
-                  onPurchaseTicket={handlePurchaseTicket}
-                  onJoinFreeEvent={handleJoinFreeEvent}
-                />
-              ))}
-            </Carousel>
-          ) : (
-            <View style={styles.emptySectionContainer}>
-              <Ionicons name="flame-outline" size={36} color="#4b5563" />
-              <Text style={styles.emptySectionText}>No trending events yet</Text>
-              <TouchableOpacity onPress={() => setIsModalVisible(true)}>
-                <Text style={styles.emptySectionCta}>Create the first one</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+        {/* Greeting */}
+        <View style={styles.greetingSection}>
+          <Text style={styles.greetingText}>
+            {getGreeting()}{username ? `, ${username}` : ""} {getGreetingEmoji()}
+          </Text>
+          <Text style={styles.greetingDate}>
+            {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+          </Text>
         </View>
 
-        {/* This Week Section */}
-        {(highlights.upcoming.length > 0 || !loadingHighlights) && (
-          <View style={styles.exploreSection}>
-            <View style={styles.exploreSectionHeader}>
-              <View style={styles.sectionTitleRow}>
-                <Ionicons name="calendar" size={18} color="#a855f7" style={{ marginRight: 6 }} />
-                <Text style={styles.sectionTitle}>This Week</Text>
+        {/* Hero Card */}
+        {heroEvent && (
+          <TouchableOpacity
+            style={styles.heroCard}
+            activeOpacity={0.92}
+            onPress={() => router.push(`/event/${heroEvent._id}` as any)}
+          >
+            <LinearGradient
+              colors={["#2D1B69", "#0B0613"]}
+              style={styles.heroCardInner}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+            >
+              {heroEvent.image && (
+                <Image source={{ uri: heroEvent.image }} style={styles.heroImage} contentFit="cover" />
+              )}
+              <View style={styles.heroOverlay} />
+              <View style={styles.heroContent}>
+                <View style={styles.heroTopRow}>
+                  <View style={styles.heroBadge}>
+                    <View style={styles.liveDot} />
+                    <Text style={styles.heroBadgeText}>Up Next</Text>
+                  </View>
+                </View>
+                <View style={styles.heroBottom}>
+                  {(() => {
+                    const isHosting = heroEvent.isCreator || heroEvent.userStatus === "creator";
+                    const hasTicket = heroEvent.userHasPurchased;
+                    const isAttending = !isHosting && heroEvent.userStatus === "accepted";
+                    const isPending = !isHosting && heroEvent.userStatus === "pending";
+
+                    let label = "Up next";
+                    if (isHosting) label = "You are hosting";
+                    else if (hasTicket) label = "You have a ticket for";
+                    else if (isAttending) label = "You are attending";
+                    else if (isPending) label = "You're invited to";
+
+                    return (
+                      <>
+                        <Text style={styles.heroInviteLabel}>{label}</Text>
+                        <Text style={styles.heroTitle} numberOfLines={2}>{heroEvent.title}</Text>
+                        {heroEvent.location && (
+                          <Text style={styles.heroLocation} numberOfLines={1}>
+                            <Ionicons name="location-outline" size={12} color="rgba(244,238,255,0.7)" /> {heroEvent.location}
+                          </Text>
+                        )}
+
+                        {isHosting ? (
+                          <TouchableOpacity
+                            style={styles.heroButton}
+                            activeOpacity={0.85}
+                            onPress={() => router.push(`/event/${heroEvent._id}` as any)}
+                          >
+                            <Text style={styles.heroButtonText}>Manage Event</Text>
+                            <Ionicons name="arrow-forward" size={14} color={C.bg} />
+                          </TouchableOpacity>
+                        ) : hasTicket ? (
+                          <TouchableOpacity
+                            style={styles.heroButton}
+                            activeOpacity={0.85}
+                            onPress={() => router.push("/tickets" as any)}
+                          >
+                            <Text style={styles.heroButtonText}>View Ticket</Text>
+                            <Ionicons name="ticket-outline" size={14} color={C.bg} />
+                          </TouchableOpacity>
+                        ) : isAttending ? (
+                          <TouchableOpacity
+                            style={styles.heroButton}
+                            activeOpacity={0.85}
+                            onPress={() => router.push(`/event/${heroEvent._id}` as any)}
+                          >
+                            <Text style={styles.heroButtonText}>View Details</Text>
+                            <Ionicons name="arrow-forward" size={14} color={C.bg} />
+                          </TouchableOpacity>
+                        ) : isPending ? (
+                          <View style={styles.heroRsvpRow}>
+                            <TouchableOpacity
+                              style={[styles.heroButton, styles.heroRsvpAccept]}
+                              activeOpacity={0.85}
+                              onPress={() => handleRsvp(heroEvent._id, "accept")}
+                            >
+                              <Text style={styles.heroButtonText}>Accept</Text>
+                              <Ionicons name="checkmark" size={14} color={C.bg} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.heroButton, styles.heroRsvpDecline]}
+                              activeOpacity={0.85}
+                              onPress={() => handleRsvp(heroEvent._id, "decline")}
+                            >
+                              <Text style={[styles.heroButtonText, { color: "#fff" }]}>Decline</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={styles.heroButton}
+                            activeOpacity={0.85}
+                            onPress={() => {
+                              if (heroEvent.isPaid) {
+                                handlePurchaseTicket(heroEvent._id, heroEvent.title);
+                              } else {
+                                handleJoinFreeEvent(heroEvent._id, heroEvent.title);
+                              }
+                            }}
+                          >
+                            <Text style={styles.heroButtonText}>{heroEvent.isPaid ? "Get Ticket" : "Join Free"}</Text>
+                            <Ionicons name="arrow-forward" size={14} color={C.bg} />
+                          </TouchableOpacity>
+                        )}
+                      </>
+                    );
+                  })()}
+                </View>
               </View>
-            </View>
-            {loadingHighlights ? (
-              <EventCardSkeleton count={3} horizontal />
-            ) : highlights.upcoming.length > 0 ? (
-              <Carousel itemWidth={300} gap={16}>
-                {highlights.upcoming.map((event) => (
-                  <PublicEventCard
-                    key={event._id}
-                    event={event}
-                    onPurchaseTicket={handlePurchaseTicket}
-                    onJoinFreeEvent={handleJoinFreeEvent}
-                  />
-                ))}
-              </Carousel>
-            ) : (
-              <View style={styles.emptySectionContainer}>
-                <Text style={styles.emptySectionText}>No events this week</Text>
-              </View>
-            )}
+            </LinearGradient>
+          </TouchableOpacity>
+        )}
+
+        {/* After That */}
+        {afterThat.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="After that →"
+              subtitle="This week's calendar"
+              onAction={() => router.push("/public-events" as any)}
+              actionLabel="All"
+            />
+            <FlatList
+              horizontal
+              data={afterThat}
+              keyExtractor={(item) => item._id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              renderItem={({ item }) => (
+                <SmallEventCard
+                  event={item}
+                  onPress={() => router.push(`/event/${item._id}` as any)}
+                  onPurchase={handlePurchaseTicket}
+                  onJoin={handleJoinFreeEvent}
+                />
+              )}
+            />
           </View>
         )}
 
-        {/* Upcoming Events Section */}
-        <View style={styles.exploreSection}>
-          <View style={styles.exploreSectionHeader}>
-            <Text style={styles.sectionTitle}>Upcoming Events</Text>
-            <TouchableOpacity onPress={() => router.push("/public-events" as any)}>
-              <Text style={styles.seeAllText}>See All</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.sectionSubtitle}>
-            Discover amazing public events happening near you
-          </Text>
-
-          {/* City filter chips */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.cityFilterScroll}
-            contentContainerStyle={styles.cityFilterContent}
-          >
-            <TouchableOpacity
-              style={[styles.cityChip, !selectedCity && styles.cityChipActive]}
-              onPress={() => {
-                setSelectedCity(null);
-                fetchPublicEvents(null);
-              }}
-            >
-              <Text style={[styles.cityChipText, !selectedCity && styles.cityChipTextActive]}>
-                All
-              </Text>
-            </TouchableOpacity>
-            {cities.map((city) => (
+        {/* Quick Actions */}
+        <View style={styles.section}>
+          <SectionHeader title="Throw something" subtitle="Start planning in 30 seconds" />
+          <View style={styles.quickGrid}>
+            {QUICK_ACTIONS.map((action, i) => (
               <TouchableOpacity
-                key={city._id}
-                style={[styles.cityChip, selectedCity === city.name && styles.cityChipActive]}
+                key={action.label}
+                style={styles.quickAction}
+                activeOpacity={0.8}
                 onPress={() => {
-                  setSelectedCity(city.name);
-                  fetchPublicEvents(city.name);
+                  if (action.label === "Book Vendor") {
+                    router.push("/(tabs)/vendors");
+                  } else {
+                    setIsModalVisible(true);
+                  }
                 }}
               >
-                <Text style={[styles.cityChipText, selectedCity === city.name && styles.cityChipTextActive]}>
-                  {city.name}
-                </Text>
+                <View style={[styles.quickActionIcon, { backgroundColor: `${action.color}18` }]}>
+                  <Ionicons name={action.icon} size={22} color={action.color} />
+                </View>
+                <Text style={styles.quickActionLabel}>{action.label}</Text>
               </TouchableOpacity>
             ))}
-          </ScrollView>
+          </View>
+        </View>
 
-          {loadingEvents ? (
-            <EventCardSkeleton count={4} horizontal />
-          ) : publicEvents.length > 0 ? (
-            <>
-              <Carousel itemWidth={320} gap={16}>
-                {publicEvents.map((event) => (
+        {/* Trending Now */}
+        {highlights.trending.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="Trending Now 🔥"
+              subtitle="Hot in your city"
+              onAction={() => router.push("/public-events" as any)}
+              actionLabel="All"
+            />
+            <FlatList
+              horizontal
+              data={highlights.trending}
+              keyExtractor={(item) => item._id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              renderItem={({ item }) => (
+                <View style={{ width: 300, marginRight: 12 }}>
                   <PublicEventCard
-                    key={event._id}
-                    event={event}
+                    event={item}
                     onPurchaseTicket={handlePurchaseTicket}
                     onJoinFreeEvent={handleJoinFreeEvent}
                   />
-                ))}
-              </Carousel>
-              {hasMorePublicEvents && (
-                <TouchableOpacity
-                  style={styles.seeAllBtn}
-                  onPress={() => router.push("/public-events" as any)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.seeAllText}>See All Events</Text>
-                  <Ionicons name="arrow-forward" size={14} color="#a855f7" />
-                </TouchableOpacity>
+                </View>
               )}
-            </>
-          ) : (
-            <View style={styles.emptySectionContainer}>
-              <Ionicons name="calendar-outline" size={36} color="#4b5563" />
-              <Text style={styles.emptySectionText}>
-                {selectedCity ? `No events in ${selectedCity}` : "No upcoming events"}
-              </Text>
-            </View>
-          )}
-        </View>
+            />
+          </View>
+        )}
 
-        {/* Features Section */}
-        <View style={styles.featuresSection}>
-          <Text style={styles.sectionTitle}>What We Offer</Text>
-          <Text style={styles.sectionSubtitle}>
-            Everything you need for the perfect night
-          </Text>
+        {/* Where the city's at — vendors */}
+        {vendors.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="Where the city's at"
+              subtitle="Vendors & venues near you"
+              onAction={() => router.push("/(tabs)/vendors")}
+              actionLabel="All"
+            />
+            <FlatList
+              horizontal
+              data={vendors}
+              keyExtractor={(item) => item._id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              renderItem={({ item }) => (
+                <VendorCard
+                  vendor={item}
+                  onPress={() => router.push(`/vendor-details/${item._id}` as any)}
+                />
+              )}
+            />
+          </View>
+        )}
 
-          <View style={styles.featuresGrid}>
-            <AnimatedFeatureCard
-              icon="business"
-              title="Find Vendors & Venues"
-              description="Discover the best nightlife spots and service providers"
-              gradient={["#667eea", "#764ba2"] as const}
-              delay={100}
-              page="vendors"
-            />
-            <AnimatedFeatureCard
-              icon="calendar"
-              title="Plan Your Event"
-              description="Organize every detail of your perfect night out"
-              gradient={["#f093fb", "#f5576c"] as const}
-              delay={200}
-              onPress={() => setIsModalVisible(true)}
-            />
-            <AnimatedFeatureCard
-              icon="star"
-              title="Curated Lists"
-              description="Explore top-rated picks and local favorites"
-              gradient={["#4facfe", "#00f2fe"] as const}
-              delay={300}
-              page="bests"
-            />
+        {/* Editor's Picks — Bests/Guides */}
+        <View style={styles.section}>
+          <SectionHeader
+            title="Editor's picks"
+            subtitle="Top city guides"
+            onAction={() => router.push("/(tabs)/bests")}
+            actionLabel="All"
+          />
+          <View style={styles.picksGrid}>
+            {[
+              { emoji: "🍹", label: "Best Rooftop Bars", color: "#A855F720" },
+              { emoji: "🎵", label: "Top Live Music", color: "#EC489920" },
+              { emoji: "🕺", label: "Clubs & Dancing", color: "#22D3EE20" },
+              { emoji: "🌆", label: "Sunset Spots", color: "#F59E0B20" },
+            ].map((pick) => (
+              <TouchableOpacity
+                key={pick.label}
+                style={[styles.pickTile, { backgroundColor: pick.color }]}
+                activeOpacity={0.8}
+                onPress={() => router.push("/(tabs)/bests")}
+              >
+                <Text style={styles.pickEmoji}>{pick.emoji}</Text>
+                <Text style={styles.pickLabel}>{pick.label}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
 
-        {/* Footer */}
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>
-            Made with love for nightlife enthusiasts
-          </Text>
-        </View>
+        <View style={{ height: 80 }} />
       </ScrollView>
 
-      {/* Floating Action Button */}
-      <Animated.View
-        style={[styles.fabContainer, { transform: [{ scale: pulseAnim }] }]}
+      {/* FAB */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => setIsModalVisible(true)}
+        activeOpacity={0.85}
       >
-        <TouchableOpacity
-          style={styles.fab}
-          onPress={() => setIsModalVisible(true)}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={["#a855f7", "#7c3aed"]}
-            style={styles.fabGradient}
-          >
-            <Ionicons name="add" size={28} color="white" />
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
+        <LinearGradient colors={[C.purple, C.purpleDeep]} style={styles.fabGradient}>
+          <Ionicons name="add" size={28} color="#fff" />
+        </LinearGradient>
+      </TouchableOpacity>
 
       <CreateEventModal
         visible={isModalVisible}
@@ -566,162 +658,345 @@ export default function Home() {
 const styles = StyleSheet.create({
   scrollView: {
     flex: 1,
-    backgroundColor: "#0f0f1a",
+    backgroundColor: C.bg,
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 20,
   },
-  heroSection: {
-    paddingHorizontal: getResponsivePadding(),
-    position: "relative",
+  greetingSection: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 20,
+  },
+  greetingText: {
+    fontFamily: "BricolageGrotesque_800ExtraBold",
+    fontSize: 28,
+    color: C.text,
+    letterSpacing: -0.5,
+    lineHeight: 34,
+  },
+  greetingDate: {
+    fontFamily: Fonts.regular,
+    fontSize: 13,
+    color: C.textDim,
+    marginTop: 4,
+  },
+  heroCard: {
+    marginHorizontal: 14,
+    borderRadius: 24,
     overflow: "hidden",
-    height: Dimensions.get('window').height - 195,
-    justifyContent: "center",
+    marginBottom: 28,
+    shadowColor: C.purple,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.35,
+    shadowRadius: 30,
+    elevation: 12,
+  },
+  heroCardInner: {
+    minHeight: 320,
+    position: "relative",
+  },
+  heroImage: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+  },
+  heroOverlay: {
+    position: "absolute",
+    inset: 0,
+    backgroundColor: "rgba(11,6,19,0.55)",
   },
   heroContent: {
-    alignItems: "center",
+    flex: 1,
+    minHeight: 320,
+    padding: 20,
+    justifyContent: "space-between",
   },
-  logoText: {
-    fontSize: scaleFontSize(40),
-    fontFamily: Fonts.black,
-    color: "#a855f7",
-    marginBottom: 16,
-    textShadowColor: "rgba(168, 85, 247, 0.5)",
-    textShadowOffset: { width: 0, height: 4 },
-    textShadowRadius: 20,
+  heroTopRow: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
   },
-  heroTitle: {
-    fontSize: scaleFontSize(24),
-    fontFamily: Fonts.bold,
-    color: "#fff",
-    textAlign: "center",
-    marginBottom: 12,
-    lineHeight: 32,
-  },
-  heroSubtitle: {
-    fontSize: scaleFontSize(16),
-    fontFamily: Fonts.regular,
-    color: "#9ca3af",
-    textAlign: "center",
-    marginBottom: 32,
-    paddingHorizontal: 20,
-  },
-  ctaButton: {
-    borderRadius: 16,
-    overflow: "hidden",
-    shadowColor: "#a855f7",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 10,
-  },
-  ctaGradient: {
+  heroBadge: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 16,
-    paddingHorizontal: 32,
-    gap: 8,
+    gap: 6,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
   },
-  ctaText: {
-    color: "white",
-    fontSize: scaleFontSize(18),
+  liveDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: C.pink,
+  },
+  heroBadgeText: {
     fontFamily: Fonts.bold,
+    fontSize: 10,
+    color: "#fff",
+    letterSpacing: 0.6,
+    textTransform: "uppercase",
   },
-  decorCircle1: {
-    position: "absolute",
-    top: -100,
-    right: -100,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: "rgba(168, 85, 247, 0.1)",
+  heroBottom: {
+    gap: 4,
   },
-  decorCircle2: {
-    position: "absolute",
-    bottom: -50,
-    left: -80,
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: "rgba(124, 58, 237, 0.1)",
+  heroInviteLabel: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 11,
+    color: "rgba(244,238,255,0.75)",
+    letterSpacing: 0.8,
+    textTransform: "uppercase",
+    marginBottom: 4,
   },
-  featuresSection: {
-    paddingVertical: 50,
-    paddingHorizontal: getResponsivePadding(),
-    backgroundColor: "#0f0f1a",
+  heroTitle: {
+    fontFamily: "BricolageGrotesque_800ExtraBold",
+    fontSize: 36,
+    color: "#fff",
+    letterSpacing: -1,
+    lineHeight: 38,
+  },
+  heroLocation: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    color: "rgba(244,238,255,0.7)",
+    marginTop: 6,
+  },
+  heroButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 14,
+    backgroundColor: "#fff",
+    paddingHorizontal: 18,
+    paddingVertical: 11,
+    borderRadius: 12,
+    alignSelf: "flex-start",
+  },
+  heroButtonText: {
+    fontFamily: Fonts.bold,
+    fontSize: 13,
+    color: C.bg,
+    letterSpacing: -0.2,
+  },
+  heroRsvpRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 14,
+  },
+  heroRsvpAccept: {
+    marginTop: 0,
+    backgroundColor: "#fff",
+  },
+  heroRsvpDecline: {
+    marginTop: 0,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.3)",
+  },
+  section: {
+    marginBottom: 28,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: scaleFontSize(22),
     fontFamily: Fonts.bold,
-    color: "#fff",
-    textAlign: "center",
-    marginBottom: 8,
+    fontSize: 18,
+    color: C.text,
+    letterSpacing: -0.3,
   },
   sectionSubtitle: {
-    fontSize: scaleFontSize(15),
     fontFamily: Fonts.regular,
-    color: "#9ca3af",
-    textAlign: "center",
-    marginBottom: 32,
+    fontSize: 12,
+    color: C.textMute,
+    marginTop: 2,
   },
-  featuresGrid: {
-    gap: 16,
+  sectionAction: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 13,
+    color: C.purple,
   },
-  featureCard: {
-    borderRadius: 20,
+  horizontalList: {
+    paddingHorizontal: 20,
+    paddingBottom: 2,
+  },
+  smallCard: {
+    width: 160,
+    marginRight: 12,
+    borderRadius: 16,
     overflow: "hidden",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    borderWidth: 1,
+    borderColor: C.strokeHi,
   },
-  featureGradient: {
-    padding: 24,
+  smallCardInner: {
+    flex: 1,
+  },
+  smallCardImageWrap: {
+    position: "relative",
+  },
+  smallCardImage: {
+    width: "100%",
+    height: 100,
+  },
+  smallCardBadge: {
+    position: "absolute",
+    top: 8,
+    left: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  smallCardBadgeFree: {
+    backgroundColor: "rgba(34,197,94,0.85)",
+  },
+  smallCardBadgePaid: {
+    backgroundColor: "rgba(168,85,247,0.9)",
+  },
+  smallCardBadgeText: {
+    fontFamily: Fonts.bold,
+    fontSize: 10,
+    color: "#fff",
+    letterSpacing: 0.3,
+  },
+  smallCardContent: {
+    padding: 10,
+  },
+  smallCardTitle: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 13,
+    color: C.text,
+    lineHeight: 17,
+  },
+  smallCardDate: {
+    fontFamily: Fonts.regular,
+    fontSize: 11,
+    color: C.textMute,
+    marginTop: 4,
+  },
+  smallCardAction: {
+    marginTop: 8,
+    backgroundColor: "rgba(34,197,94,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.4)",
+    borderRadius: 8,
+    paddingVertical: 5,
     alignItems: "center",
   },
-  featureIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
+  smallCardActionPaid: {
+    backgroundColor: "rgba(168,85,247,0.15)",
+    borderColor: "rgba(168,85,247,0.4)",
+  },
+  smallCardActionText: {
+    fontFamily: Fonts.bold,
+    fontSize: 11,
+    color: C.text,
+  },
+  smallCardOwned: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginTop: 8,
+  },
+  smallCardOwnedText: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 11,
+    color: C.purple,
+  },
+  quickGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    paddingHorizontal: 20,
+  },
+  quickAction: {
+    width: "47%",
+    backgroundColor: C.surface,
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.stroke,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  quickActionIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 16,
   },
-  featureTitle: {
-    fontSize: scaleFontSize(18),
-    fontFamily: Fonts.bold,
-    color: "white",
-    marginBottom: 8,
-    textAlign: "center",
+  quickActionLabel: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 13,
+    color: C.text,
+    flex: 1,
   },
-  featureDescription: {
-    fontSize: scaleFontSize(14),
+  vendorCard: {
+    width: 140,
+    marginRight: 12,
+    backgroundColor: C.surface,
+    borderRadius: 16,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: C.stroke,
+  },
+  vendorCardImage: {
+    width: "100%",
+    height: 100,
+    overflow: "hidden",
+  },
+  vendorCardContent: {
+    padding: 10,
+  },
+  vendorCardName: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 13,
+    color: C.text,
+  },
+  vendorCardType: {
     fontFamily: Fonts.regular,
-    color: "rgba(255, 255, 255, 0.8)",
-    textAlign: "center",
-    lineHeight: 20,
+    fontSize: 11,
+    color: C.textMute,
+    marginTop: 3,
   },
-  footer: {
-    paddingVertical: 30,
-    alignItems: "center",
-    backgroundColor: "#0f0f1a",
+  picksGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    paddingHorizontal: 20,
   },
-  footerText: {
-    fontSize: scaleFontSize(14),
-    fontFamily: Fonts.regular,
-    color: "#6b7280",
+  pickTile: {
+    width: "47%",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: C.stroke,
+    gap: 8,
   },
-  fabContainer: {
+  pickEmoji: {
+    fontSize: 28,
+  },
+  pickLabel: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 13,
+    color: C.text,
+    lineHeight: 17,
+  },
+  fab: {
     position: "absolute",
     bottom: 16,
     right: 24,
-  },
-  fab: {
     borderRadius: 30,
     overflow: "hidden",
-    shadowColor: "#a855f7",
+    shadowColor: C.purple,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
@@ -732,82 +1007,5 @@ const styles = StyleSheet.create({
     height: 60,
     justifyContent: "center",
     alignItems: "center",
-  },
-  exploreSection: {
-    paddingVertical: 50,
-    backgroundColor: "#0f0f1a",
-  },
-  exploreSectionHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: getResponsivePadding(),
-    marginBottom: 8,
-  },
-  seeAllText: {
-    fontSize: scaleFontSize(14),
-    fontFamily: Fonts.semiBold,
-    color: "#a855f7",
-  },
-  sectionTitleRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  cityFilterScroll: {
-    marginTop: 8,
-    marginBottom: 12,
-  },
-  cityFilterContent: {
-    paddingHorizontal: 20,
-    gap: 8,
-  },
-  cityChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: "#374151",
-    marginRight: 8,
-  },
-  cityChipActive: {
-    backgroundColor: "#a855f7",
-  },
-  cityChipText: {
-    fontSize: scaleFontSize(13),
-    fontFamily: Fonts.medium,
-    color: "#9ca3af",
-  },
-  cityChipTextActive: {
-    color: "#fff",
-  },
-  emptySectionContainer: {
-    alignItems: "center",
-    paddingVertical: 32,
-    paddingHorizontal: 20,
-  },
-  emptySectionText: {
-    fontSize: scaleFontSize(14),
-    fontFamily: Fonts.regular,
-    color: "#6b7280",
-    marginTop: 8,
-    textAlign: "center",
-  },
-  emptySectionCta: {
-    fontSize: scaleFontSize(14),
-    fontFamily: Fonts.semiBold,
-    color: "#a855f7",
-    marginTop: 6,
-  },
-  loadingContainer: {
-    paddingVertical: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  seeAllBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginTop: 12,
-    paddingVertical: 10,
   },
 });

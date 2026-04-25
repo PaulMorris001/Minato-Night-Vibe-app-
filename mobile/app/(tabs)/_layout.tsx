@@ -22,10 +22,12 @@ import { capitalize } from "@/libs/helpers";
 import { Fonts } from "@/constants/fonts";
 import { BASE_URL } from "@/constants/constants";
 import { useAccount } from "@/contexts/AccountContext";
+import { useUnread } from "@/contexts/UnreadContext";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabsLayout() {
   const { activeAccount } = useAccount();
+  const { totalUnread } = useUnread();
   const isGlassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
   const segments = useSegments();
   const currentTab = segments[1]; // Gets the current tab name (home, vendors, bests, etc.)
@@ -325,6 +327,13 @@ export default function TabsLayout() {
                 style={styles.ticketGradient}
               >
                 <Ionicons name="chatbubbles-outline" size={20} color="#fff" />
+                {totalUnread > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>
+                      {totalUnread > 99 ? "99+" : totalUnread}
+                    </Text>
+                  </View>
+                )}
               </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity
@@ -685,5 +694,25 @@ const styles = StyleSheet.create({
     color: "#ef4444",
     fontSize: 16,
     fontFamily: Fonts.semiBold,
+  },
+  unreadBadge: {
+    position: "absolute",
+    top: 4,
+    right: 4,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#EC4899",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 3,
+    borderWidth: 1.5,
+    borderColor: "#1f2937",
+  },
+  unreadBadgeText: {
+    color: "#fff",
+    fontSize: 9,
+    fontFamily: Fonts.bold,
+    lineHeight: 11,
   },
 });

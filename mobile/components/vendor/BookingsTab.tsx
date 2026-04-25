@@ -12,9 +12,11 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
+import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { BASE_URL } from "@/constants/constants";
 import { Fonts } from "@/constants/fonts";
+import chatService from "@/services/chat.service";
 
 type BookingStatus = "all" | "pending" | "confirmed" | "rejected" | "cancelled";
 
@@ -72,11 +74,13 @@ function formatDate(iso: string) {
 }
 
 export default function BookingsTab() {
+  const router = useRouter();
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [activeFilter, setActiveFilter] = useState<BookingStatus>("all");
   const [updating, setUpdating] = useState<string | null>(null);
+  const [chattingWith, setChattingWith] = useState<string | null>(null);
 
   const fetchBookings = useCallback(async (status: BookingStatus = activeFilter) => {
     try {
@@ -144,6 +148,18 @@ export default function BookingsTab() {
         },
       ]
     );
+  };
+
+  const handleChatWithClient = async (clientId: string, bookingId: string) => {
+    setChattingWith(bookingId);
+    try {
+      const chat = await chatService.getOrCreateDirectChat(clientId);
+      router.push(`/chat/${chat._id}` as any);
+    } catch {
+      Alert.alert("Error", "Could not open chat");
+    } finally {
+      setChattingWith(null);
+    }
   };
 
   const renderBookingCard = ({ item }: { item: Booking }) => {
@@ -216,6 +232,25 @@ export default function BookingsTab() {
             <Ionicons name="chatbubble-outline" size={13} color="#6b7280" />
             <Text style={styles.messageText} numberOfLines={3}>{item.message}</Text>
           </View>
+        )}
+
+        {/* Chat with client button for confirmed bookings */}
+        {item.status === "confirmed" && (
+          <TouchableOpacity
+            style={styles.chatButton}
+            onPress={() => handleChatWithClient(item.client._id, item._id)}
+            disabled={chattingWith === item._id}
+            activeOpacity={0.8}
+          >
+            {chattingWith === item._id ? (
+              <ActivityIndicator size="small" color="#a855f7" />
+            ) : (
+              <>
+                <Ionicons name="chatbubbles-outline" size={16} color="#a855f7" />
+                <Text style={styles.chatButtonText}>Message Client</Text>
+              </>
+            )}
+          </TouchableOpacity>
         )}
 
         {/* Actions */}
@@ -525,6 +560,23 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 14,
     fontFamily: Fonts.semiBold,
+  },
+  chatButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 10,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(168, 85, 247, 0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(168, 85, 247, 0.3)",
+  },
+  chatButtonText: {
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    color: "#a855f7",
   },
   centered: {
     flex: 1,

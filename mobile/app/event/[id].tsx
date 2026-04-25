@@ -535,49 +535,51 @@ export default function EventDetailsPage() {
               </View>
             )}
 
-            {/* Invited Users */}
-            <View style={styles.sectionContainer}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.detailRow}>
-                  <Ionicons name="people" size={20} color="#a855f7" />
-                  <Text style={styles.sectionTitle}>
-                    Invited ({event.invitedUsers.length})
-                  </Text>
+            {/* Invited Users — only visible to creator and invitees (private events) */}
+            {!event.isPublic && (event.userStatus === "creator" || event.userStatus === "accepted" || event.userStatus === "pending") && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.sectionHeader}>
+                  <View style={styles.detailRow}>
+                    <Ionicons name="people" size={20} color="#a855f7" />
+                    <Text style={styles.sectionTitle}>
+                      Invited ({event.invitedUsers.length})
+                    </Text>
+                  </View>
+                  {isCreator && (
+                    <TouchableOpacity
+                      style={styles.inviteButton}
+                      onPress={() => setIsInviteModalVisible(true)}
+                    >
+                      <Ionicons name="person-add" size={18} color="#fff" />
+                      <Text style={styles.inviteButtonText}>Invite</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
-                {isCreator && (
-                  <TouchableOpacity
-                    style={styles.inviteButton}
-                    onPress={() => setIsInviteModalVisible(true)}
-                  >
-                    <Ionicons name="person-add" size={18} color="#fff" />
-                    <Text style={styles.inviteButtonText}>Invite</Text>
-                  </TouchableOpacity>
+
+                {event.invitedUsers.length > 0 ? (
+                  event.invitedUsers.map((user) => (
+                    <View key={user._id} style={styles.userCard}>
+                      {user.profilePicture ? (
+                        <Image
+                          source={{ uri: user.profilePicture }}
+                          style={styles.userAvatar}
+                        />
+                      ) : (
+                        <View style={styles.userAvatarPlaceholder}>
+                          <Ionicons name="person" size={24} color="#a855f7" />
+                        </View>
+                      )}
+                      <View style={styles.userInfo}>
+                        <Text style={styles.userName}>{user.username}</Text>
+                        {isCreator && <Text style={styles.userEmail}>{user.email}</Text>}
+                      </View>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.emptyText}>No users invited yet</Text>
                 )}
               </View>
-
-              {event.invitedUsers.length > 0 ? (
-                event.invitedUsers.map((user) => (
-                  <View key={user._id} style={styles.userCard}>
-                    {user.profilePicture ? (
-                      <Image
-                        source={{ uri: user.profilePicture }}
-                        style={styles.userAvatar}
-                      />
-                    ) : (
-                      <View style={styles.userAvatarPlaceholder}>
-                        <Ionicons name="person" size={24} color="#a855f7" />
-                      </View>
-                    )}
-                    <View style={styles.userInfo}>
-                      <Text style={styles.userName}>{user.username}</Text>
-                      <Text style={styles.userEmail}>{user.email}</Text>
-                    </View>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.emptyText}>No users invited yet</Text>
-              )}
-            </View>
+            )}
 
             {/* Vendors Section */}
             <View style={styles.sectionContainer}>

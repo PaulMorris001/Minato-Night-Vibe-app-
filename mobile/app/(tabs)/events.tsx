@@ -29,6 +29,11 @@ import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
 import socketService from "@/services/socket.service";
 import EventCardSkeleton from "@/components/skeletons/EventCardSkeleton";
 import { createEventShareLink } from "@/utils/shareLinks";
+import PublicEventCard, { PublicEvent } from "@/components/shared/PublicEventCard";
+import { useStripePayment } from "@/hooks/useStripePayment";
+import { trackEvent as trackAnalyticsEvent } from "@/utils/analytics";
+import { fetchCities } from "@/libs/api";
+import { City } from "@/libs/interfaces";
 
 interface Event {
   _id: string;
@@ -69,6 +74,12 @@ interface Event {
 
 export default function EventsPage() {
   const router = useRouter();
+  const { payForTicket } = useStripePayment();
+
+  // Tab state
+  const [activeTab, setActiveTab] = useState<"private" | "discover">("private");
+
+  // Private events state
   const [events, setEvents] = useState<Event[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -78,6 +89,15 @@ export default function EventsPage() {
   const [inviteUsername, setInviteUsername] = useState("");
   const [searchedUsers, setSearchedUsers] = useState<any[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
+
+  // Discover (public) events state
+  const [discoverEvents, setDiscoverEvents] = useState<PublicEvent[]>([]);
+  const [discoverLoading, setDiscoverLoading] = useState(false);
+  const [discoverPage, setDiscoverPage] = useState(1);
+  const [discoverHasMore, setDiscoverHasMore] = useState(true);
+  const [discoverLoadingMore, setDiscoverLoadingMore] = useState(false);
+  const [selectedCity, setSelectedCity] = useState<string | null>(null);
+  const [cities, setCities] = useState<City[]>([]);
   const [inviteTab, setInviteTab] = useState<"people" | "vendors">("people");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
@@ -142,9 +162,94 @@ export default function EventsPage() {
     fetchEvents(page + 1);
   };
 
+  const DISCOVER_LIMIT = 10;
+
+  const fetchDiscoverEvents = async (pageNum = 1, city: string | null = selectedCity, isRefresh = false) => {
+    try {
+      if (pageNum === 1) setDiscoverLoading(true);
+      else setDiscoverLoadingMore(true);
+
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) return;
+
+      const cityParam = city ? `&city=${encodeURIComponent(city)}` : "";
+      const res = await fetch(
+        `${BASE_URL}/events/public/explore?page=${pageNum}&limit=${DISCOVER_LIMIT}${cityParam}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      const data = await res.json();
+
+      if (res.ok) {
+        const incoming: PublicEvent[] = data.events || [];
+        if (pageNum === 1 || isRefresh) {
+          setDiscoverEvents(incoming);
+        } else {
+          setDiscoverEvents((prev) => [...prev, ...incoming]);
+        }
+        setDiscoverPage(pageNum);
+        setDiscoverHasMore(incoming.length === DISCOVER_LIMIT);
+      }
+    } catch {}
+    finally {
+      setDiscoverLoading(false);
+      setDiscoverLoadingMore(false);
+    }
+  };
+
+  const loadMoreDiscover = () => {
+    if (!discoverHasMore || discoverLoadingMore) return;
+    fetchDiscoverEvents(discoverPage + 1);
+  };
+
+  const handlePurchaseTicket = async (eventId: string, eventTitle: string) => {
+    const result = await payForTicket(eventId);
+    if (!result.success) {
+      if (result.error) Alert.alert("Payment Failed", result.error);
+      return;
+    }
+    const token = await SecureStore.getItemAsync("token");
+    const confirmRes = await fetch(`${BASE_URL}/stripe/confirm/ticket/${eventId}`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ paymentIntentId: result.paymentIntentId }),
+    });
+    if (confirmRes.ok) {
+      trackAnalyticsEvent("ticket_purchased", { eventId, eventTitle });
+      Alert.alert("Success!", `You're going to "${eventTitle}"! Check your tickets.`);
+      fetchDiscoverEvents(1, selectedCity, true);
+    } else {
+      const d = await confirmRes.json();
+      Alert.alert("Error", d.message || "Payment succeeded but ticket could not be issued.");
+    }
+  };
+
+  const handleJoinFreeEvent = async (eventId: string, eventTitle: string) => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) return;
+      const res = await fetch(`${BASE_URL}/events/${eventId}/join`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        Alert.alert("Success!", `You've joined "${eventTitle}"`);
+        fetchDiscoverEvents(1, selectedCity, true);
+      } else {
+        Alert.alert("Error", data.message || "Failed to join event");
+      }
+    } catch {
+      Alert.alert("Error", "Failed to join event");
+    }
+  };
+
   useFocusEffect(
     useCallback(() => {
       fetchEvents(1, true);
+      fetchDiscoverEvents(1, null, true);
+      fetchCities()
+        .then((data) => { if (Array.isArray(data) && data.length > 0) setCities(data); })
+        .catch(() => {});
     }, [])
   );
 
@@ -160,7 +265,12 @@ export default function EventsPage() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchEvents(1, true);
+    if (activeTab === "private") {
+      fetchEvents(1, true);
+    } else {
+      fetchDiscoverEvents(1, selectedCity, true);
+      setRefreshing(false);
+    }
   };
 
   const handleRespondInvite = async (eventId: string, status: "accepted" | "declined") => {
@@ -473,8 +583,9 @@ export default function EventsPage() {
     router.push(`/event/${eventId}`);
   };
 
+  const privateEvents = events.filter(e => !e.isPublic);
+
   const renderEvent = (event: Event) => {
-    const isCreator = event.createdBy._id;
     const eventDate = new Date(event.date);
 
     return (
@@ -495,12 +606,10 @@ export default function EventsPage() {
         <View style={styles.eventContent}>
           <View style={styles.eventTitleRow}>
             <Text style={styles.eventTitle}>{event.title}</Text>
-            {event.isPublic && (
-              <View style={styles.publicBadge}>
-                <Ionicons name="globe-outline" size={14} color="#10b981" />
-                <Text style={styles.publicBadgeText}>PUBLIC</Text>
-              </View>
-            )}
+            <View style={styles.privateBadge}>
+              <Ionicons name="lock-closed-outline" size={12} color="#a855f7" />
+              <Text style={styles.privateBadgeText}>PRIVATE</Text>
+            </View>
           </View>
 
           <View style={styles.eventDetail}>
@@ -528,22 +637,13 @@ export default function EventsPage() {
             </View>
           ) : null}
 
-          {/* Show ticket stats for public paid events, invited count for private events */}
-          {event.isPublic && event.isPaid ? (
-            <View style={styles.eventDetail}>
-              <Ionicons name="ticket" size={16} color="#a855f7" />
-              <Text style={styles.eventDetailText}>
-                {event.ticketsSold || 0} / {event.maxGuests} tickets sold
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.eventDetail}>
-              <Ionicons name="people" size={16} color="#a855f7" />
-              <Text style={styles.eventDetailText}>
-                {event.invitedUsers.length} invited
-              </Text>
-            </View>
-          )}
+          <View style={styles.eventDetail}>
+            <Ionicons name="people" size={16} color="#a855f7" />
+            <Text style={styles.eventDetailText}>
+              {event.invitedUsers.length} invited
+              {event.pendingInvites.length > 0 ? ` · ${event.pendingInvites.length} pending` : ""}
+            </Text>
+          </View>
 
           <View style={styles.eventActions}>
             <TouchableOpacity
@@ -599,7 +699,27 @@ export default function EventsPage() {
       <LinearGradient colors={["#0f0f1a", "#1a1a2e"]} style={styles.container}>
         <SafeAreaView style={styles.safeArea}>
           <View style={styles.header}>
-            <Text style={styles.headerTitle}>My Events</Text>
+            <Text style={styles.headerTitle}>Events</Text>
+          </View>
+
+          {/* Tab switcher */}
+          <View style={styles.tabRow}>
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === "private" && styles.tabBtnActive]}
+              onPress={() => setActiveTab("private")}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="lock-closed-outline" size={14} color={activeTab === "private" ? "#fff" : "#6b7280"} />
+              <Text style={[styles.tabBtnText, activeTab === "private" && styles.tabBtnTextActive]}>Private</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === "discover" && styles.tabBtnActive]}
+              onPress={() => setActiveTab("discover")}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="globe-outline" size={14} color={activeTab === "discover" ? "#fff" : "#6b7280"} />
+              <Text style={[styles.tabBtnText, activeTab === "discover" && styles.tabBtnTextActive]}>Discover</Text>
+            </TouchableOpacity>
           </View>
 
         <ScrollView
@@ -613,11 +733,68 @@ export default function EventsPage() {
             />
           }
         >
-          {loading ? (
+          {/* ──── DISCOVER TAB ──── */}
+          {activeTab === "discover" ? (
+            <>
+              {/* City filter chips */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={styles.cityFilterScroll}
+                contentContainerStyle={styles.cityFilterContent}
+              >
+                <TouchableOpacity
+                  style={[styles.cityChip, !selectedCity && styles.cityChipActive]}
+                  onPress={() => { setSelectedCity(null); fetchDiscoverEvents(1, null, true); }}
+                >
+                  <Text style={[styles.cityChipText, !selectedCity && styles.cityChipTextActive]}>All</Text>
+                </TouchableOpacity>
+                {cities.map((city) => (
+                  <TouchableOpacity
+                    key={city._id}
+                    style={[styles.cityChip, selectedCity === city.name && styles.cityChipActive]}
+                    onPress={() => { setSelectedCity(city.name); fetchDiscoverEvents(1, city.name, true); }}
+                  >
+                    <Text style={[styles.cityChipText, selectedCity === city.name && styles.cityChipTextActive]}>{city.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+
+              {discoverLoading ? (
+                <EventCardSkeleton count={5} />
+              ) : discoverEvents.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="globe-outline" size={64} color="#6b7280" />
+                  <Text style={styles.emptyStateTitle}>No public events yet</Text>
+                  <Text style={styles.emptyStateText}>Check back soon or try a different city</Text>
+                </View>
+              ) : (
+                <>
+                  {discoverEvents.map((ev) => (
+                    <View key={ev._id} style={{ paddingHorizontal: 16, marginBottom: 12 }}>
+                      <PublicEventCard
+                        event={ev}
+                        onPurchaseTicket={handlePurchaseTicket}
+                        onJoinFreeEvent={handleJoinFreeEvent}
+                      />
+                    </View>
+                  ))}
+                  {discoverHasMore && (
+                    <TouchableOpacity style={styles.loadMoreBtn} onPress={loadMoreDiscover} disabled={discoverLoadingMore} activeOpacity={0.7}>
+                      {discoverLoadingMore ? <ActivityIndicator size="small" color="#a855f7" /> : <Text style={styles.loadMoreText}>Load More</Text>}
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
+            </>
+          ) : null}
+
+          {/* ──── PRIVATE TAB ──── */}
+          {activeTab === "private" ? (loading ? (
             <EventCardSkeleton count={5} />
           ) : (() => {
-            const pending = events.filter(e => e.userStatus === "pending");
-            const myEvents = events.filter(e => e.userStatus !== "pending");
+            const pending = privateEvents.filter(e => e.userStatus === "pending");
+            const myEvents = privateEvents.filter(e => e.userStatus !== "pending");
             return (
               <>
                 {/* ── Pending Invites ── */}
@@ -678,19 +855,19 @@ export default function EventsPage() {
                   </View>
                 )}
 
-                {/* ── My Events & Attending ── */}
+                {/* ── My Private Events & Attending ── */}
                 {myEvents.length === 0 && pending.length === 0 ? (
                   <View style={styles.emptyState}>
-                    <Ionicons name="calendar-outline" size={64} color="#6b7280" />
-                    <Text style={styles.emptyStateTitle}>No events yet</Text>
+                    <Ionicons name="lock-closed-outline" size={64} color="#6b7280" />
+                    <Text style={styles.emptyStateTitle}>No private events yet</Text>
                     <Text style={styles.emptyStateText}>
-                      Create your first event from the home page
+                      Create an invite-only event from the home page
                     </Text>
                   </View>
                 ) : myEvents.length > 0 ? (
                   <View style={styles.section}>
                     {pending.length > 0 && (
-                      <Text style={styles.sectionTitle}>My Events</Text>
+                      <Text style={styles.sectionTitle}>My Private Events</Text>
                     )}
                     {myEvents.map(renderEvent)}
                   </View>
@@ -711,14 +888,14 @@ export default function EventsPage() {
                     )}
                   </TouchableOpacity>
                 )}
-                {!hasMore && events.length > 0 && (
+                {!hasMore && privateEvents.length > 0 && (
                   <Text style={styles.allLoadedText}>
-                    {total} event{total !== 1 ? "s" : ""} total
+                    {privateEvents.length} private event{privateEvents.length !== 1 ? "s" : ""}
                   </Text>
                 )}
               </>
             );
-          })()}
+          })()) : null}
         </ScrollView>
         </SafeAreaView>
       </LinearGradient>
@@ -1119,13 +1296,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContent: {
-    padding: getResponsivePadding(),
+    paddingBottom: 20,
   },
   emptyState: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
     paddingVertical: 80,
+    paddingHorizontal: 24,
   },
   emptyStateTitle: {
     fontSize: scaleFontSize(20),
@@ -1141,7 +1319,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   // ── Section headings ──
-  section: { marginBottom: 8 },
+  section: { marginBottom: 8, paddingHorizontal: 16 },
   sectionTitle: {
     fontSize: scaleFontSize(13),
     fontFamily: Fonts.semiBold,
@@ -1256,6 +1434,78 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     color: "#10b981",
     letterSpacing: 0.5,
+  },
+  privateBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "rgba(168, 85, 247, 0.15)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    marginLeft: 8,
+  },
+  privateBadgeText: {
+    fontSize: scaleFontSize(10),
+    fontFamily: Fonts.bold,
+    color: "#a855f7",
+    letterSpacing: 0.5,
+  },
+  tabRow: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginVertical: 12,
+    backgroundColor: "#1f1f2e",
+    borderRadius: 12,
+    padding: 4,
+  },
+  tabBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 9,
+  },
+  tabBtnActive: {
+    backgroundColor: "#a855f7",
+  },
+  tabBtnText: {
+    fontSize: 13,
+    fontFamily: Fonts.semiBold,
+    color: "#6b7280",
+  },
+  tabBtnTextActive: {
+    color: "#fff",
+  },
+  cityFilterScroll: {
+    marginTop: 4,
+    marginBottom: 12,
+  },
+  cityFilterContent: {
+    paddingHorizontal: 16,
+    gap: 8,
+  },
+  cityChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    backgroundColor: "#1f1f2e",
+    borderWidth: 1,
+    borderColor: "#374151",
+  },
+  cityChipActive: {
+    backgroundColor: "#a855f7",
+    borderColor: "#a855f7",
+  },
+  cityChipText: {
+    fontSize: 13,
+    fontFamily: Fonts.semiBold,
+    color: "#6b7280",
+  },
+  cityChipTextActive: {
+    color: "#fff",
   },
   eventDetail: {
     flexDirection: "row",

@@ -103,8 +103,17 @@ export default function ChatScreen() {
       onNewMessage: (message: Message) => {
         if (message.chat === id) {
           setMessages((prev) => {
-            // prevent duplicates (covers both socket delivery and optimistic add)
             if (prev.some((m) => m._id === message._id)) return prev;
+            // Own message arriving via socket: replace the pending temp bubble
+            // instead of appending, so spinner never coexists with the sent tick
+            if (message.sender._id === currentUserId) {
+              const tempIdx = prev.findIndex((m) => m._id.startsWith("temp_"));
+              if (tempIdx !== -1) {
+                const next = [...prev];
+                next[tempIdx] = message;
+                return next;
+              }
+            }
             return [...prev, message];
           });
 
@@ -153,27 +162,50 @@ export default function ChatScreen() {
   const handleSendMessage = async (content: string) => {
     if (!content.trim() || sending) return;
 
+    const tempId = `temp_${Date.now()}`;
+
+    // Build sender from participants so the bubble renders correctly right away
+    const senderProfile = chat?.participants.find((p) => p._id === currentUserId)
+      ?? { _id: currentUserId, username: "", email: "" };
+
+    const tempMessage: Message = {
+      _id: tempId,
+      chat: id as string,
+      sender: senderProfile,
+      type: "text",
+      content: content.trim(),
+      status: "sending",
+      isDeleted: false,
+      isEdited: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    // Push the bubble instantly before the API call
+    setMessages((prev) => [...prev, tempMessage]);
+    setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+
     try {
       setSending(true);
-      const newMessage = await chatService.sendMessage(id, {
+      const newMessage = await chatService.sendMessage(id as string, {
         type: "text",
         content: content.trim(),
       });
 
-      // Add message to UI immediately so the sender always sees it.
-      // The dedup check in the socket handler prevents it showing twice
-      // if the socket also delivers it.
+      // Replace temp bubble with the real server message.
+      // If the socket beat us and already added the real message, just remove the temp.
       setMessages((prev) => {
-        if (prev.some((m) => m._id === newMessage._id)) return prev;
-        return [...prev, newMessage];
+        if (prev.some((m) => m._id === newMessage._id)) {
+          return prev.filter((m) => m._id !== tempId);
+        }
+        return prev.map((m) => (m._id === tempId ? newMessage : m));
       });
       trackEvent("message_sent", { chatId: id, type: "text" });
-
-      setTimeout(() => {
-        flatListRef.current?.scrollToEnd({ animated: true });
-      }, 100);
     } catch (error: any) {
       console.error("Error sending message:", error);
+      setMessages((prev) =>
+        prev.map((m) => m._id === tempId ? { ...m, status: "failed" } : m)
+      );
       Alert.alert("Error", "Failed to send message");
     } finally {
       setSending(false);

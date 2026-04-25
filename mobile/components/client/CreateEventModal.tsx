@@ -46,6 +46,7 @@ export default function CreateEventModal({
 }: CreateEventModalProps) {
   const [loading, setLoading] = useState(false);
   const [cities, setCities] = useState<City[]>([]);
+  const [isVerified, setIsVerified] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -66,6 +67,7 @@ export default function CreateEventModal({
   useEffect(() => {
     if (visible) {
       loadCitiesAndTypes();
+      loadVerificationStatus();
     }
   }, [visible]);
   
@@ -76,6 +78,30 @@ export default function CreateEventModal({
     } catch {
       // Fall back to static constants silently
     }
+  };
+
+  const loadVerificationStatus = async () => {
+    try {
+      // Check SecureStore first for a fast path
+      const userJson = await SecureStore.getItemAsync("user");
+      if (userJson) {
+        const u = JSON.parse(userJson);
+        if (typeof u.verified === "boolean") {
+          setIsVerified(u.verified);
+          return;
+        }
+      }
+      // Fall back to profile API
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) return;
+      const res = await fetch(`${BASE_URL}/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setIsVerified(data.user?.verified ?? data.vendor?.verified ?? false);
+      }
+    } catch {}
   };
 
   const handleInputChange = (field: string, value: string | boolean) => {
@@ -219,6 +245,27 @@ export default function CreateEventModal({
   
   
 
+  const isSubmitEnabled = !!formData.title.trim() && !!formData.date && !!formData.location;
+
+  const quickDates = [
+    { label: "Tonight", offset: 0 },
+    { label: "Tomorrow", offset: 1 },
+    { label: "This Wknd", offset: 2 },
+    { label: "Custom", offset: -1 },
+  ];
+
+  const applyQuickDate = (offset: number) => {
+    if (offset === -1) {
+      setShowDatePicker(true);
+      return;
+    }
+    const d = new Date();
+    d.setDate(d.getDate() + offset);
+    d.setHours(22, 0, 0, 0);
+    setSelectedDate(d);
+    setFormData((prev) => ({ ...prev, date: d.toISOString() }));
+  };
+
   return (
     <Modal
       animationType="slide"
@@ -228,17 +275,20 @@ export default function CreateEventModal({
     >
       <View style={styles.modalOverlay}>
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <View style={styles.modalContainer}>
+          <LinearGradient colors={["#1A0F35", "#0B0613"]} style={styles.modalContainer}>
+            {/* Grabber */}
+            <View style={styles.grabber} />
+
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 8 }}
+              contentContainerStyle={{ paddingBottom: 100 }}
             >
               {/* Header */}
               <View style={styles.header}>
-                <Text style={styles.modalTitle}>Create Event</Text>
+                <Text style={styles.modalTitle}>Create event</Text>
                 <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                  <Text style={styles.closeButtonText}>✕</Text>
+                  <Ionicons name="close" size={20} color="rgba(244,238,255,0.7)" />
                 </TouchableOpacity>
               </View>
 
@@ -246,30 +296,47 @@ export default function CreateEventModal({
               <ImagePickerButton
                 imageUri={eventImage}
                 onImageSelected={setEventImage}
-                label="Event Image"
-                size={120}
+                label="Cover Photo"
+                size={140}
                 shape="square"
               />
 
               {/* Event Title */}
-              <Text style={styles.label}>Event Title *</Text>
+              <Text style={styles.label}>Event name *</Text>
               <TextInput
                 style={styles.input}
-                placeholder="e.g., Birthday Party"
-                placeholderTextColor="#999"
+                placeholder="Give it a name..."
+                placeholderTextColor="rgba(244,238,255,0.3)"
                 value={formData.title}
                 onChangeText={(value) => handleInputChange("title", value)}
               />
 
-              {/* Event Date */}
-              <Text style={styles.label}>Event Date & Time *</Text>
-              <TouchableOpacity
-                style={styles.datePickerButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Ionicons name="calendar-outline" size={20} color="#a855f7" />
+              {/* Quick Date Pills */}
+              <Text style={styles.label}>When *</Text>
+              <View style={styles.quickDatesRow}>
+                {quickDates.map((qd) => {
+                  const active = qd.offset !== -1 && formData.date && (() => {
+                    const target = new Date();
+                    target.setDate(target.getDate() + qd.offset);
+                    const selected = new Date(formData.date);
+                    return selected.toDateString() === target.toDateString();
+                  })();
+                  return (
+                    <TouchableOpacity
+                      key={qd.label}
+                      style={[styles.quickDatePill, active && styles.quickDatePillActive]}
+                      onPress={() => applyQuickDate(qd.offset)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.quickDateText, active && styles.quickDateTextActive]}>{qd.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <TouchableOpacity style={styles.datePickerButton} onPress={() => setShowDatePicker(true)}>
+                <Ionicons name="calendar-outline" size={18} color="#a855f7" />
                 <Text style={styles.datePickerText}>
-                  {formatDisplayDate(formData.date)}
+                  {formData.date ? formatDisplayDate(formData.date) : "Pick date & time"}
                 </Text>
               </TouchableOpacity>
               {showDatePicker && Platform.OS === "ios" && (
@@ -357,117 +424,128 @@ export default function CreateEventModal({
               )}
 
               {/* Description */}
-              <Text style={styles.label}>Description</Text>
+              <Text style={styles.label}>The vibe</Text>
               <TextInput
                 style={[styles.input, styles.multilineInput]}
-                placeholder="Event details..."
-                placeholderTextColor="#999"
+                placeholder="What's the mood? Any details..."
+                placeholderTextColor="rgba(244,238,255,0.3)"
                 multiline
                 numberOfLines={4}
                 value={formData.description}
                 onChangeText={(value) => handleInputChange("description", value)}
               />
 
-              {/* Public Event Toggle */}
-              <TouchableOpacity
-                style={styles.checkboxContainer}
-                onPress={() => handleInputChange("isPublic", !formData.isPublic)}
-              >
-                <View
-                  style={[
-                    styles.checkbox,
-                    formData.isPublic && styles.checkboxChecked,
-                  ]}
+              {/* Who can join — visibility toggle */}
+              <Text style={styles.label}>Who can join</Text>
+              <View style={styles.visibilityRow}>
+                <TouchableOpacity
+                  style={[styles.visibilityCard, !formData.isPublic && styles.visibilityCardActive]}
+                  onPress={() => handleInputChange("isPublic", false)}
+                  activeOpacity={0.8}
                 >
-                  {formData.isPublic && (
-                    <Text style={styles.checkmark}>✓</Text>
-                  )}
-                </View>
-                <View style={styles.checkboxTextContainer}>
-                  <Text style={styles.checkboxLabel}>Make this event public</Text>
-                  <Text style={styles.checkboxHint}>
-                    Public events can be discovered by others. You can also charge for tickets!
+                  <Text style={styles.visibilityEmoji}>🔒</Text>
+                  <Text style={[styles.visibilityLabel, !formData.isPublic && styles.visibilityLabelActive]}>Private</Text>
+                  <Text style={styles.visibilityHint}>Invite only</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.visibilityCard,
+                    formData.isPublic && styles.visibilityCardActive,
+                    !isVerified && styles.visibilityCardDisabled,
+                  ]}
+                  onPress={() => {
+                    if (!isVerified) {
+                      Alert.alert(
+                        "Verification required",
+                        "Only verified users can create public events. Submit a verification request to unlock this."
+                      );
+                      return;
+                    }
+                    handleInputChange("isPublic", true);
+                  }}
+                  activeOpacity={isVerified ? 0.8 : 1}
+                >
+                  <View style={styles.visibilityPublicTop}>
+                    <Text style={styles.visibilityEmoji}>🌐</Text>
+                    {!isVerified && (
+                      <Ionicons name="lock-closed" size={13} color="rgba(244,238,255,0.3)" style={{ marginLeft: 4 }} />
+                    )}
+                  </View>
+                  <Text style={[
+                    styles.visibilityLabel,
+                    formData.isPublic && styles.visibilityLabelActive,
+                    !isVerified && styles.visibilityLabelDisabled,
+                  ]}>Public</Text>
+                  <Text style={[styles.visibilityHint, !isVerified && styles.visibilityHintDisabled]}>
+                    {isVerified ? "Open to all" : "Verified only"}
                   </Text>
-                </View>
-              </TouchableOpacity>
+                </TouchableOpacity>
+              </View>
 
-              {/* Paid Event Toggle (only if public) */}
+              {/* Sell tickets (only if public) */}
               {formData.isPublic && (
                 <>
                   <TouchableOpacity
                     style={styles.checkboxContainer}
-                    onPress={() =>
-                      handleInputChange("isPaid", !formData.isPaid)
-                    }
+                    onPress={() => handleInputChange("isPaid", !formData.isPaid)}
                   >
-                    <View
-                      style={[
-                        styles.checkbox,
-                        formData.isPaid && styles.checkboxChecked,
-                      ]}
-                    >
-                      {formData.isPaid && (
-                        <Text style={styles.checkmark}>✓</Text>
-                      )}
+                    <View style={[styles.checkbox, formData.isPaid && styles.checkboxChecked]}>
+                      {formData.isPaid && <Text style={styles.checkmark}>✓</Text>}
                     </View>
-                    <Text style={styles.checkboxLabel}>
-                      Charge for tickets
-                    </Text>
+                    <Text style={styles.checkboxLabel}>Sell tickets 🎟️</Text>
                   </TouchableOpacity>
 
-                  {/* Ticket Price and Max Guests (only if paid) */}
                   {formData.isPaid && (
                     <>
                       <Text style={styles.label}>Ticket Price ($) *</Text>
                       <TextInput
                         style={styles.input}
                         placeholder="e.g., 25.00"
-                        placeholderTextColor="#999"
+                        placeholderTextColor="rgba(244,238,255,0.3)"
                         keyboardType="decimal-pad"
                         value={formData.ticketPrice}
-                        onChangeText={(value) =>
-                          handleInputChange("ticketPrice", value)
-                        }
+                        onChangeText={(value) => handleInputChange("ticketPrice", value)}
                       />
-
-                      <Text style={styles.label}>Maximum Guests *</Text>
+                      <Text style={styles.label}>Max Guests *</Text>
                       <TextInput
                         style={styles.input}
                         placeholder="e.g., 100"
-                        placeholderTextColor="#999"
+                        placeholderTextColor="rgba(244,238,255,0.3)"
                         keyboardType="number-pad"
                         value={formData.maxGuests}
-                        onChangeText={(value) =>
-                          handleInputChange("maxGuests", value)
-                        }
+                        onChangeText={(value) => handleInputChange("maxGuests", value)}
                       />
                     </>
                   )}
                 </>
               )}
-
-              {/* Create Button */}
-              <TouchableOpacity
-                style={[styles.createButton, loading && styles.createButtonDisabled]}
-                onPress={handleCreateEvent}
-                disabled={loading}
-              >
-                {loading ? (
-                  <ActivityIndicator color="#fff" size="small" />
-                ) : (
-                  <Text style={styles.createButtonText}>Create Event</Text>
-                )}
-              </TouchableOpacity>
             </ScrollView>
 
-            {/* Scroll hint: fade at bottom to show more content */}
-            <View pointerEvents="none" style={styles.scrollHint}>
-              <LinearGradient
-                colors={["transparent", Colors.darkBackground]}
-                style={StyleSheet.absoluteFill}
-              />
+            {/* Sticky footer */}
+            <View style={styles.stickyFooter}>
+              <TouchableOpacity
+                style={[styles.createButton, !isSubmitEnabled && styles.createButtonDisabled]}
+                onPress={handleCreateEvent}
+                disabled={loading || !isSubmitEnabled}
+                activeOpacity={0.85}
+              >
+                <LinearGradient
+                  colors={isSubmitEnabled ? ["#A855F7", "#7C3AED"] : ["#2D1B69", "#1A1030"]}
+                  style={styles.createButtonGradient}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#fff" size="small" />
+                  ) : (
+                    <Text style={styles.createButtonText}>
+                      {isSubmitEnabled ? "Create event →" : "Add name, date & place"}
+                    </Text>
+                  )}
+                </LinearGradient>
+              </TouchableOpacity>
             </View>
-          </View>
+          </LinearGradient>
         </TouchableWithoutFeedback>
       </View>
     </Modal>
@@ -477,80 +555,115 @@ export default function CreateEventModal({
 const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.7)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "flex-end",
   },
   modalContainer: {
-    width: "90%",
-    maxHeight: "90%",
-    backgroundColor: Colors.darkBackground,
-    borderRadius: 16,
-    padding: getResponsivePadding(),
+    height: "92%",
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    overflow: "hidden",
+    padding: 0,
+  },
+  grabber: {
+    width: 38,
+    height: 5,
+    borderRadius: 3,
+    backgroundColor: "rgba(244,238,255,0.2)",
+    alignSelf: "center",
+    marginTop: 12,
+    marginBottom: 4,
   },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   modalTitle: {
-    fontSize: scaleFontSize(24),
-    fontFamily: Fonts.bold,
-    color: "#fff",
+    fontFamily: "BricolageGrotesque_800ExtraBold",
+    fontSize: scaleFontSize(22),
+    color: "#F4EEFF",
+    letterSpacing: -0.5,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#374151",
+    backgroundColor: "rgba(255,255,255,0.08)",
     justifyContent: "center",
     alignItems: "center",
   },
-  closeButtonText: {
-    color: "#fff",
-    fontSize: scaleFontSize(18),
-    fontFamily: Fonts.bold,
-  },
   label: {
-    fontSize: scaleFontSize(14),
+    fontSize: scaleFontSize(13),
     fontFamily: Fonts.semiBold,
-    color: "#e5e7eb",
+    color: "rgba(244,238,255,0.64)",
     marginBottom: 8,
-    marginTop: 12,
+    marginTop: 16,
+    paddingHorizontal: 20,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
   },
   input: {
-    width: "100%",
+    marginHorizontal: 20,
     borderWidth: 1,
-    borderColor: "#374151",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
     fontSize: scaleFontSize(16),
     fontFamily: Fonts.regular,
-    color: "#fff",
-    backgroundColor: "#1f1f2e",
+    color: "#F4EEFF",
+    backgroundColor: "rgba(255,255,255,0.06)",
+    marginBottom: 4,
+  },
+  quickDatesRow: {
+    flexDirection: "row",
+    gap: 8,
+    paddingHorizontal: 20,
     marginBottom: 8,
+  },
+  quickDatePill: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    backgroundColor: "rgba(255,255,255,0.05)",
+  },
+  quickDatePillActive: {
+    backgroundColor: "#A855F7",
+    borderColor: "#A855F7",
+  },
+  quickDateText: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 13,
+    color: "rgba(244,238,255,0.64)",
+  },
+  quickDateTextActive: {
+    color: "#fff",
   },
   datePickerButton: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
-    borderColor: "#374151",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    backgroundColor: "#1f1f2e",
-    marginBottom: 8,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    marginBottom: 4,
+    marginHorizontal: 20,
   },
   datePickerText: {
-    fontSize: scaleFontSize(16),
+    fontSize: scaleFontSize(15),
     fontFamily: Fonts.regular,
-    color: "#fff",
+    color: "#F4EEFF",
   },
   multilineInput: {
-    height: 100,
+    height: 90,
     textAlignVertical: "top",
   },
   cityPickerButton: {
@@ -558,63 +671,114 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
-    borderColor: "#374151",
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    backgroundColor: "#1f1f2e",
-    marginBottom: 8,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    marginBottom: 4,
+    marginHorizontal: 20,
   },
   cityPickerText: {
     flex: 1,
     fontSize: scaleFontSize(16),
     fontFamily: Fonts.regular,
-    color: "#fff",
+    color: "#F4EEFF",
   },
   cityPickerPlaceholder: {
-    color: "#999",
+    color: "rgba(244,238,255,0.3)",
   },
   cityDropdown: {
     borderWidth: 1,
-    borderColor: "#374151",
-    borderRadius: 8,
-    backgroundColor: "#1f1f2e",
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 12,
+    backgroundColor: "#1A1030",
     marginBottom: 8,
+    marginHorizontal: 20,
     overflow: "hidden",
   },
   cityItem: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    paddingHorizontal: 20,
-    paddingVertical: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: "#374151",
+    borderBottomColor: "rgba(255,255,255,0.06)",
   },
   cityItemSelected: {
-    backgroundColor: "rgba(168, 85, 247, 0.08)",
+    backgroundColor: "rgba(168, 85, 247, 0.1)",
   },
   cityItemText: {
-    fontSize: scaleFontSize(16),
+    fontSize: scaleFontSize(15),
     fontFamily: Fonts.regular,
-    color: "#e5e7eb",
+    color: "#F4EEFF",
   },
   cityItemTextSelected: {
     color: "#a855f7",
     fontFamily: Fonts.semiBold,
   },
+  visibilityRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 20,
+  },
+  visibilityCard: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: "rgba(255,255,255,0.04)",
+    alignItems: "center",
+    gap: 4,
+  },
+  visibilityCardActive: {
+    borderColor: "#A855F7",
+    backgroundColor: "rgba(168,85,247,0.12)",
+  },
+  visibilityCardDisabled: {
+    opacity: 0.45,
+  },
+  visibilityPublicTop: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  visibilityEmoji: {
+    fontSize: 22,
+  },
+  visibilityLabel: {
+    fontFamily: Fonts.bold,
+    fontSize: 14,
+    color: "rgba(244,238,255,0.5)",
+  },
+  visibilityLabelActive: {
+    color: "#A855F7",
+  },
+  visibilityLabelDisabled: {
+    color: "rgba(244,238,255,0.3)",
+  },
+  visibilityHint: {
+    fontFamily: Fonts.regular,
+    fontSize: 11,
+    color: "rgba(244,238,255,0.35)",
+  },
+  visibilityHintDisabled: {
+    color: "rgba(244,238,255,0.2)",
+  },
   checkboxContainer: {
     flexDirection: "row",
     alignItems: "center",
     marginVertical: 12,
+    paddingHorizontal: 20,
   },
   checkbox: {
     width: 24,
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: "#374151",
-    backgroundColor: "#1f1f2e",
+    borderColor: "rgba(255,255,255,0.2)",
+    backgroundColor: "rgba(255,255,255,0.06)",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
@@ -631,7 +795,7 @@ const styles = StyleSheet.create({
   checkboxLabel: {
     fontSize: scaleFontSize(15),
     fontFamily: Fonts.medium,
-    color: "#e5e7eb",
+    color: "#F4EEFF",
   },
   checkboxTextContainer: {
     flex: 1,
@@ -639,32 +803,34 @@ const styles = StyleSheet.create({
   checkboxHint: {
     fontSize: scaleFontSize(12),
     fontFamily: Fonts.regular,
-    color: "#9ca3af",
+    color: "rgba(244,238,255,0.42)",
     marginTop: 4,
   },
-  createButton: {
-    marginTop: 20,
-    backgroundColor: Colors.primary,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  createButtonDisabled: {
-    opacity: 0.6,
-  },
-  scrollHint: {
+  stickyFooter: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
-    height: 56,
-    borderBottomLeftRadius: 16,
-    borderBottomRightRadius: 16,
+    padding: 16,
+    paddingBottom: 28,
+    backgroundColor: "rgba(11,6,19,0.85)",
+  },
+  createButton: {
+    borderRadius: 14,
+    overflow: "hidden",
+  },
+  createButtonDisabled: {
+    opacity: 0.7,
+  },
+  createButtonGradient: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
   },
   createButtonText: {
     color: "#fff",
     fontSize: scaleFontSize(16),
     fontFamily: Fonts.bold,
+    letterSpacing: -0.2,
   },
 });

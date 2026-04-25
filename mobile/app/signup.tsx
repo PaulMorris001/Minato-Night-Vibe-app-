@@ -3,6 +3,7 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -26,6 +27,10 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState("");
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -34,9 +39,31 @@ export default function Signup() {
     configureGoogleSignIn();
   }, []);
 
+  const handleConfirmPasswordChange = (value: string) => {
+    setConfirmPassword(value);
+    if (password && value && value !== password) {
+      setPasswordError("Passwords don't match");
+    } else {
+      setPasswordError("");
+    }
+  };
+
+  const handlePasswordChange = (value: string) => {
+    setPassword(value);
+    if (confirmPassword && value !== confirmPassword) {
+      setPasswordError("Passwords don't match");
+    } else {
+      setPasswordError("");
+    }
+  };
+
   const handleSignup = async () => {
-    if (!username || !email || !password) {
+    if (!username || !email || !password || !confirmPassword) {
       Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+    if (password !== confirmPassword) {
+      setPasswordError("Passwords don't match");
       return;
     }
 
@@ -200,13 +227,66 @@ export default function Signup() {
               keyboardType="email-address"
             />
 
-            <FormInput
-              label="Password"
-              placeholder="Create a password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-            />
+            {/* Password */}
+            <View style={styles.passwordContainer}>
+              <Text style={styles.passwordLabel}>Password</Text>
+              <View style={[styles.passwordRow, passwordError ? styles.passwordRowError : null]}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Create a password"
+                  placeholderTextColor="#6b7280"
+                  value={password}
+                  onChangeText={handlePasswordChange}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  textContentType="newPassword"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.eyeButton}
+                >
+                  <Ionicons
+                    name={showPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#6b7280"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Confirm Password */}
+            <View style={styles.passwordContainer}>
+              <Text style={styles.passwordLabel}>Confirm Password</Text>
+              <View style={[styles.passwordRow, passwordError ? styles.passwordRowError : null]}>
+                <TextInput
+                  style={styles.passwordInput}
+                  placeholder="Re-enter your password"
+                  placeholderTextColor="#6b7280"
+                  value={confirmPassword}
+                  onChangeText={handleConfirmPasswordChange}
+                  secureTextEntry={!showConfirmPassword}
+                  autoCapitalize="none"
+                  autoComplete="new-password"
+                  textContentType="newPassword"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirmPassword((v) => !v)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={styles.eyeButton}
+                >
+                  <Ionicons
+                    name={showConfirmPassword ? "eye-off-outline" : "eye-outline"}
+                    size={20}
+                    color="#6b7280"
+                  />
+                </TouchableOpacity>
+              </View>
+              {passwordError ? (
+                <Text style={styles.passwordError}>{passwordError}</Text>
+              ) : null}
+            </View>
 
             <PrimaryButton
               onPress={handleSignup}
@@ -325,6 +405,42 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: scaleFontSize(16),
     fontWeight: "600",
+  },
+  passwordContainer: {
+    marginBottom: 20,
+  },
+  passwordLabel: {
+    fontSize: 16,
+    fontFamily: "System",
+    fontWeight: "600",
+    color: "#e5e7eb",
+    marginBottom: 8,
+  },
+  passwordRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#1f1f2e",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#374151",
+    paddingHorizontal: 14,
+  },
+  passwordRowError: {
+    borderColor: "#ef4444",
+  },
+  passwordInput: {
+    flex: 1,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: "#fff",
+  },
+  eyeButton: {
+    paddingLeft: 8,
+  },
+  passwordError: {
+    fontSize: 12,
+    color: "#ef4444",
+    marginTop: 4,
   },
   footer: {
     alignItems: "center",
