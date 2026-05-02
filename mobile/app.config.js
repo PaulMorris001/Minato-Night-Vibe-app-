@@ -80,7 +80,7 @@ module.exports = {
       {
         url: "https://sentry.io/",
         project: "react-native",
-        organization: "setemi-if",
+        organization: "minato-tu",
         setCommits: false,
       },
     ],

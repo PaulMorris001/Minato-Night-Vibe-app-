@@ -121,7 +121,7 @@ export default function Login() {
       } else if (error.response?.status === 404) {
         errorMessage = "No account found with that email address. Did you mean to sign up?";
       } else if (error.response?.status === 403) {
-        errorMessage = "Your account has been suspended. Please contact support.";
+        errorMessage = "Your account has been suspended. Please contact Support@nvibez.com.";
       } else if (error.response?.status === 429) {
         errorMessage = "Too many login attempts. Please wait a few minutes and try again.";
       } else if (error.response?.status >= 500) {

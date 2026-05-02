@@ -37,15 +37,15 @@ const sections = [
   },
   {
     title: "Data Retention",
-    body: "We retain your account data for as long as your account is active. You may request deletion of your account and associated data by contacting support@nightvibe.app.",
+    body: "We retain your account data for as long as your account is active. You may request deletion of your account and associated data by contacting Support@nvibez.com.",
   },
   {
     title: "Your Rights",
-    body: "You have the right to access, correct, or delete your personal data. To exercise these rights, contact us at support@nightvibe.app.",
+    body: "You have the right to access, correct, or delete your personal data. To exercise these rights, contact us at Support@nvibez.com.",
   },
   {
     title: "Contact Us",
-    body: "For any privacy-related questions or concerns, reach out to:\n\nsupport@nightvibe.app",
+    body: "For any privacy-related questions or concerns, reach out to:\n\nSupport@nvibez.com",
   },
 ];
 

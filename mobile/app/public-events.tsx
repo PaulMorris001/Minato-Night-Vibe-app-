@@ -143,7 +143,7 @@ export default function PublicEventsPage() {
       setPage(1);
     } else {
       const d = await confirmRes.json();
-      Alert.alert("Error", d.message || "Payment succeeded but ticket could not be issued. Please contact support.");
+      Alert.alert("Error", d.message || "Payment succeeded but ticket could not be issued. Please contact Support@nvibez.com.");
     }
   };
 

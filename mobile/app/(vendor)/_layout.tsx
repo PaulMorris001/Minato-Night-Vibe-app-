@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Modal,
+  Alert,
   Platform,
   StatusBar,
   Image,
@@ -213,7 +214,12 @@ export default function VendorLayout() {
               <Ionicons name="chevron-forward" size={20} color="#4b5563" />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.menuItem}>
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() =>
+                Alert.alert("Help & Support", "Need help? Reach us at:\n\nSupport@nvibez.com", [{ text: "Got it" }])
+              }
+            >
               <View style={styles.menuIconContainer}>
                 <Ionicons
                   name="help-circle-outline"

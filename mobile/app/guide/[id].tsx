@@ -118,7 +118,7 @@ export default function GuideDetailPage() {
         fetchGuide();
       } else {
         const d = await confirmRes.json();
-        Alert.alert("Error", d.message || "Payment succeeded but access could not be granted. Please contact support.");
+        Alert.alert("Error", d.message || "Payment succeeded but access could not be granted. Please contact Support@nvibez.com.");
       }
     } finally {
       setPurchasing(false);

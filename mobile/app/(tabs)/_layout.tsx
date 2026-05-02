@@ -267,7 +267,7 @@ export default function TabsLayout() {
           setIsProfileModalVisible(false);
           Alert.alert(
             "Help & Support",
-            "Need help? Reach us at:\n\nsupport@nightvibe.app\n\nOr visit nightvibe.app/help for FAQs and guides.",
+            "Need help? Reach us at:\n\nSupport@nvibez.com",
             [{ text: "Got it" }]
           );
         }}
