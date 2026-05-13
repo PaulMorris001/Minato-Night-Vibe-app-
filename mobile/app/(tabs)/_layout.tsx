@@ -399,11 +399,11 @@ export default function TabsLayout() {
           tabBarInactiveTintColor: "#6b7280",
           tabBarStyle: {
             backgroundColor: Platform.OS === "ios" ? "rgba(31, 31, 46, 0.95)" : "#1f1f2e",
-            paddingBottom: Math.max(insets.bottom, Platform.OS === "ios" ? 24 : 16),
+            paddingBottom: Platform.OS === "ios" ? Math.max(insets.bottom, 24) : insets.bottom + 8,
             paddingTop: 8,
             borderTopWidth: 0.5,
             borderTopColor: "rgba(168, 85, 247, 0.2)",
-            height: Platform.OS === "ios" ? 90 : 70 + Math.max(insets.bottom - 8, 0),
+            height: Platform.OS === "ios" ? 90 : 60 + insets.bottom + 8,
             shadowColor: "#000",
             shadowOffset: {
               width: 0,

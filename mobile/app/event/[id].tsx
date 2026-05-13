@@ -13,7 +13,9 @@ import {
   FlatList,
   KeyboardAvoidingView,
   Platform,
+  Share,
 } from "react-native";
+import { createEventShareLink } from "@/utils/shareLinks";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
@@ -276,6 +278,20 @@ export default function EventDetailsPage() {
 
   const isCreator = event?.createdBy._id === currentUserId;
 
+  const handleShareEvent = async () => {
+    if (!event) return;
+    try {
+      const link = createEventShareLink(event.shareToken || event._id);
+      await Share.share({
+        message: `Check out this event on NightVibe: ${event.title}\n${link}`,
+        title: event.title,
+        url: link,
+      });
+    } catch (err) {
+      console.error("Share event error:", err);
+    }
+  };
+
   // Vendor search (debounced by useEffect in handleVendorSearch)
   const handleVendorSearch = async (query: string) => {
     setVendorQuery(query);
@@ -359,17 +375,24 @@ export default function EventDetailsPage() {
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Event Details</Text>
-          {!isCreator ? (
+          <View style={styles.headerActions}>
             <TouchableOpacity
               style={styles.backButton}
-              onPress={() => setReportSheetVisible(true)}
-              accessibilityLabel="Report event or block creator"
+              onPress={handleShareEvent}
+              accessibilityLabel="Share event"
             >
-              <Ionicons name="ellipsis-horizontal" size={22} color="#fff" />
+              <Ionicons name="share-social-outline" size={22} color="#a855f7" />
             </TouchableOpacity>
-          ) : (
-            <View style={styles.backButton} />
-          )}
+            {!isCreator ? (
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={() => setReportSheetVisible(true)}
+                accessibilityLabel="Report event or block creator"
+              >
+                <Ionicons name="ellipsis-horizontal" size={22} color="#fff" />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
 
         <ScrollView
@@ -923,6 +946,10 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     justifyContent: "center",
+    alignItems: "center",
+  },
+  headerActions: {
+    flexDirection: "row",
     alignItems: "center",
   },
   headerTitle: {

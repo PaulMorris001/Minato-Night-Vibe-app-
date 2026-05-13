@@ -7,7 +7,6 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { Fonts } from "@/constants/fonts";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface ChatInputProps {
   onSend: (message: string) => void;
@@ -24,7 +23,6 @@ export default function ChatInput({
   placeholder = "Type a message...",
   disabled = false,
 }: ChatInputProps) {
-  const insets = useSafeAreaInsets();
   const [message, setMessage] = useState("");
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isTypingRef = useRef(false);
@@ -68,7 +66,7 @@ export default function ChatInput({
   };
 
   return (
-      <View style={[styles.container, { paddingBottom: insets.bottom + 8 }]}>
+      <View style={styles.container}>
         {onImagePick && (
           <TouchableOpacity
             style={styles.iconButton}

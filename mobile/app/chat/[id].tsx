@@ -430,11 +430,11 @@ export default function ChatScreen() {
 
   return (
     <LinearGradient colors={["#1a1a2e", "#16213e"]} style={styles.container}>
-      <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <SafeAreaView style={styles.safeArea} edges={["top", "bottom"]}>
         <KeyboardAvoidingView
           style={styles.keyboardView}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 0}
+          keyboardVerticalOffset={0}
         >
           {/* Header */}
           <View style={styles.header}>

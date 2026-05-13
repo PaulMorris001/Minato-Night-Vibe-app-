@@ -304,9 +304,9 @@ export default function EventsPage() {
 
   const handleShareEvent = async (event: Event) => {
     try {
-      const link = createEventShareLink(event.shareToken);
+      const link = createEventShareLink(event.shareToken || event._id);
       await Share.share({
-        message: `Join my event: ${event.title}\nDate: ${new Date(event.date).toLocaleDateString()}\nLocation: ${event.location}\n\nOpen in NightVibe: ${link}`,
+        message: `Check out this event on NightVibe: ${event.title}\n${link}`,
         title: event.title,
         url: link,
       });

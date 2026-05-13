@@ -12,6 +12,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  KeyboardAvoidingView,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
@@ -273,7 +274,10 @@ export default function CreateEventModal({
       visible={visible}
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
           <LinearGradient colors={["#1A0F35", "#0B0613"]} style={styles.modalContainer}>
             {/* Grabber */}
@@ -282,7 +286,7 @@ export default function CreateEventModal({
             <ScrollView
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-              contentContainerStyle={{ paddingBottom: 100 }}
+              contentContainerStyle={{ paddingBottom: 140 }}
             >
               {/* Header */}
               <View style={styles.header}>
@@ -547,7 +551,7 @@ export default function CreateEventModal({
             </View>
           </LinearGradient>
         </TouchableWithoutFeedback>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

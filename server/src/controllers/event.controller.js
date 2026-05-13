@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Event from "../models/event.model.js";
 import User from "../models/user.model.js";
 import Ticket from "../models/ticket.model.js";
@@ -207,14 +208,29 @@ export const getEventById = async (req, res) => {
   }
 };
 
-// Get event by share token
+// Get event by share token OR by event _id (back-compat for older events
+// whose shareToken was never generated, and for links that use the _id).
 export const getEventByShareToken = async (req, res) => {
   try {
     const { shareToken } = req.params;
 
-    const event = await Event.findOne({ shareToken, isActive: true })
+    // 1) try shareToken
+    let event = await Event.findOne({ shareToken, isActive: true })
       .populate('createdBy', 'username email profilePicture')
       .populate('invitedUsers', 'username email profilePicture');
+
+    // 2) fall back to _id if the param looks like an ObjectId
+    if (!event && mongoose.isValidObjectId(shareToken)) {
+      event = await Event.findOne({ _id: shareToken, isActive: true })
+        .populate('createdBy', 'username email profilePicture')
+        .populate('invitedUsers', 'username email profilePicture');
+      // Auto-heal: if this event has no shareToken yet, set it so subsequent
+      // shares use the canonical token-based URL.
+      if (event && !event.shareToken) {
+        event.shareToken = new mongoose.Types.ObjectId().toString();
+        await event.save();
+      }
+    }
 
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
@@ -506,7 +522,10 @@ export const joinEventByShareLink = async (req, res) => {
     const { shareToken } = req.params;
     const userId = req.user.id;
 
-    const event = await Event.findOne({ shareToken, isActive: true });
+    let event = await Event.findOne({ shareToken, isActive: true });
+    if (!event && mongoose.isValidObjectId(shareToken)) {
+      event = await Event.findOne({ _id: shareToken, isActive: true });
+    }
 
     if (!event) {
       return res.status(404).json({ message: "Event not found" });
