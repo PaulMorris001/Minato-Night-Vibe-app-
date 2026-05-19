@@ -9,8 +9,12 @@
     "ios": "expo run:ios",
     "web": "expo start --web",
     "lint": "expo lint",
-    "ota:preview": "eas update --branch preview",
-    "ota:production": "eas update --branch production",
+    "ota:preview": "eas update --branch preview --platform ios && eas update --branch preview --platform android",
+    "ota:preview:ios": "eas update --branch preview --platform ios",
+    "ota:preview:android": "eas update --branch preview --platform android",
+    "ota:production": "eas update --branch production --platform ios && eas update --branch production --platform android",
+    "ota:production:ios": "eas update --branch production --platform ios",
+    "ota:production:android": "eas update --branch production --platform android",
     "ota:rollback": "eas update:rollback"
   },
   "dependencies": {

@@ -184,7 +184,7 @@ export default function Login() {
 
               <Text style={styles.headline}>
                 Welcome{"\n"}
-                <GradientAccent style={styles.headline}>back, regular.</GradientAccent>
+                <GradientAccent style={styles.headline}>back, regular!</GradientAccent>
               </Text>
               <Text style={styles.subhint}>
                 Your friends are already RSVP'ing. Let's catch up.
