@@ -30,7 +30,11 @@ function toSocialPreviewImage(url) {
   if (!url || typeof url !== 'string') return null;
   if (!url.includes('res.cloudinary.com') || !url.includes('/upload/')) return url;
   if (url.includes('/upload/w_1200,')) return url;
-  return url.replace('/upload/', '/upload/w_1200,h_630,c_fill,g_auto,q_auto,f_jpg/');
+  // Tuned for WhatsApp: 1200×630 (standard social card aspect), eco-quality
+  // JPG to keep the file under ~300 KB which WhatsApp prefers, and no
+  // `g_auto` so we don't depend on the Content-Aware Cropping add-on which
+  // can 404 on accounts that don't have it enabled.
+  return url.replace('/upload/', '/upload/w_1200,h_630,c_fill,q_auto:eco,f_jpg/');
 }
 
 function formatEventWhen(dateValue) {
@@ -139,6 +143,8 @@ function buildLandingPage({
   <meta property="og:description" content="${d}" />
   <meta property="og:url" content="${url}" />
   <meta property="og:image" content="${ogImage}" />
+  <meta property="og:image:secure_url" content="${ogImage}" />
+  <meta property="og:image:type" content="image/jpeg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="${t}" />
