@@ -24,6 +24,28 @@ function stripeErrorPayload(error, fallback) {
   };
 }
 
+/**
+ * True when a Stripe error indicates the saved Connect account ID is no
+ * longer reachable by the current API key. Two sibling cases:
+ *   · `resource_missing` — the account ID doesn't exist in this mode at all.
+ *   · `account_invalid` — the ID exists but belongs to a different platform
+ *     (e.g. the secret key was rotated from a different Stripe account, or
+ *     swapped between test and live).
+ * Either way the recovery is the same: wipe the stale ID and create a new
+ * account under the current key.
+ */
+function isStaleAccountError(err) {
+  const code = err?.code || err?.raw?.code;
+  if (code === "resource_missing" || code === "account_invalid") return true;
+  // Some platform-mismatch errors don't carry a clean code in older SDK
+  // versions — fall back to a message-substring check as a safety net.
+  const msg = (err?.raw?.message || err?.message || "").toLowerCase();
+  return (
+    msg.includes("not connected to your platform") ||
+    msg.includes("no such account")
+  );
+}
+
 // ─── Seller Connect Onboarding ───────────────────────────────────────────────
 
 /**
@@ -89,14 +111,14 @@ export const getAccountLink = async (req, res) => {
     try {
       accountLink = await buildLink(user.stripeAccountId);
     } catch (err) {
-      const stripeCode = err?.code || err?.raw?.code;
-      // `resource_missing` = account ID doesn't exist in the current Stripe
-      // mode. Almost always means a test-mode ID is saved but the server is
-      // now using a live secret key (or vice versa). Recover transparently:
-      // mint a fresh account and retry once.
-      if (stripeCode === "resource_missing") {
+      // Stale account ID — either it doesn't exist in this Stripe mode, or
+      // it belongs to a different Connect platform than the current secret
+      // key. Recover transparently: mint a fresh account and retry once.
+      if (isStaleAccountError(err)) {
         console.warn(
-          `[Stripe Connect] saved accountId ${user.stripeAccountId} not found in current mode — recreating`
+          `[Stripe Connect] saved accountId ${user.stripeAccountId} is stale (${
+            err?.code || err?.raw?.code || "no-code"
+          }) — recreating under the current API key`
         );
         const account = await stripe.accounts.create({
           type: "express",
@@ -140,12 +162,14 @@ export const getAccountStatus = async (req, res) => {
     try {
       account = await stripe.accounts.retrieve(user.stripeAccountId);
     } catch (err) {
-      const stripeCode = err?.code || err?.raw?.code;
-      // Saved account ID no longer exists in current mode — wipe it and
-      // report disconnected so the UI shows the "Set Up Payouts" CTA.
-      if (stripeCode === "resource_missing") {
+      // Saved account ID is unreachable under the current key — wipe it and
+      // report disconnected so the UI shows the "Set Up Payouts" CTA, which
+      // will mint a fresh account on the next tap.
+      if (isStaleAccountError(err)) {
         console.warn(
-          `[Stripe Connect] saved accountId ${user.stripeAccountId} not found on retrieve — clearing`
+          `[Stripe Connect] saved accountId ${user.stripeAccountId} unreachable on retrieve (${
+            err?.code || err?.raw?.code || "no-code"
+          }) — clearing`
         );
         user.stripeAccountId = null;
         user.stripeOnboardingComplete = false;

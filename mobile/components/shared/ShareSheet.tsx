@@ -201,8 +201,8 @@ export default function ShareSheet({ visible, onClose, target }: ShareSheetProps
               />
               <SheetOption
                 icon="share-outline"
-                label="Share externally"
-                hint="iMessage, WhatsApp, copy link…"
+                label="Copy Link"
+                hint="Share to iMessage, WhatsApp, Instagram…"
                 onPress={handleExternalShare}
               />
               <SheetOption icon="close" label="Cancel" muted onPress={onClose} />
