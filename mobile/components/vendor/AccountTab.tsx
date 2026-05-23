@@ -19,8 +19,10 @@ import axios from "axios";
 import { useRouter } from "expo-router";
 import { Colors } from "@/constants/colors";
 import { BASE_URL } from "@/constants/constants";
-import { fetchCities, fetchVendorTypes } from "@/libs/api";
-import { City, VendorType } from "@/libs/interfaces";
+import { fetchVendorTypes } from "@/libs/api";
+import { VendorType, LocationSelection } from "@/libs/interfaces";
+import { LocationPicker } from "@/components/shared";
+import { formatLocation } from "@/utils/location";
 import { ImagePickerButton } from "@/components/shared";
 import { uploadImage } from "@/utils/imageUpload";
 
@@ -34,9 +36,7 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
   const [stripeOnboardingComplete, setStripeOnboardingComplete] = useState(false);
   const [saving, setSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
-  const [cities, setCities] = useState<City[]>([]);
   const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
-  const [showCityPicker, setShowCityPicker] = useState(false);
   const [showTypePicker, setShowTypePicker] = useState(false);
   const [businessPicture, setBusinessPicture] = useState("");
   const [profilePicture, setProfilePicture] = useState("");
@@ -47,17 +47,22 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
     businessDescription: "",
     vendorType: "",
     vendorTypeName: "",
-    city: "",
     cityName: "",
+    state: "",
+    country: "",
     address: "",
     phone: "",
     website: "",
+    instagram: "",
+    twitter: "",
+    tiktok: "",
+    facebook: "",
     verified: false,
   });
 
   useEffect(() => {
     fetchProfile();
-    loadCitiesAndTypes();
+    loadVendorTypes();
     fetchStripeStatus();
   }, []);
 
@@ -73,13 +78,12 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
     }
   };
 
-  const loadCitiesAndTypes = async () => {
+  const loadVendorTypes = async () => {
     try {
-      const [c, t] = await Promise.all([fetchCities(), fetchVendorTypes()]);
-      if (Array.isArray(c) && c.length > 0) setCities(c);
+      const t = await fetchVendorTypes();
       if (Array.isArray(t) && t.length > 0) setVendorTypes(t);
     } catch {
-      // silently ignore — pickers just stay empty if fetch fails
+      // silently ignore — picker just stays empty if fetch fails
     }
   };
 
@@ -98,11 +102,16 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
         businessDescription: user.businessDescription || "",
         vendorType: user.vendorType || "",
         vendorTypeName: user.vendorTypeName || user.vendorType || "",
-        city: user.location?.city || "",
-        cityName: user.location?.cityName || user.location?.city || "",
+        cityName: user.location?.city || "",
+        state: user.location?.state || "",
+        country: user.location?.country || "",
         address: user.location?.address || "",
         phone: user.contactInfo?.phone || "",
         website: user.contactInfo?.website || "",
+        instagram: user.contactInfo?.instagram || "",
+        twitter: user.contactInfo?.twitter || "",
+        tiktok: user.contactInfo?.tiktok || "",
+        facebook: user.contactInfo?.facebook || "",
         verified: user.verified || false,
       });
       setBusinessPicture(user.businessPicture || "");
@@ -162,11 +171,17 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
           vendorType: profile.vendorTypeName,
           location: {
             city: profile.cityName,
+            state: profile.state,
+            country: profile.country,
             address: profile.address,
           },
           contactInfo: {
             phone: profile.phone,
             website: profile.website,
+            instagram: profile.instagram,
+            twitter: profile.twitter,
+            tiktok: profile.tiktok,
+            facebook: profile.facebook,
           },
         },
         {
@@ -183,15 +198,6 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
     } finally {
       setSaving(false);
     }
-  };
-
-  const selectCity = (city: City) => {
-    setProfile({
-      ...profile,
-      city: city._id,
-      cityName: city.name,
-    });
-    setShowCityPicker(false);
   };
 
   const selectVendorType = (type: VendorType) => {
@@ -401,24 +407,34 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
         <Text style={styles.sectionTitle}>Location</Text>
 
         <View style={styles.field}>
-          <Text style={styles.label}>City</Text>
           {isEditing ? (
-            <TouchableOpacity
-              style={styles.picker}
-              onPress={() => setShowCityPicker(true)}
-            >
-              <Text
-                style={[
-                  styles.pickerText,
-                  !profile.cityName && styles.pickerPlaceholder,
-                ]}
-              >
-                {profile.cityName || "Select city"}
-              </Text>
-              <Ionicons name="chevron-down" size={20} color="#9ca3af" />
-            </TouchableOpacity>
+            <LocationPicker
+              value={{
+                country: profile.country,
+                state: profile.state,
+                city: profile.cityName,
+              }}
+              onChange={(sel) =>
+                setProfile((p) => ({
+                  ...p,
+                  cityName: sel.city,
+                  state: sel.state,
+                  country: sel.country,
+                }))
+              }
+              label="City"
+            />
           ) : (
-            <Text style={styles.value}>{profile.cityName || "Not set"}</Text>
+            <>
+              <Text style={styles.label}>City</Text>
+              <Text style={styles.value}>
+                {formatLocation({
+                  city: profile.cityName,
+                  state: profile.state,
+                  country: profile.country,
+                }) || "Not set"}
+              </Text>
+            </>
           )}
         </View>
 
@@ -474,6 +490,29 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
             <Text style={styles.value}>{profile.website || "Not set"}</Text>
           )}
         </View>
+
+        {([
+          { key: "instagram", label: "Instagram", placeholder: "@username or link" },
+          { key: "tiktok", label: "TikTok", placeholder: "@username or link" },
+          { key: "twitter", label: "X (Twitter)", placeholder: "@username or link" },
+          { key: "facebook", label: "Facebook", placeholder: "Page name or link" },
+        ] as const).map((s) => (
+          <View style={styles.field} key={s.key}>
+            <Text style={styles.label}>{s.label}</Text>
+            {isEditing ? (
+              <TextInput
+                style={styles.input}
+                value={profile[s.key]}
+                onChangeText={(text) => setProfile({ ...profile, [s.key]: text })}
+                placeholder={s.placeholder}
+                placeholderTextColor="#666"
+                autoCapitalize="none"
+              />
+            ) : (
+              <Text style={styles.value}>{profile[s.key] || "Not set"}</Text>
+            )}
+          </View>
+        ))}
       </View>
 
       {isEditing && (
@@ -490,48 +529,6 @@ export default function AccountTab({ onRefresh }: AccountTabProps) {
         </TouchableOpacity>
       )}
 
-      {/* City Picker Modal */}
-      <Modal
-        visible={showCityPicker}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowCityPicker(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Select City</Text>
-              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
-                <Ionicons name="close" size={24} color="#fff" />
-              </TouchableOpacity>
-            </View>
-            <FlatList
-              data={cities}
-              keyExtractor={(item) => item._id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.modalItem,
-                    profile.city === item._id && styles.modalItemSelected,
-                  ]}
-                  onPress={() => selectCity(item)}
-                >
-                  <Text
-                    style={[
-                      styles.modalItemText,
-                      profile.city === item._id && styles.modalItemTextSelected,
-                    ]}
-                  >
-                    {item.name}
-                  </Text>
-                  <Text style={styles.modalItemSubtext}>{item.state}</Text>
-                </TouchableOpacity>
-              )}
-              showsVerticalScrollIndicator={false}
-            />
-          </View>
-        </View>
-      </Modal>
 
       {/* Vendor Type Picker Modal */}
       <Modal

@@ -8,6 +8,10 @@ module.exports = {
   scheme: "mobile",
   userInterfaceStyle: "automatic",
   newArchEnabled: true,
+  // Native-only app (Stripe et al. don't bundle for web). Listing just the two
+  // native platforms keeps `expo export` / `eas update --platform all` from
+  // ever trying to build a web bundle.
+  platforms: ["ios", "android"],
   // OTA updates via EAS Update. Bump `version` above whenever you do a fresh
   // native build (new module, permission, plugin change). All OTA updates are
   // pinned to a runtime that matches the binary's app version — old binaries
@@ -101,6 +105,12 @@ module.exports = {
       "expo-notifications",
       {
         color: "#a855f7",
+      },
+    ],
+    [
+      "expo-calendar",
+      {
+        calendarPermission: "NightVibe needs calendar access to add events you're attending so you get a reminder and a quick link back to the event.",
       },
     ],
   ],

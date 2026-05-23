@@ -12,7 +12,7 @@ export default function Cities() {
   const [loading, setLoading] = useState(true);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", state: "" });
+  const [form, setForm] = useState({ name: "", state: "", country: "United States" });
   const [adding, setAdding] = useState(false);
   const [formError, setFormError] = useState("");
 
@@ -36,8 +36,12 @@ export default function Cities() {
     setFormError("");
     setAdding(true);
     try {
-      await adminApi.createCity({ name: form.name.trim(), state: form.state.trim() });
-      setForm({ name: "", state: "" });
+      await adminApi.createCity({
+        name: form.name.trim(),
+        state: form.state.trim(),
+        country: form.country.trim() || "United States",
+      });
+      setForm({ name: "", state: "", country: "United States" });
       load();
     } catch (err: any) {
       setFormError(err?.response?.data?.message || "Failed to add city.");
@@ -66,9 +70,15 @@ export default function Cities() {
     },
     {
       key: "state",
-      header: "State",
+      header: "State / Region",
       width: 160,
       render: (c) => <span style={{ color: colors.textMuted }}>{c.state}</span>,
+    },
+    {
+      key: "country",
+      header: "Country",
+      width: 160,
+      render: (c) => <span style={{ color: colors.textMuted }}>{c.country || "United States"}</span>,
     },
     {
       key: "actions",
@@ -96,9 +106,16 @@ export default function Cities() {
             />
             <input
               style={inputStyle}
-              placeholder="State"
+              placeholder="State / Region"
               value={form.state}
               onChange={(e) => setForm({ ...form, state: e.target.value })}
+              onKeyDown={(e) => e.key === "Enter" && handleAdd()}
+            />
+            <input
+              style={inputStyle}
+              placeholder="Country"
+              value={form.country}
+              onChange={(e) => setForm({ ...form, country: e.target.value })}
               onKeyDown={(e) => e.key === "Enter" && handleAdd()}
             />
             <Button variant="primary" onClick={handleAdd} loading={adding}>

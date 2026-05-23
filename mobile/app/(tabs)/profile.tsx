@@ -27,6 +27,7 @@ interface UserProfile {
   _id: string;
   username: string;
   profilePicture?: string;
+  bio?: string;
   isVendor?: boolean;
   verified?: boolean;
   followersCount: number;
@@ -64,6 +65,7 @@ export default function ProfileScreen() {
         _id: u._id,
         username: u.username,
         profilePicture: u.profilePicture || "",
+        bio: u.bio || "",
         isVendor: u.isVendor,
         verified: u.verified || false,
         followersCount: u.followersCount || 0,
@@ -219,6 +221,8 @@ function Header({
             </Text>
           </View>
         </View>
+
+        {!!user?.bio && <Text style={styles.bio}>{user.bio}</Text>}
 
         {/* Stats row */}
         <View style={styles.statsRow}>
@@ -524,6 +528,13 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   handleVendor: { color: AU.purpleSoft, fontFamily: Fonts.bold },
+  bio: {
+    color: AU.text,
+    fontFamily: Fonts.regular,
+    fontSize: 13.5,
+    lineHeight: 20,
+    marginTop: 14,
+  },
 
   // Stats row
   statsRow: {

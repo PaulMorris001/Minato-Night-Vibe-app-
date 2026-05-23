@@ -5,6 +5,7 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  TextInput,
   Alert,
   ActivityIndicator,
 } from "react-native";
@@ -26,6 +27,7 @@ export default function SettingsScreen() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [profilePicture, setProfilePicture] = useState("");
+  const [bio, setBio] = useState("");
   const [user, setUser] = useState({
     username: "",
     email: "",
@@ -70,6 +72,7 @@ export default function SettingsScreen() {
         emailVerifiedAt: userData.emailVerifiedAt || null,
       });
       setProfilePicture(userData.profilePicture || "");
+      setBio(userData.bio || "");
 
       const verifData = verifRes.data;
       setVerificationStatus(verifData.status || "none");
@@ -128,45 +131,38 @@ export default function SettingsScreen() {
     switchAccount();
   };
 
-  const handleSaveProfilePicture = async () => {
-    if (!profilePicture) {
-      Alert.alert("Error", "Please select a profile picture");
-      return;
-    }
-
+  const handleSaveProfile = async () => {
     setSaving(true);
     try {
       const token = await SecureStore.getItemAsync("token");
 
-      let cloudinaryUrl = profilePicture;
+      const payload: { profilePicture?: string; bio: string } = { bio };
 
-      // If it's a local URI (starts with file://), upload to Cloudinary first
-      if (profilePicture.startsWith('file://')) {
-        try {
-          const result = await uploadImage(profilePicture, 'profiles', token!);
-          cloudinaryUrl = result.url;
-          // Update local state with Cloudinary URL
-          setProfilePicture(cloudinaryUrl);
-        } catch (uploadError: any) {
-          console.error("Upload error:", uploadError);
-          Alert.alert("Upload Error", "Failed to upload image to Cloudinary");
-          setSaving(false);
-          return;
+      // Upload a newly-picked photo, otherwise keep the existing URL
+      if (profilePicture) {
+        if (profilePicture.startsWith("file://")) {
+          try {
+            const result = await uploadImage(profilePicture, "profiles", token!);
+            payload.profilePicture = result.url;
+            setProfilePicture(result.url);
+          } catch (uploadError: any) {
+            console.error("Upload error:", uploadError);
+            Alert.alert("Upload Error", "Failed to upload image to Cloudinary");
+            setSaving(false);
+            return;
+          }
+        } else {
+          payload.profilePicture = profilePicture;
         }
       }
 
-      // Now update profile with Cloudinary URL
-      await axios.put(
-        `${BASE_URL}/profile/picture`,
-        { profilePicture: cloudinaryUrl },
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
-      Alert.alert("Success", "Profile picture updated successfully");
+      await axios.put(`${BASE_URL}/profile/picture`, payload, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      Alert.alert("Success", "Profile updated successfully");
     } catch (error: any) {
       const errorMessage =
-        error.response?.data?.message || "Failed to update profile picture";
+        error.response?.data?.message || "Failed to update profile";
       Alert.alert("Error", errorMessage);
     } finally {
       setSaving(false);
@@ -194,11 +190,11 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Profile Picture Section */}
+      {/* Profile Section */}
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Profile Picture</Text>
+        <Text style={styles.sectionTitle}>Profile</Text>
         <Text style={styles.sectionDescription}>
-          Upload a photo to personalize your account
+          Add a photo and a short bio to personalize your account
         </Text>
 
         <ImagePickerButton
@@ -210,9 +206,21 @@ export default function SettingsScreen() {
           fallbackName={user.username}
         />
 
+        <Text style={styles.fieldLabel}>Bio</Text>
+        <TextInput
+          style={styles.bioInput}
+          placeholder="Tell people a bit about yourself..."
+          placeholderTextColor="#6b7280"
+          value={bio}
+          onChangeText={setBio}
+          multiline
+          maxLength={500}
+        />
+        <Text style={styles.bioCount}>{bio.length}/500</Text>
+
         <TouchableOpacity
           style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-          onPress={handleSaveProfilePicture}
+          onPress={handleSaveProfile}
           disabled={saving}
         >
           {saving ? (
@@ -220,7 +228,7 @@ export default function SettingsScreen() {
           ) : (
             <>
               <Ionicons name="checkmark-circle" size={20} color="#fff" />
-              <Text style={styles.saveButtonText}>Save Profile Picture</Text>
+              <Text style={styles.saveButtonText}>Save Profile</Text>
             </>
           )}
         </TouchableOpacity>
@@ -527,6 +535,32 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: "#9ca3af",
     marginBottom: 20,
+  },
+  fieldLabel: {
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    color: "#e5e7eb",
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  bioInput: {
+    backgroundColor: "#1f1f2e",
+    borderWidth: 1,
+    borderColor: "#374151",
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 15,
+    fontFamily: Fonts.regular,
+    color: "#fff",
+    minHeight: 90,
+    textAlignVertical: "top",
+  },
+  bioCount: {
+    fontSize: 12,
+    fontFamily: Fonts.regular,
+    color: "#6b7280",
+    alignSelf: "flex-end",
+    marginTop: 4,
   },
   saveButton: {
     backgroundColor: Colors.primary,

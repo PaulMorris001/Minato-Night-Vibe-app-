@@ -8,7 +8,10 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { Image } from "expo-image";
 import { createGuideShareLink } from "@/utils/shareLinks";
+import { formatLocation } from "@/utils/location";
+import { toggleGuideSave } from "@/libs/api";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
@@ -31,6 +34,8 @@ export default function GuideDetailPage() {
   const [loading, setLoading] = useState(true);
   const [hasPurchased, setHasPurchased] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
+  const [isSaved, setIsSaved] = useState(false);
+  const [savingToggle, setSavingToggle] = useState(false);
   const [purchasing, setPurchasing] = useState(false);
   const [reportSheetVisible, setReportSheetVisible] = useState(false);
   const [shareSheetVisible, setShareSheetVisible] = useState(false);
@@ -69,6 +74,7 @@ export default function GuideDetailPage() {
         setGuide(data.guide);
         setHasPurchased(data.hasPurchased || false);
         setIsOwner(data.isOwner || false);
+        setIsSaved(data.isSaved || false);
       } else {
         // If the user cold-started from a shared link, there's no back stack
         // to pop to — fall through to home if `router.back()` would no-op.
@@ -100,6 +106,21 @@ export default function GuideDetailPage() {
       ]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleToggleSave = async () => {
+    if (savingToggle) return;
+    setSavingToggle(true);
+    const next = !isSaved;
+    setIsSaved(next); // optimistic
+    try {
+      const res = await toggleGuideSave(id);
+      if (typeof res?.saved === "boolean") setIsSaved(res.saved);
+    } catch {
+      setIsSaved(!next); // revert on failure
+    } finally {
+      setSavingToggle(false);
     }
   };
 
@@ -183,6 +204,19 @@ export default function GuideDetailPage() {
           Guide
         </Text>
         <View style={styles.headerActions}>
+          {!isOwner && (
+            <TouchableOpacity
+              style={styles.shareButton}
+              onPress={handleToggleSave}
+              accessibilityLabel={isSaved ? "Unsave guide" : "Save guide"}
+            >
+              <Ionicons
+                name={isSaved ? "bookmark" : "bookmark-outline"}
+                size={22}
+                color="#a855f7"
+              />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={styles.shareButton}
             onPress={() => setShareSheetVisible(true)}
@@ -207,6 +241,10 @@ export default function GuideDetailPage() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {!!guide.coverImage && (
+          <Image source={{ uri: guide.coverImage }} style={styles.coverImage} contentFit="cover" />
+        )}
+
         <View style={styles.titleSection}>
           <Text style={styles.title}>{guide.title}</Text>
           <View style={styles.authorRow}>
@@ -217,7 +255,7 @@ export default function GuideDetailPage() {
             <View style={styles.metaItem}>
               <Ionicons name="location" size={16} color="#a855f7" />
               <Text style={styles.metaText}>
-                {guide.city}, {guide.cityState}
+                {formatLocation({ city: guide.city, state: guide.cityState, country: guide.country })}
               </Text>
             </View>
             <View style={styles.metaItem}>
@@ -288,6 +326,9 @@ export default function GuideDetailPage() {
                     </View>
                     <Text style={styles.sectionTitle}>{section.title}</Text>
                   </View>
+                  {!!section.image && (
+                    <Image source={{ uri: section.image }} style={styles.sectionImage} contentFit="cover" />
+                  )}
                   <Text style={styles.sectionDescription}>
                     {section.description}
                   </Text>
@@ -369,6 +410,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#0f0f1a",
+  },
+  coverImage: {
+    width: "100%",
+    height: 200,
+    borderRadius: 16,
+    marginBottom: 16,
+  },
+  sectionImage: {
+    width: "100%",
+    height: 160,
+    borderRadius: 12,
+    marginBottom: 12,
   },
   titleSection: {
     marginBottom: 20,

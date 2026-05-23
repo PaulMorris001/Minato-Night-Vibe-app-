@@ -22,17 +22,11 @@ import axios from "axios";
 import { BASE_URL } from "@/constants/constants";
 import { Colors } from "@/constants/colors";
 import { Fonts } from "@/constants/fonts";
-import { ImagePickerButton } from "@/components/shared";
-import { uploadImage } from "@/utils/imageUpload";
+import { ImagePickerButton, LocationPicker, MultiImagePicker } from "@/components/shared";
+import { uploadImage, resolveImageUrls } from "@/utils/imageUpload";
 import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
-import { fetchCities } from "@/libs/api";
-
-
-interface City {
-  _id: string;
-  name: string;
-  state: string;
-}
+import { LocationSelection } from "@/libs/interfaces";
+import { formatLocation } from "@/utils/location";
 
 interface CreateEventModalProps {
   visible: boolean;
@@ -46,41 +40,31 @@ export default function CreateEventModal({
   onEventCreated,
 }: CreateEventModalProps) {
   const [loading, setLoading] = useState(false);
-  const [cities, setCities] = useState<City[]>([]);
+  const [eventLocation, setEventLocation] = useState<LocationSelection | null>(null);
   const [isVerified, setIsVerified] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
     date: "",
     location: "",
+    address: "",
     description: "",
     isPublic: false,
     isPaid: false,
     ticketPrice: "",
     maxGuests: "",
   });
-  const [eventImage, setEventImage] = useState("");
+  const [eventImages, setEventImages] = useState<string[]>([]);
   const [venueProofImage, setVenueProofImage] = useState("");
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [showCityPicker, setShowCityPicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date());
 
   useEffect(() => {
     if (visible) {
-      loadCitiesAndTypes();
       loadVerificationStatus();
     }
   }, [visible]);
-  
-  const loadCitiesAndTypes = async () => {
-    try {
-      const [c] = await Promise.all([fetchCities()]);
-      if (Array.isArray(c) && c.length > 0) setCities(c);
-    } catch {
-      // Fall back to static constants silently
-    }
-  };
 
   const loadVerificationStatus = async () => {
     try {
@@ -159,8 +143,8 @@ export default function CreateEventModal({
       Alert.alert("Validation Error", "Please select an event date and time");
       return;
     }
-    if (!formData.location) {
-      Alert.alert("Validation Error", "Please select a location");
+    if (!eventLocation?.city || !eventLocation?.state) {
+      Alert.alert("Validation Error", "Please select your country, state, and city");
       return;
     }
 
@@ -190,22 +174,19 @@ export default function CreateEventModal({
         return;
       }
 
-      let eventImageUrl = "";
+      let eventImageUrls: string[] = [];
       let venueProofUrl = "";
 
-      // Upload event image to Cloudinary if selected
-      if (eventImage && eventImage.startsWith("file://")) {
+      // Upload any newly-picked event photos to Cloudinary
+      if (eventImages.length > 0) {
         try {
-          const result = await uploadImage(eventImage, "events", token);
-          eventImageUrl = result.url;
+          eventImageUrls = await resolveImageUrls(eventImages, "events", token);
         } catch (uploadError) {
-          console.error("Error uploading event image:", uploadError);
-          Alert.alert("Upload Error", "Failed to upload event image");
+          console.error("Error uploading event images:", uploadError);
+          Alert.alert("Upload Error", "Failed to upload event photos");
           setLoading(false);
           return;
         }
-      } else if (eventImage) {
-        eventImageUrl = eventImage;
       }
 
       // Upload venue proof for paid events
@@ -229,9 +210,13 @@ export default function CreateEventModal({
       const eventData = {
         title: formData.title.trim(),
         date: formData.date.trim(),
-        location: formData.location,
+        location: formatLocation(eventLocation),
+        address: formData.address.trim(),
+        city: eventLocation.city,
+        state: eventLocation.state,
+        country: eventLocation.country,
         description: formData.description.trim(),
-        image: eventImageUrl,
+        images: eventImageUrls,
         isPublic: formData.isPublic,
         isPaid: formData.isPaid,
         ticketPrice: formData.isPaid ? parseFloat(formData.ticketPrice) : 0,
@@ -250,14 +235,16 @@ export default function CreateEventModal({
         title: "",
         date: "",
         location: "",
+        address: "",
         description: "",
         isPublic: false,
         isPaid: false,
         ticketPrice: "",
         maxGuests: "",
       });
-      setEventImage("");
+      setEventImages([]);
       setVenueProofImage("");
+      setEventLocation(null);
 
       // Callback and close
       if (onEventCreated) onEventCreated();
@@ -274,7 +261,7 @@ export default function CreateEventModal({
   
   
 
-  const isSubmitEnabled = !!formData.title.trim() && !!formData.date && !!formData.location;
+  const isSubmitEnabled = !!formData.title.trim() && !!formData.date && !!eventLocation?.city;
 
   const quickDates = [
     { label: "Tonight", offset: 0 },
@@ -324,14 +311,15 @@ export default function CreateEventModal({
                 </TouchableOpacity>
               </View>
 
-              {/* Event Image */}
-              <ImagePickerButton
-                imageUri={eventImage}
-                onImageSelected={setEventImage}
-                label="Cover Photo"
-                size={140}
-                shape="square"
-              />
+              {/* Event Photos */}
+              <View style={{ paddingHorizontal: 20, marginTop: 8 }}>
+                <MultiImagePicker
+                  value={eventImages}
+                  onChange={setEventImages}
+                  label="Event photos"
+                  max={6}
+                />
+              </View>
 
               {/* Event Title */}
               <Text style={styles.label}>Event name *</Text>
@@ -398,62 +386,25 @@ export default function CreateEventModal({
                 />
               )}
 
-              {/* Location/City */}
-              <Text style={styles.label}>Location *</Text>
-              <TouchableOpacity
-                style={styles.cityPickerButton}
-                onPress={() => setShowCityPicker((v) => !v)}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="location-outline" size={18} color="#a855f7" />
-                <Text
-                  style={[
-                    styles.cityPickerText,
-                    !formData.location && styles.cityPickerPlaceholder,
-                  ]}
-                >
-                  {formData.location
-                    ? (() => {
-                        const match = cities.find((c) => c.name === formData.location);
-                        return match ? `${match.name}, ${match.state}` : formData.location;
-                      })()
-                    : "Select a city"}
-                </Text>
-                <Ionicons
-                  name={showCityPicker ? "chevron-up" : "chevron-down"}
-                  size={16}
-                  color="#6b7280"
+              {/* Address — precise venue / street so guests know exactly where */}
+              <Text style={styles.label}>Address</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., 123 Main St, Rooftop Lounge"
+                placeholderTextColor="rgba(244,238,255,0.3)"
+                value={formData.address}
+                onChangeText={(value) => handleInputChange("address", value)}
+              />
+
+              {/* Location (Country → State → City) */}
+              <View style={{ paddingHorizontal: 20, marginTop: 4 }}>
+                <LocationPicker
+                  value={eventLocation ?? undefined}
+                  onChange={setEventLocation}
+                  label="Location"
+                  required
                 />
-              </TouchableOpacity>
-              {showCityPicker && (
-                <View style={styles.cityDropdown}>
-                  {cities.map((item) => (
-                    <TouchableOpacity
-                      key={item._id}
-                      style={[
-                        styles.cityItem,
-                        formData.location === item.name && styles.cityItemSelected,
-                      ]}
-                      onPress={() => {
-                        handleInputChange("location", item.name);
-                        setShowCityPicker(false);
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.cityItemText,
-                          formData.location === item.name && styles.cityItemTextSelected,
-                        ]}
-                      >
-                        {item.name}, {item.state}
-                      </Text>
-                      {formData.location === item.name && (
-                        <Ionicons name="checkmark" size={18} color="#a855f7" />
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
+              </View>
 
               {/* Description */}
               <Text style={styles.label}>The vibe</Text>
@@ -718,58 +669,6 @@ const styles = StyleSheet.create({
   multilineInput: {
     height: 90,
     textAlignVertical: "top",
-  },
-  cityPickerButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    marginBottom: 4,
-    marginHorizontal: 20,
-  },
-  cityPickerText: {
-    flex: 1,
-    fontSize: scaleFontSize(16),
-    fontFamily: Fonts.regular,
-    color: "#F4EEFF",
-  },
-  cityPickerPlaceholder: {
-    color: "rgba(244,238,255,0.3)",
-  },
-  cityDropdown: {
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-    borderRadius: 12,
-    backgroundColor: "#1A1030",
-    marginBottom: 8,
-    marginHorizontal: 20,
-    overflow: "hidden",
-  },
-  cityItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(255,255,255,0.06)",
-  },
-  cityItemSelected: {
-    backgroundColor: "rgba(168, 85, 247, 0.1)",
-  },
-  cityItemText: {
-    fontSize: scaleFontSize(15),
-    fontFamily: Fonts.regular,
-    color: "#F4EEFF",
-  },
-  cityItemTextSelected: {
-    color: "#a855f7",
-    fontFamily: Fonts.semiBold,
   },
   visibilityRow: {
     flexDirection: "row",

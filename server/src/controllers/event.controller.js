@@ -22,7 +22,12 @@ export const createEvent = async (req, res) => {
       title,
       date,
       location,
+      address,
+      city,
+      state,
+      country,
       image,
+      images,
       description,
       isPublic,
       isPaid,
@@ -40,6 +45,7 @@ export const createEvent = async (req, res) => {
       { field: "Title", value: title },
       { field: "Description", value: description },
       { field: "Location", value: location },
+      { field: "Address", value: address },
     ]);
 
     // Validate pricing options for public paid events
@@ -102,21 +108,29 @@ export const createEvent = async (req, res) => {
     }
 
     // Handle event image upload
-    let eventImageUrl = "";
-    if (image) {
-      if (image.startsWith('data:image')) {
+    // Build the photo gallery. The client uploads photos and sends back URLs in
+    // `images`; older clients send a single `image`. Any inline base64 is
+    // uploaded here as a fallback.
+    const incoming = [];
+    if (Array.isArray(images)) incoming.push(...images);
+    else if (image) incoming.push(image);
+
+    const gallery = [];
+    for (const item of incoming) {
+      if (!item) continue;
+      if (typeof item === "string" && item.startsWith("data:image")) {
         try {
-          const result = await uploadBase64Image(image, 'events');
-          eventImageUrl = result.url;
+          const result = await uploadBase64Image(item, "events");
+          gallery.push(result.url);
         } catch (error) {
           console.error("Error uploading event image:", error);
           return res.status(400).json({ message: "Error uploading event image", details: error.message });
         }
       } else {
-        // Already a URL
-        eventImageUrl = image;
+        gallery.push(item);
       }
     }
+    const eventImageUrl = gallery[0] || "";
 
     // Paid-event approval gate (Model C): every organizer's first paid event
     // still goes through the admin queue, even if they're identity-verified.
@@ -154,7 +168,12 @@ export const createEvent = async (req, res) => {
       title,
       date: new Date(date),
       location,
+      address: address || "",
+      city: city || "",
+      state: state || "",
+      country: country || "",
       image: eventImageUrl,
+      images: gallery,
       description: description || "",
       createdBy: userId,
       isPublic: isPublic || false,
@@ -295,7 +314,16 @@ export const getEventById = async (req, res) => {
       return res.status(403).json({ message: "You don't have access to this event" });
     }
 
+    // Track unique non-creator viewers for the organizer's "N seen" metric.
+    const alreadyViewed = (event.viewedBy || []).some((id) => id.toString() === userId);
+    if (!isCreator && !alreadyViewed) {
+      await Event.updateOne({ _id: eventId }, { $addToSet: { viewedBy: userId } });
+    }
+    const seenCount = (event.viewedBy || []).length + (!isCreator && !alreadyViewed ? 1 : 0);
+
     const eventObj = event.toObject();
+    eventObj.seenCount = seenCount;
+    delete eventObj.viewedBy; // don't leak the viewer list
     eventObj.userRsvp = event.rsvpUsers.some(u => u._id.toString() === userId);
     eventObj.rsvpCount = event.rsvpUsers.length;
 
@@ -419,7 +447,7 @@ export const getEventByShareToken = async (req, res) => {
 export const updateEvent = async (req, res) => {
   try {
     const { eventId } = req.params;
-    const { title, date, location, image, description, isPublic } = req.body;
+    const { title, date, location, address, city, state, country, image, images, description, isPublic } = req.body;
     const userId = req.user.id;
 
     const event = await Event.findById(eventId);
@@ -449,6 +477,7 @@ export const updateEvent = async (req, res) => {
       { field: "Title", value: title },
       { field: "Description", value: description },
       { field: "Location", value: location },
+      { field: "Address", value: address },
     ]);
 
     // Handle event image upload (if provided)
@@ -472,10 +501,35 @@ export const updateEvent = async (req, res) => {
       }
     }
 
+    // Handle the full photo gallery (if provided). Client uploads then sends URLs.
+    if (Array.isArray(images)) {
+      const gallery = [];
+      for (const item of images) {
+        if (!item) continue;
+        if (typeof item === "string" && item.startsWith("data:image")) {
+          try {
+            const result = await uploadBase64Image(item, "events");
+            gallery.push(result.url);
+          } catch (error) {
+            console.error("Error uploading event image:", error);
+            return res.status(400).json({ message: "Error uploading event image", details: error.message });
+          }
+        } else {
+          gallery.push(item);
+        }
+      }
+      event.images = gallery;
+      event.image = gallery[0] || "";
+    }
+
     // Update fields
     if (title) event.title = title;
     if (date) event.date = new Date(date);
     if (location) event.location = location;
+    if (address !== undefined) event.address = address;
+    if (city !== undefined) event.city = city;
+    if (state !== undefined) event.state = state;
+    if (country !== undefined) event.country = country;
     if (description !== undefined) event.description = description;
 
     await event.save();

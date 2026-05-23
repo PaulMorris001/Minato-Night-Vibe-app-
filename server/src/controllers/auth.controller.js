@@ -4,7 +4,8 @@ import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
 import config from "../config/env.js";
 import User from "../models/user.model.js";
-import { Vendor } from "../models/vendor.model.js";
+import { Vendor, City } from "../models/vendor.model.js";
+import { findOrCreateCity } from "./vendors.controller.js";
 import { uploadBase64Image, deleteImage } from "../services/image.service.js";
 import {
   generateOTP,
@@ -156,8 +157,22 @@ export async function becomeVendor(req, res) {
 
     await user.save();
 
+    // Resolve the City document for vendor discovery. New clients send
+    // { country, state, city }; older clients may still send a cityId.
+    let cityDoc = null;
+    if (location?.cityId) {
+      cityDoc = await City.findById(location.cityId).catch(() => null);
+    }
+    if (!cityDoc) {
+      cityDoc = await findOrCreateCity({
+        name: location?.city,
+        state: location?.state,
+        country: location?.country,
+      });
+    }
+
     // Create/upsert linked Vendor document with ObjectId refs for discovery
-    if (vendorTypeId && location?.cityId) {
+    if (vendorTypeId && cityDoc) {
       try {
         await Vendor.findOneAndUpdate(
           { user: user._id },
@@ -166,11 +181,14 @@ export async function becomeVendor(req, res) {
             description: businessDescription,
             images: businessPictureUrl ? [businessPictureUrl] : [],
             vendorType: vendorTypeId,
-            city: location.cityId,
+            city: cityDoc._id,
             contact: {
               phone: contactInfo?.phone || "",
-              instagram: contactInfo?.instagram || "",
               website: contactInfo?.website || "",
+              instagram: contactInfo?.instagram || "",
+              twitter: contactInfo?.twitter || "",
+              tiktok: contactInfo?.tiktok || "",
+              facebook: contactInfo?.facebook || "",
             },
             user: user._id,
             priceRange: 2,
@@ -270,16 +288,27 @@ export async function updateVendorProfile(req, res) {
 
     await user.save();
 
-    // Sync linked Vendor document (name, description, images, contact)
+    // Sync linked Vendor document (name, description, images, contact, city)
     const vendorUpdate = {};
     if (businessName) vendorUpdate.name = businessName;
     if (businessDescription) vendorUpdate.description = businessDescription;
     if (user.businessPicture) vendorUpdate.images = [user.businessPicture];
+    if (location?.city && location?.state) {
+      const cityDoc = await findOrCreateCity({
+        name: location.city,
+        state: location.state,
+        country: location.country,
+      });
+      if (cityDoc) vendorUpdate.city = cityDoc._id;
+    }
     if (contactInfo) {
       vendorUpdate.contact = {
         phone: contactInfo.phone || "",
-        instagram: contactInfo.instagram || "",
         website: contactInfo.website || "",
+        instagram: contactInfo.instagram || "",
+        twitter: contactInfo.twitter || "",
+        tiktok: contactInfo.tiktok || "",
+        facebook: contactInfo.facebook || "",
       };
     }
     if (Object.keys(vendorUpdate).length > 0) {
@@ -338,9 +367,9 @@ export async function getProfile(req, res) {
   }
 }
 
-// Update profile picture (for both clients and vendors)
+// Update profile picture and/or bio (for both clients and vendors)
 export async function updateProfilePicture(req, res) {
-  const { profilePicture } = req.body;
+  const { profilePicture, bio } = req.body;
 
   try {
     const user = await User.findById(req.user.id);
@@ -349,39 +378,51 @@ export async function updateProfilePicture(req, res) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // Handle profile picture upload
-    if (profilePicture && profilePicture.startsWith('data:image')) {
-      try {
-        // Delete old profile picture if it exists and is a Cloudinary URL
-        if (user.profilePicture && user.profilePicture.includes('cloudinary.com')) {
-          await deleteImage(user.profilePicture).catch(err => console.error("Error deleting old profile picture:", err));
-        }
+    // Only touch the picture when the client actually sends one — otherwise a
+    // bio-only update would wipe the existing photo.
+    if (profilePicture !== undefined) {
+      if (profilePicture && profilePicture.startsWith('data:image')) {
+        try {
+          // Delete old profile picture if it exists and is a Cloudinary URL
+          if (user.profilePicture && user.profilePicture.includes('cloudinary.com')) {
+            await deleteImage(user.profilePicture).catch(err => console.error("Error deleting old profile picture:", err));
+          }
 
-        const result = await uploadBase64Image(profilePicture, 'profiles');
-        user.profilePicture = result.url;
-      } catch (error) {
-        console.error("Error uploading profile picture:", error);
-        return res.status(400).json({ message: "Error uploading profile picture", details: error.message });
+          const result = await uploadBase64Image(profilePicture, 'profiles');
+          user.profilePicture = result.url;
+        } catch (error) {
+          console.error("Error uploading profile picture:", error);
+          return res.status(400).json({ message: "Error uploading profile picture", details: error.message });
+        }
+      } else {
+        // Already a URL or empty string
+        user.profilePicture = profilePicture;
       }
-    } else {
-      // Already a URL or empty string
-      user.profilePicture = profilePicture;
+    }
+
+    if (bio !== undefined) {
+      assertClean([{ field: "Bio", value: bio }]);
+      user.bio = bio;
     }
 
     await user.save();
 
     res.json({
-      message: "Profile picture updated successfully",
+      message: "Profile updated successfully",
       user: {
         id: user._id,
         username: user.username,
         email: user.email,
         profilePicture: user.profilePicture,
+        bio: user.bio,
         isVendor: user.isVendor
       }
     });
   } catch (error) {
-    res.status(400).json({ message: "Error updating profile picture", details: error.message });
+    if (error.statusCode === 400) {
+      return res.status(400).json({ message: error.message });
+    }
+    res.status(400).json({ message: "Error updating profile", details: error.message });
   }
 }
 

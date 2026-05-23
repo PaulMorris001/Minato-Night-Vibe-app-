@@ -28,6 +28,7 @@ import privacyRoutes from "./routes/privacy.route.js";
 import csaeRoutes from "./routes/csae.route.js";
 import reportRoutes from "./routes/report.route.js";
 import blockRoutes from "./routes/block.route.js";
+import locationRoutes from "./routes/location.route.js";
 
 
 const app = express();
@@ -68,6 +69,7 @@ app.use("/api/", verificationRoutes);
 app.use("/api/", bookingRoutes);
 app.use("/api/", reportRoutes);
 app.use("/api/", blockRoutes);
+app.use("/api/", locationRoutes);
 app.use("/", deleteAccountRoutes);
 app.use("/", deepLinksRoutes);
 app.use("/", privacyRoutes);

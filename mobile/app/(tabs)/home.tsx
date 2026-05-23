@@ -102,6 +102,40 @@ interface Vendor {
   image?: string;
 }
 
+interface TopGuide {
+  _id: string;
+  title: string;
+  authorName: string;
+  price: number;
+  city: string;
+  topic: string;
+  views: number;
+  salesCount: number;
+}
+
+const TOPIC_EMOJI: Record<string, string> = {
+  Chefs: "👨‍🍳",
+  "Food and Restaurants": "🍽️",
+  "Music and Bands": "🎸",
+  "Bars and Clubs": "🍸",
+  Casinos: "🎰",
+  Concerts: "🎤",
+  Events: "🎉",
+  Transportation: "🚕",
+  Venues: "🏛️",
+  Florists: "💐",
+  Decorations: "🎈",
+  Desserts: "🍰",
+  Beverages: "🥤",
+  "Grocery stores": "🛒",
+  Museums: "🖼️",
+  Parks: "🌳",
+  Hotels: "🏨",
+  Spas: "💆",
+  "Hair and Nail Salons": "💅",
+  "Barber Shops": "💈",
+};
+
 const QUICK_ACTIONS = [
   { icon: "home-outline" as const, label: "House Party", color: C.purple },
   { icon: "ticket-outline" as const, label: "Ticketed Event", color: C.pink },
@@ -220,6 +254,44 @@ function VendorCard({ vendor, onPress }: { vendor: Vendor; onPress: () => void }
   );
 }
 
+function GuideCard({ guide, onPress }: { guide: TopGuide; onPress: () => void }) {
+  const emoji = TOPIC_EMOJI[guide.topic] || "📍";
+  return (
+    <TouchableOpacity style={styles.guideCard} onPress={onPress} activeOpacity={0.85}>
+      <LinearGradient colors={["#2D1B69", "#1A1030"]} style={styles.guideCardBanner}>
+        <Text style={styles.guideCardEmoji}>{emoji}</Text>
+      </LinearGradient>
+      <View style={styles.guideCardContent}>
+        <Text style={styles.guideCardTitle} numberOfLines={2}>{guide.title}</Text>
+        <Text style={styles.guideCardMeta} numberOfLines={1}>
+          {guide.city} · by {guide.authorName}
+        </Text>
+        <View style={styles.guideCardFooter}>
+          <View style={styles.guideTopicBadge}>
+            <Text style={styles.guideTopicText} numberOfLines={1}>{guide.topic}</Text>
+          </View>
+          <Text style={styles.guideCardPrice}>
+            {guide.price === 0 ? "FREE" : `$${guide.price}`}
+          </Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function GuideCardSkeleton() {
+  return (
+    <View style={[styles.guideCard, { overflow: "hidden" }]}>
+      <Skeleton width="100%" height={70} borderRadius={0} />
+      <View style={{ padding: 12, gap: 8 }}>
+        <Skeleton width="100%" height={14} />
+        <Skeleton width={120} height={10} />
+        <Skeleton width="100%" height={22} borderRadius={8} style={{ marginTop: 4 }} />
+      </View>
+    </View>
+  );
+}
+
 export default function Home() {
   const router = useRouter();
   const { payForTicket } = useStripePayment();
@@ -227,6 +299,7 @@ export default function Home() {
   const [publicEvents, setPublicEvents] = useState<PublicEvent[]>([]);
   const [highlights, setHighlights] = useState<{ trending: PublicEvent[]; upcoming: PublicEvent[] }>({ trending: [], upcoming: [] });
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [topGuides, setTopGuides] = useState<TopGuide[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [username, setUsername] = useState("");
@@ -290,6 +363,17 @@ export default function Home() {
     } catch {}
   };
 
+  const fetchTopGuides = async () => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      const headers: Record<string, string> = {};
+      if (token) headers.Authorization = `Bearer ${token}`;
+      const response = await fetch(`${BASE_URL}/guides/top?limit=10`, { headers });
+      const data = await response.json();
+      if (response.ok) setTopGuides(data.guides || []);
+    } catch {}
+  };
+
   const fetchUsername = async () => {
     try {
       const userJson = await SecureStore.getItemAsync("user");
@@ -308,13 +392,13 @@ export default function Home() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchPublicEvents(selectedCity, true), fetchHighlights(), fetchVendors()]);
+    await Promise.all([fetchPublicEvents(selectedCity, true), fetchHighlights(), fetchVendors(), fetchTopGuides()]);
     setRefreshing(false);
   };
 
   useEffect(() => {
     fetchUsername();
-    Promise.all([fetchPublicEvents(null), fetchHighlights(), fetchVendors()]).finally(() =>
+    Promise.all([fetchPublicEvents(null), fetchHighlights(), fetchVendors(), fetchTopGuides()]).finally(() =>
       setInitialLoading(false)
     );
 
@@ -696,33 +780,42 @@ export default function Home() {
           </View>
         )}
 
-        {/* Editor's Picks — Bests/Guides */}
-        <View style={styles.section}>
-          <SectionHeader
-            title="Editor's picks"
-            subtitle="Top city guides"
-            onAction={() => router.push("/(tabs)/bests")}
-            actionLabel="All"
-          />
-          <View style={styles.picksGrid}>
-            {[
-              { emoji: "🍹", label: "Best Rooftop Bars", color: "#A855F720" },
-              { emoji: "🎵", label: "Top Live Music", color: "#EC489920" },
-              { emoji: "🕺", label: "Clubs & Dancing", color: "#22D3EE20" },
-              { emoji: "🌆", label: "Sunset Spots", color: "#F59E0B20" },
-            ].map((pick) => (
-              <TouchableOpacity
-                key={pick.label}
-                style={[styles.pickTile, { backgroundColor: pick.color }]}
-                activeOpacity={0.8}
-                onPress={() => router.push("/(tabs)/bests")}
-              >
-                <Text style={styles.pickEmoji}>{pick.emoji}</Text>
-                <Text style={styles.pickLabel}>{pick.label}</Text>
-              </TouchableOpacity>
-            ))}
+        {/* Top guides — best-selling city guides */}
+        {initialLoading ? (
+          <View style={styles.section}>
+            <SectionHeader title="Top guides" subtitle="Best-selling city guides" />
+            <FlatList
+              horizontal
+              data={[1, 2, 3, 4]}
+              keyExtractor={(item) => String(item)}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              renderItem={() => <GuideCardSkeleton />}
+            />
           </View>
-        </View>
+        ) : topGuides.length > 0 && (
+          <View style={styles.section}>
+            <SectionHeader
+              title="Top guides"
+              subtitle="Best-selling city guides"
+              onAction={() => router.push("/(tabs)/bests")}
+              actionLabel="All"
+            />
+            <FlatList
+              horizontal
+              data={topGuides}
+              keyExtractor={(item) => item._id}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.horizontalList}
+              renderItem={({ item }) => (
+                <GuideCard
+                  guide={item}
+                  onPress={() => router.push(`/guide/${item._id}` as any)}
+                />
+              )}
+            />
+          </View>
+        )}
 
         <View style={{ height: 80 }} />
       </ScrollView>
@@ -1059,28 +1152,62 @@ const styles = StyleSheet.create({
     color: C.textMute,
     marginTop: 3,
   },
-  picksGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
-    paddingHorizontal: 20,
-  },
-  pickTile: {
-    width: "47%",
+  guideCard: {
+    width: 220,
+    marginRight: 16,
     borderRadius: 16,
-    padding: 16,
+    backgroundColor: C.surface,
     borderWidth: 1,
     borderColor: C.stroke,
-    gap: 8,
+    overflow: "hidden",
   },
-  pickEmoji: {
-    fontSize: 28,
+  guideCardBanner: {
+    height: 70,
+    paddingHorizontal: 12,
+    justifyContent: "center",
   },
-  pickLabel: {
-    fontFamily: Fonts.semiBold,
-    fontSize: 13,
+  guideCardEmoji: {
+    fontSize: 30,
+  },
+  guideCardContent: {
+    padding: 12,
+    gap: 6,
+  },
+  guideCardTitle: {
+    fontFamily: Fonts.bold,
+    fontSize: 14,
     color: C.text,
-    lineHeight: 17,
+    lineHeight: 18,
+    minHeight: 36,
+  },
+  guideCardMeta: {
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    color: C.textDim,
+  },
+  guideCardFooter: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 2,
+  },
+  guideTopicBadge: {
+    flexShrink: 1,
+    backgroundColor: "rgba(168,85,247,0.12)",
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    marginRight: 8,
+  },
+  guideTopicText: {
+    fontFamily: Fonts.medium,
+    fontSize: 11,
+    color: C.purple,
+  },
+  guideCardPrice: {
+    fontFamily: Fonts.bold,
+    fontSize: 14,
+    color: C.purple,
   },
   fab: {
     position: "absolute",

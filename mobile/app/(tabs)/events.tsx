@@ -34,14 +34,22 @@ import { Avatar } from "@/components/shared/Avatar";
 import { useStripePayment } from "@/hooks/useStripePayment";
 import { trackEvent as trackAnalyticsEvent } from "@/utils/analytics";
 import { fetchCities } from "@/libs/api";
-import { City } from "@/libs/interfaces";
+import { City, LocationSelection } from "@/libs/interfaces";
+import { LocationPicker, MultiImagePicker } from "@/components/shared";
+import { formatLocation } from "@/utils/location";
+import { resolveImageUrls } from "@/utils/imageUpload";
 
 interface Event {
   _id: string;
   title: string;
   date: string;
   location: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
   image?: string;
+  images?: string[];
   description?: string;
   shareToken: string;
   isPublic: boolean;
@@ -112,10 +120,15 @@ export default function EventsPage() {
     title: "",
     date: "",
     location: "",
-    image: "",
+    address: "",
+    city: "",
+    state: "",
+    country: "",
+    images: [] as string[],
     description: "",
     isPublic: false,
   });
+  const [editLocation, setEditLocation] = useState<LocationSelection | null>(null);
 
   const PAGE_LIMIT = 10;
 
@@ -324,10 +337,21 @@ export default function EventsPage() {
       title: event.title,
       date: eventDate.toISOString(),
       location: event.location,
-      image: event.image || "",
+      address: event.address || "",
+      city: event.city || "",
+      state: event.state || "",
+      country: event.country || "",
+      images: event.images && event.images.length > 0 ? event.images : event.image ? [event.image] : [],
       description: event.description || "",
       isPublic: event.isPublic,
     });
+    // Prefill the picker from structured fields when present; legacy events
+    // only have the free-text location, so leave the picker empty for those.
+    setEditLocation(
+      event.city
+        ? { country: event.country || "United States", state: event.state || "", city: event.city }
+        : null
+    );
     setIsEditModalVisible(true);
   };
 
@@ -470,9 +494,20 @@ export default function EventsPage() {
 
     try {
       const token = await SecureStore.getItemAsync("token");
+
+      // Upload any newly-picked photos, keep already-hosted ones
+      let imageUrls = editData.images;
+      try {
+        imageUrls = await resolveImageUrls(editData.images, "events", token!);
+      } catch {
+        Alert.alert("Upload Error", "Failed to upload event photos");
+        return;
+      }
+
       // Visibility is immutable post-creation — don't send it on update so a
       // stale toggle in local state can't trip the server's guard.
-      const { isPublic: _ignored, ...editablePayload } = editData;
+      const { isPublic: _ignored, images: _imgs, ...rest } = editData;
+      const editablePayload = { ...rest, images: imageUrls };
       const response = await fetch(`${BASE_URL}/events/${selectedEvent._id}`, {
         method: "PUT",
         headers: {
@@ -569,19 +604,6 @@ export default function EventsPage() {
     );
   };
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: false,
-      quality: 0.8,
-      base64: true,
-    });
-
-    if (!result.canceled && result.assets[0].base64) {
-      const base64Image = `data:image/jpeg;base64,${result.assets[0].base64}`;
-      setEditData({ ...editData, image: base64Image });
-    }
-  };
 
   const handleEventPress = (eventId: string) => {
     router.push(`/event/${eventId}`);
@@ -986,51 +1008,42 @@ export default function EventsPage() {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Location *</Text>
+                <Text style={styles.inputLabel}>Address</Text>
                 <TextInput
                   style={styles.input}
-                  placeholder="e.g., Downtown Club"
+                  placeholder="e.g., 123 Main St, Rooftop Lounge"
                   placeholderTextColor="#6b7280"
-                  value={editData.location}
-                  onChangeText={(text) =>
-                    setEditData({ ...editData, location: text })
-                  }
+                  value={editData.address}
+                  onChangeText={(text) => setEditData({ ...editData, address: text })}
                 />
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Event Image</Text>
-                <TouchableOpacity
-                  style={styles.imagePickerButton}
-                  onPress={pickImage}
-                  activeOpacity={0.7}
-                >
-                  <LinearGradient
-                    colors={["#667eea", "#764ba2"]}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 0 }}
-                    style={styles.imagePickerGradient}
-                  >
-                    <Ionicons name="image-outline" size={20} color="white" />
-                    <Text style={styles.imagePickerText}>
-                      {editData.image ? "Change Image" : "Pick an Image"}
-                    </Text>
-                  </LinearGradient>
-                </TouchableOpacity>
-                {editData.image ? (
-                  <View style={styles.imagePreviewContainer}>
-                    <Image
-                      source={{ uri: editData.image }}
-                      style={styles.imagePreview}
-                    />
-                    <TouchableOpacity
-                      style={styles.removeImageButton}
-                      onPress={() => setEditData({ ...editData, image: "" })}
-                    >
-                      <Ionicons name="close-circle" size={24} color="#ef4444" />
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
+                <LocationPicker
+                  key={selectedEvent?._id || "edit"}
+                  label="Location"
+                  required
+                  value={editLocation ?? undefined}
+                  onChange={(sel) => {
+                    setEditLocation(sel);
+                    setEditData((prev) => ({
+                      ...prev,
+                      location: formatLocation(sel) || prev.location,
+                      city: sel.city,
+                      state: sel.state,
+                      country: sel.country,
+                    }));
+                  }}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <MultiImagePicker
+                  value={editData.images}
+                  onChange={(imgs) => setEditData({ ...editData, images: imgs })}
+                  label="Event photos"
+                  max={6}
+                />
               </View>
 
               <View style={styles.inputGroup}>

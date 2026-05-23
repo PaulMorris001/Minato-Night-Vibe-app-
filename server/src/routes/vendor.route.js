@@ -3,6 +3,8 @@ import {
   getAllCities,
   getVendorTypesByCity,
   getVendorsByCityAndType,
+  browseVendors,
+  getVendorById,
   getAllVendorTypes,
   searchVendors,
   rateVendor,
@@ -17,6 +19,8 @@ router.get("/vendor-types", getAllVendorTypes);
 router.get("/cities/:cityId/vendor-types", getVendorTypesByCity);
 router.get("/cities/:cityId/vendors/:vendorTypeId", getVendorsByCityAndType);
 router.get("/vendors/search", searchVendors);
+router.get("/vendors/browse", browseVendors);
+router.get("/vendors/:vendorId", getVendorById);
 router.post("/vendors/:vendorId/rate", authenticate, rateVendor);
 router.get("/vendors/:vendorId/reviews", authenticate, getVendorReviews);
 

@@ -1,6 +1,24 @@
 import { City, VendorType, Vendor } from "../models/vendor.model.js";
 import Review from "../models/review.model.js";
 
+const escapeRegex = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Resolve a City document from a picker selection, creating it on first use.
+ * Cities are no longer a fixed admin list — they're materialized the first
+ * time a vendor (or anything else) picks one from the CSC API. Keyed by
+ * {country, state, name} to match the unique index.
+ */
+export async function findOrCreateCity({ name, state, country }) {
+  if (!name || !state) return null;
+  const resolvedCountry = country || "United States";
+  return City.findOneAndUpdate(
+    { name, state, country: resolvedCountry },
+    { $setOnInsert: { name, state, country: resolvedCountry } },
+    { upsert: true, new: true, setDefaultsOnInsert: true }
+  );
+}
+
 export async function getAllCities(req, res) {
   try {
     const cities = await City.find().sort({ name: 1 });
@@ -29,6 +47,34 @@ export async function getVendorTypesByCity(req, res) {
   }
 }
 
+// Browse vendors for the carousel view — flat list, populated with city +
+// vendorType, optionally narrowed to a location (country / state / city).
+// The client groups the result into per-vendor-type carousels.
+export async function browseVendors(req, res) {
+  try {
+    const { country, state, city } = req.query;
+
+    const vendorQuery = {};
+    if (country || state || city) {
+      const cityQuery = {};
+      if (country) cityQuery.country = new RegExp(`^${escapeRegex(country)}$`, "i");
+      if (state) cityQuery.state = new RegExp(`^${escapeRegex(state)}$`, "i");
+      if (city) cityQuery.name = new RegExp(`^${escapeRegex(city)}$`, "i");
+      const matchingCities = await City.find(cityQuery).select("_id");
+      vendorQuery.city = { $in: matchingCities.map((c) => c._id) };
+    }
+
+    const vendors = await Vendor.find(vendorQuery)
+      .populate("city", "name state country")
+      .populate("vendorType", "name icon")
+      .sort({ verified: -1, rating: -1 });
+
+    res.json({ vendors });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
 export async function getVendorsByCityAndType(req, res) {
   try {
     const { cityId, vendorTypeId } = req.params;
@@ -37,6 +83,19 @@ export async function getVendorsByCityAndType(req, res) {
       .populate("vendorType", "name icon")
       .sort({ verified: -1, rating: -1 });
     res.status(200).json(vendors);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+}
+
+// Fetch a single vendor (with contact links + images) for the details screen
+export async function getVendorById(req, res) {
+  try {
+    const vendor = await Vendor.findById(req.params.vendorId)
+      .populate("city", "name state country")
+      .populate("vendorType", "name icon");
+    if (!vendor) return res.status(404).json({ message: "Vendor not found" });
+    res.json(vendor);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

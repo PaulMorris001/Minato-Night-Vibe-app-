@@ -166,11 +166,15 @@ export async function getCitiesAdmin(req, res) {
 
 export async function createCity(req, res) {
   try {
-    const { name, state } = req.body;
+    const { name, state, country } = req.body;
     if (!name || !state) {
       return res.status(400).json({ message: "Name and state are required" });
     }
-    const city = await new City({ name: name.trim(), state: state.trim() }).save();
+    const city = await new City({
+      name: name.trim(),
+      state: state.trim(),
+      country: (country || "United States").trim(),
+    }).save();
     res.status(201).json(city);
   } catch (error) {
     res.status(500).json({ message: error.message });

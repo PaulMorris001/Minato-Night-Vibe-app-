@@ -31,6 +31,7 @@ import { useStripePayment } from "@/hooks/useStripePayment";
 import EventCardSkeleton from "@/components/skeletons/EventCardSkeleton";
 import ReportBlockSheet from "@/components/shared/ReportBlockSheet";
 import ShareSheet, { ShareTarget } from "@/components/shared/ShareSheet";
+import { ImageViewerModal } from "@/components/shared";
 import { GlassCard } from "@/components/event-details/GlassCard";
 import { AU } from "@/components/auth/tokens";
 import {
@@ -41,6 +42,8 @@ import {
   neighborhoodFromLocation,
   vendorAccentColor,
 } from "@/utils/eventDetails";
+import { formatLocation } from "@/utils/location";
+import { addEventToCalendar } from "@/utils/calendar";
 
 interface RsvpUser {
   _id: string;
@@ -71,8 +74,14 @@ interface Event {
   title: string;
   date: string;
   location: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
   image?: string;
+  images?: string[];
   description?: string;
+  seenCount?: number;
   shareToken: string;
   isPublic: boolean;
   isPaid: boolean;
@@ -184,6 +193,8 @@ export default function EventDetailsPage() {
   const { id } = useLocalSearchParams();
   const [event, setEvent] = useState<Event | null>(null);
   const [loading, setLoading] = useState(true);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [viewerIndex, setViewerIndex] = useState(0);
   const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [searchedUsers, setSearchedUsers] = useState<SearchedUser[]>([]);
@@ -715,6 +726,17 @@ export default function EventDetailsPage() {
             )}
           </View>
 
+          {/* Expand cover to full-screen viewer */}
+          {!!event.image && (
+            <TouchableOpacity
+              style={styles.heroExpandButton}
+              onPress={() => { setViewerIndex(0); setViewerVisible(true); }}
+              hitSlop={8}
+            >
+              <Ionicons name="expand-outline" size={18} color="#fff" />
+            </TouchableOpacity>
+          )}
+
           {/* Title + meta */}
           <View style={styles.heroBottom}>
             <Text style={styles.heroTitle}>{event.title}</Text>
@@ -728,12 +750,39 @@ export default function EventDetailsPage() {
                   <Text style={styles.heroMetaText}>{neighborhood}</Text>
                 </>
               )}
+              {isCreator && (
+                <>
+                  <View style={styles.metaDot} />
+                  <Ionicons name="eye-outline" size={14} color={AU.purpleSoft} />
+                  <Text style={styles.heroMetaText}>{event.seenCount ?? 0} seen</Text>
+                </>
+              )}
             </View>
           </View>
         </View>
 
         {/* ─── CONTENT ──────────────────────────────────────── */}
         <View style={styles.content}>
+          {/* Photo gallery */}
+          {event.images && event.images.length > 1 && (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.galleryStrip}
+              contentContainerStyle={styles.galleryContent}
+            >
+              {event.images.map((uri, i) => (
+                <TouchableOpacity
+                  key={`${uri}-${i}`}
+                  activeOpacity={0.85}
+                  onPress={() => { setViewerIndex(i); setViewerVisible(true); }}
+                >
+                  <Image source={{ uri }} style={styles.galleryImage} contentFit="cover" />
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+
           {/* Cancelled banner */}
           {isCancelled && (
             <View style={styles.cancelledBanner}>
@@ -889,6 +938,24 @@ export default function EventDetailsPage() {
             <GlassCard>
               <Text style={styles.microLabel}>ABOUT</Text>
               <Text style={styles.aboutBody}>{event.description}</Text>
+            </GlassCard>
+          )}
+
+          {/* Where */}
+          {(!!event.address || !!event.location) && (
+            <GlassCard>
+              <Text style={styles.microLabel}>WHERE</Text>
+              {!!event.address && <Text style={styles.aboutBody}>{event.address}</Text>}
+              <View style={styles.whereRow}>
+                <Ionicons name="location-outline" size={15} color={AU.purpleSoft} />
+                <Text style={styles.whereCity}>
+                  {formatLocation({
+                    city: event.city,
+                    state: event.state,
+                    country: event.country,
+                  }) || event.location}
+                </Text>
+              </View>
             </GlassCard>
           )}
 
@@ -1151,7 +1218,32 @@ export default function EventDetailsPage() {
               label="Add to calendar"
               onPress={() => {
                 setActionSheetVisible(false);
-                Alert.alert("Coming soon", "Calendar export isn't wired up yet.");
+                if (!event) return;
+                // Let the action sheet finish dismissing before the OS
+                // permission prompt presents (iOS won't stack modals).
+                setTimeout(async () => {
+                  const res = await addEventToCalendar(event);
+                  if (res.ok) {
+                    Alert.alert(
+                      "Added to calendar",
+                      "We added this event with a 1-hour reminder and a link that opens it in NightVibe."
+                    );
+                  } else if (res.error === "permission") {
+                    Alert.alert(
+                      "Calendar access needed",
+                      "Enable calendar access for NightVibe in Settings to add this event."
+                    );
+                  } else if (res.error === "no_calendar") {
+                    Alert.alert("No calendar found", "This device doesn't have a calendar we can write to.");
+                  } else if (res.error === "unavailable") {
+                    Alert.alert(
+                      "Update required",
+                      "Adding to calendar will be available in the next app update. Please update NightVibe from the store."
+                    );
+                  } else {
+                    Alert.alert("Couldn't add", "Something went wrong adding this event to your calendar.");
+                  }
+                }, 320);
               }}
             />
             {isCreator && (
@@ -1224,6 +1316,19 @@ export default function EventDetailsPage() {
         visible={shareSheetVisible}
         onClose={() => setShareSheetVisible(false)}
         target={shareTarget}
+      />
+
+      <ImageViewerModal
+        visible={viewerVisible}
+        images={
+          event.images && event.images.length > 0
+            ? event.images
+            : event.image
+            ? [event.image]
+            : []
+        }
+        initialIndex={viewerIndex}
+        onClose={() => setViewerVisible(false)}
       />
 
       {/* ─── INVITE USER MODAL (preserved) ─────────────────── */}
@@ -1662,6 +1767,9 @@ const styles = StyleSheet.create({
     backgroundColor: AU.surface,
   },
   heroImage: { ...StyleSheet.absoluteFillObject },
+  galleryStrip: { marginBottom: 16 },
+  galleryContent: { gap: 10, paddingRight: 8 },
+  galleryImage: { width: 140, height: 100, borderRadius: 12 },
   heroFallback: { ...StyleSheet.absoluteFillObject },
   heroEmoji: {
     position: "absolute",
@@ -1731,6 +1839,18 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     fontSize: 11,
     letterSpacing: 0.44,
+  },
+  heroExpandButton: {
+    position: "absolute",
+    bottom: 96,
+    right: 18,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 3,
   },
   heroBottom: {
     position: "absolute",
@@ -1908,6 +2028,17 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     lineHeight: 21,
     marginTop: 8,
+  },
+  whereRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+  },
+  whereCity: {
+    color: AU.textDim,
+    fontFamily: Fonts.regular,
+    fontSize: 13,
   },
 
   // Host

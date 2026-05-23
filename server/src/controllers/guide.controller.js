@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Guide, { guideTopicsList } from "../models/guide.model.js";
 import User from "../models/user.model.js";
 import { getBlockedIds } from "../utils/blockFilter.js";
@@ -22,6 +23,8 @@ export const createGuide = async (req, res) => {
       price,
       city,
       cityState,
+      country,
+      coverImage,
       topic,
       sections,
       isDraft,
@@ -96,8 +99,15 @@ export const createGuide = async (req, res) => {
       price: parseFloat(price),
       city,
       cityState,
+      country: country || "United States",
+      coverImage: coverImage || "",
       topic,
-      sections,
+      sections: sections.map((s) => ({
+        title: s.title,
+        rank: s.rank,
+        description: s.description,
+        image: s.image || "",
+      })),
       isDraft: isDraft || false,
     });
 
@@ -121,7 +131,7 @@ export const createGuide = async (req, res) => {
 // Get all guides (published only, not drafts)
 export const getGuides = async (req, res) => {
   try {
-    const { city, topic, minPrice, maxPrice, search } = req.query;
+    const { city, state, country, topic, minPrice, maxPrice, search } = req.query;
 
     const blockedIds = req.user?.id ? await getBlockedIds(req.user.id) : [];
 
@@ -131,10 +141,11 @@ export const getGuides = async (req, res) => {
       ...(blockedIds.length > 0 ? { author: { $nin: blockedIds } } : {}),
     };
 
-    // Filter by city name if provided
-    if (city) {
-      filter.city = { $regex: new RegExp(`^${city}$`, "i") };
-    }
+    // Filter by location if provided
+    const esc = (s) => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    if (city) filter.city = { $regex: new RegExp(`^${esc(city)}$`, "i") };
+    if (state) filter.cityState = { $regex: new RegExp(`^${esc(state)}$`, "i") };
+    if (country) filter.country = { $regex: new RegExp(`^${esc(country)}$`, "i") };
 
     if (topic) filter.topic = topic;
     if (minPrice || maxPrice) {
@@ -158,6 +169,61 @@ export const getGuides = async (req, res) => {
   } catch (error) {
     console.error("Get guides error:", error);
     res.status(500).json({ message: "Failed to fetch guides" });
+  }
+};
+
+// Get the top-selling published guides (most purchases, then most views)
+export const getTopGuides = async (req, res) => {
+  try {
+    const limit = Math.min(parseInt(req.query.limit, 10) || 10, 50);
+    const blockedIds = req.user?.id ? await getBlockedIds(req.user.id) : [];
+
+    const match = { isDraft: false, isActive: true };
+    if (blockedIds.length > 0) {
+      match.author = {
+        $nin: blockedIds.map((id) => new mongoose.Types.ObjectId(id)),
+      };
+    }
+
+    const guides = await Guide.aggregate([
+      { $match: match },
+      { $addFields: { salesCount: { $size: { $ifNull: ["$purchasedBy", []] } } } },
+      { $sort: { salesCount: -1, views: -1, createdAt: -1 } },
+      { $limit: limit },
+      {
+        $lookup: {
+          from: "users",
+          localField: "author",
+          foreignField: "_id",
+          as: "author",
+        },
+      },
+      { $unwind: "$author" },
+      {
+        $project: {
+          title: 1,
+          authorName: 1,
+          description: 1,
+          price: 1,
+          city: 1,
+          cityState: 1,
+          topic: 1,
+          sections: 1,
+          views: 1,
+          salesCount: 1,
+          createdAt: 1,
+          "author._id": 1,
+          "author.username": 1,
+          "author.email": 1,
+          "author.profilePicture": 1,
+        },
+      },
+    ]);
+
+    res.status(200).json({ guides });
+  } catch (error) {
+    console.error("Get top guides error:", error);
+    res.status(500).json({ message: "Failed to fetch top guides" });
   }
 };
 
@@ -208,11 +274,14 @@ export const getGuideById = async (req, res) => {
     }
 
     const isOwner = userId && guide.author._id.toString() === userId;
+    const isSaved =
+      userId && (guide.savedBy || []).some((u) => u.toString() === userId);
 
     res.status(200).json({
       guide,
       hasPurchased,
       isOwner,
+      isSaved,
     });
   } catch (error) {
     console.error("Get guide by ID error:", error);
@@ -231,6 +300,8 @@ export const updateGuide = async (req, res) => {
       price,
       city,
       cityState,
+      country,
+      coverImage,
       topic,
       sections,
       isDraft,
@@ -297,8 +368,16 @@ export const updateGuide = async (req, res) => {
     if (price !== undefined) guide.price = parseFloat(price);
     if (city !== undefined) guide.city = city;
     if (cityState !== undefined) guide.cityState = cityState;
+    if (country !== undefined) guide.country = country;
+    if (coverImage !== undefined) guide.coverImage = coverImage;
     if (topic !== undefined) guide.topic = topic;
-    if (sections !== undefined) guide.sections = sections;
+    if (sections !== undefined)
+      guide.sections = sections.map((s) => ({
+        title: s.title,
+        rank: s.rank,
+        description: s.description,
+        image: s.image || "",
+      }));
     if (isDraft !== undefined) guide.isDraft = isDraft;
 
     await guide.save();
@@ -396,6 +475,48 @@ export const purchaseGuide = async (req, res) => {
   }
 };
 
+// Toggle saving (bookmarking) a guide for the current user
+export const toggleSaveGuide = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const guide = await Guide.findById(id).select("savedBy");
+    if (!guide) return res.status(404).json({ message: "Guide not found" });
+
+    const already = guide.savedBy.some((u) => u.toString() === userId);
+    if (already) {
+      await Guide.updateOne({ _id: id }, { $pull: { savedBy: userId } });
+    } else {
+      await Guide.updateOne({ _id: id }, { $addToSet: { savedBy: userId } });
+    }
+
+    res.status(200).json({ saved: !already });
+  } catch (error) {
+    console.error("Toggle save guide error:", error);
+    res.status(500).json({ message: "Failed to update saved guide" });
+  }
+};
+
+// Get the guides the current user has saved (bookmarked)
+export const getSavedGuides = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const guides = await Guide.find({
+      savedBy: userId,
+      isDraft: false,
+      isActive: true,
+    })
+      .populate("author", "username email profilePicture")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ guides });
+  } catch (error) {
+    console.error("Get saved guides error:", error);
+    res.status(500).json({ message: "Failed to fetch saved guides" });
+  }
+};
+
 // Get purchased guides for a user
 export const getPurchasedGuides = async (req, res) => {
   try {
@@ -426,7 +547,7 @@ export const getGuidesByCity = async (req, res) => {
   console.log("🏙️ =====================================================\n\n");
   try {
     // Get city name from query parameter
-    const { name } = req.query;
+    const { name, country, state } = req.query;
 
     if (!name) {
       return res.status(400).json({ message: "City name is required" });
@@ -439,8 +560,14 @@ export const getGuidesByCity = async (req, res) => {
 
     const blockedIds = req.user?.id ? await getBlockedIds(req.user.id) : [];
 
+    // country/state disambiguate same-named cities across countries
+    const locationFilter = {};
+    if (country) locationFilter.country = { $regex: new RegExp(`^${decodeURIComponent(country)}$`, 'i') };
+    if (state) locationFilter.cityState = { $regex: new RegExp(`^${decodeURIComponent(state)}$`, 'i') };
+
     const guides = await Guide.find({
       city: { $regex: new RegExp(`^${decodedCityName}$`, 'i') },
+      ...locationFilter,
       isDraft: false,
       isActive: true,
       ...(blockedIds.length > 0 ? { author: { $nin: blockedIds } } : {}),
@@ -454,5 +581,50 @@ export const getGuidesByCity = async (req, res) => {
   } catch (error) {
     console.error("Get guides by city error:", error);
     res.status(500).json({ message: "Failed to fetch guides" });
+  }
+};
+
+// Get the distinct locations that actually have published guides.
+// Powers the "Browse guides by city" list so it reflects real content
+// instead of a curated city catalog.
+export const getGuideLocations = async (req, res) => {
+  try {
+    const blockedIds = req.user?.id ? await getBlockedIds(req.user.id) : [];
+
+    const match = { isDraft: false, isActive: true };
+    if (blockedIds.length > 0) {
+      match.author = {
+        $nin: blockedIds.map((id) => new mongoose.Types.ObjectId(id)),
+      };
+    }
+
+    const locations = await Guide.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: {
+            city: "$city",
+            state: "$cityState",
+            country: { $ifNull: ["$country", "United States"] },
+          },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          city: "$_id.city",
+          state: "$_id.state",
+          country: "$_id.country",
+          count: 1,
+        },
+      },
+      { $sort: { country: 1, state: 1, city: 1 } },
+    ]);
+
+    res.status(200).json({ locations });
+  } catch (error) {
+    console.error("Get guide locations error:", error);
+    res.status(500).json({ message: "Failed to fetch guide locations" });
   }
 };

@@ -17,6 +17,7 @@ export interface City {
   _id: string;
   name: string;
   state: string;
+  country?: string;
 }
 
 export interface VendorType {

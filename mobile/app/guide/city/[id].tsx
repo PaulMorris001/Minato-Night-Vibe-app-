@@ -20,7 +20,11 @@ import GuideCardSkeleton from "@/components/skeletons/GuideCardSkeleton";
 
 export default function CityGuidesPage() {
   const router = useRouter();
-  const { cityName } = useLocalSearchParams<{ cityName: string }>();
+  const { cityName, state, country } = useLocalSearchParams<{
+    cityName: string;
+    state?: string;
+    country?: string;
+  }>();
   const formatPrice = useFormatPrice();
 
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -40,7 +44,10 @@ export default function CityGuidesPage() {
 
       // Convert city name to URL-safe format (e.g., "New York City" -> "new-york-city")
       const urlSafeCityName = cityName.toLowerCase().replace(/\s+/g, "-");
-      const url = `${BASE_URL}/guide/by-city?name=${urlSafeCityName}`;
+      const params = new URLSearchParams({ name: urlSafeCityName });
+      if (state) params.append("state", state);
+      if (country) params.append("country", country);
+      const url = `${BASE_URL}/guide/by-city?${params.toString()}`;
 
       const headers: Record<string, string> = {};
       if (token) {
@@ -73,7 +80,7 @@ export default function CityGuidesPage() {
     } finally {
       setLoading(false);
     }
-  }, [cityName, router]);
+  }, [cityName, state, country, router]);
 
   const filterGuides = useCallback(() => {
     let filtered = [...guides];

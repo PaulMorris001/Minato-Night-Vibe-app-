@@ -12,17 +12,18 @@ import * as SecureStore from "expo-secure-store";
 import axios from "axios";
 import { Colors } from "@/constants/colors";
 import { BASE_URL } from "@/constants/constants";
-import { City, VendorType } from "@/libs/interfaces";
+import { VendorType, LocationSelection } from "@/libs/interfaces";
 import { useRouter } from "expo-router";
 import {
   BottomSheetModal,
   FormInput,
   PrimaryButton,
   ImagePickerButton,
+  LocationPicker,
 } from "@/components/shared";
 import { uploadImage } from "@/utils/imageUpload";
 import { useAccount } from "@/contexts/AccountContext";
-import { fetchCities, fetchVendorTypes } from "@/libs/api";
+import { fetchVendorTypes } from "@/libs/api";
 
 interface BecomeVendorModalProps {
   visible: boolean;
@@ -36,12 +37,10 @@ export default function BecomeVendorModal({
   const router = useRouter();
   const { setActiveAccount } = useAccount();
   const [loading, setLoading] = useState(false);
-  const [cities, setCities] = useState<City[]>([]);
   const [vendorTypes, setVendorTypes] = useState<VendorType[]>([]);
-  const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [showTypeDropdown, setShowTypeDropdown] = useState(false);
   const [businessPicture, setBusinessPicture] = useState("");
-  const [selectedCity, setSelectedCity] = useState<City | null>(null);
+  const [location, setLocation] = useState<LocationSelection | null>(null);
   const [selectedVendorType, setSelectedVendorType] = useState<VendorType | null>(null);
 
   const [formData, setFormData] = useState({
@@ -50,18 +49,21 @@ export default function BecomeVendorModal({
     address: "",
     phone: "",
     website: "",
+    instagram: "",
+    twitter: "",
+    tiktok: "",
+    facebook: "",
   });
 
   useEffect(() => {
     if (visible) {
-      loadCitiesAndTypes();
+      loadVendorTypes();
     }
   }, [visible]);
 
-  const loadCitiesAndTypes = async () => {
+  const loadVendorTypes = async () => {
     try {
-      const [c, t] = await Promise.all([fetchCities(), fetchVendorTypes()]);
-      if (Array.isArray(c) && c.length > 0) setCities(c);
+      const t = await fetchVendorTypes();
       if (Array.isArray(t) && t.length > 0) setVendorTypes(t);
     } catch {
       // Fall back to static constants silently
@@ -76,8 +78,8 @@ export default function BecomeVendorModal({
       Alert.alert("Error", "Please select a vendor type");
       return;
     }
-    if (!selectedCity) {
-      Alert.alert("Error", "Please select a city");
+    if (!location?.city || !location?.state) {
+      Alert.alert("Error", "Please select your country, state, and city");
       return;
     }
 
@@ -109,13 +111,18 @@ export default function BecomeVendorModal({
           // ObjectId fields for vendor discovery
           vendorTypeId: selectedVendorType._id,
           location: {
-            city: selectedCity.name,
-            cityId: selectedCity._id,
+            city: location.city,
+            state: location.state,
+            country: location.country,
             address: formData.address.trim(),
           },
           contactInfo: {
             phone: formData.phone.trim(),
             website: formData.website.trim(),
+            instagram: formData.instagram.trim(),
+            twitter: formData.twitter.trim(),
+            tiktok: formData.tiktok.trim(),
+            facebook: formData.facebook.trim(),
           },
         },
         {
@@ -146,11 +153,6 @@ export default function BecomeVendorModal({
     } finally {
       setLoading(false);
     }
-  };
-
-  const selectCity = (city: City) => {
-    setSelectedCity(city);
-    setShowCityDropdown(false);
   };
 
   const selectVendorType = (type: VendorType) => {
@@ -264,59 +266,9 @@ export default function BecomeVendorModal({
         containerStyle={styles.textAreaContainer}
       />
 
-      {/* City Dropdown */}
+      {/* Location (Country → State → City) */}
       <View style={styles.field}>
-        <Text style={styles.label}>
-          City <Text style={styles.required}>*</Text>
-        </Text>
-        <TouchableOpacity
-          style={styles.picker}
-          onPress={() => setShowCityDropdown(!showCityDropdown)}
-        >
-          <Text
-            style={[
-              styles.pickerText,
-              !selectedCity && styles.pickerPlaceholder,
-            ]}
-          >
-            {selectedCity?.name || "Select city"}
-          </Text>
-          <Ionicons
-            name={showCityDropdown ? "chevron-up" : "chevron-down"}
-            size={20}
-            color="#9ca3af"
-          />
-        </TouchableOpacity>
-        {showCityDropdown && (
-          <View style={styles.dropdown}>
-            <ScrollView style={styles.dropdownScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-              {cities.map((city) => (
-                <TouchableOpacity
-                  key={city._id}
-                  style={[
-                    styles.dropdownItem,
-                    selectedCity?._id === city._id &&
-                      styles.dropdownItemSelected,
-                  ]}
-                  onPress={() => selectCity(city)}
-                >
-                  <View>
-                    <Text
-                      style={[
-                        styles.dropdownItemText,
-                        selectedCity?._id === city._id &&
-                          styles.dropdownItemTextSelected,
-                      ]}
-                    >
-                      {city.name}
-                    </Text>
-                    <Text style={styles.dropdownItemSubtext}>{city.state}</Text>
-                  </View>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+        <LocationPicker value={location ?? undefined} onChange={setLocation} label="City" required />
       </View>
 
       <FormInput
@@ -341,6 +293,38 @@ export default function BecomeVendorModal({
         placeholder="Enter website URL"
         autoCapitalize="none"
         keyboardType="url"
+      />
+
+      <FormInput
+        label="Instagram"
+        value={formData.instagram}
+        onChangeText={(text) => setFormData({ ...formData, instagram: text })}
+        placeholder="@username or link"
+        autoCapitalize="none"
+      />
+
+      <FormInput
+        label="TikTok"
+        value={formData.tiktok}
+        onChangeText={(text) => setFormData({ ...formData, tiktok: text })}
+        placeholder="@username or link"
+        autoCapitalize="none"
+      />
+
+      <FormInput
+        label="X (Twitter)"
+        value={formData.twitter}
+        onChangeText={(text) => setFormData({ ...formData, twitter: text })}
+        placeholder="@username or link"
+        autoCapitalize="none"
+      />
+
+      <FormInput
+        label="Facebook"
+        value={formData.facebook}
+        onChangeText={(text) => setFormData({ ...formData, facebook: text })}
+        placeholder="Page name or link"
+        autoCapitalize="none"
       />
 
       <PrimaryButton onPress={handleSubmit} loading={loading}>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -9,16 +9,16 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
-  ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import * as SecureStore from "expo-secure-store";
-import { GUIDE_TOPICS, GuideSection, City } from "@/libs/interfaces";
+import { GUIDE_TOPICS, GuideSection, LocationSelection } from "@/libs/interfaces";
 import { Fonts } from "@/constants/fonts";
 import { BASE_URL } from "@/constants/constants";
-import { fetchCities } from "@/libs/api";
 import { Colors } from "@/constants/colors";
+import { LocationPicker, ImagePickerButton } from "@/components/shared";
+import { resolveImageUrls } from "@/utils/imageUpload";
 
 export default function CreateGuidePage() {
   const router = useRouter();
@@ -26,24 +26,14 @@ export default function CreateGuidePage() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [price, setPrice] = useState("");
-  const [city, setCity] = useState("");
+  const [coverImage, setCoverImage] = useState("");
+  const [location, setLocation] = useState<LocationSelection | null>(null);
   const [topic, setTopic] = useState("");
   const [sections, setSections] = useState<GuideSection[]>([
     { title: "", rank: 1, description: "" },
   ]);
   const [loading, setLoading] = useState(false);
-  const [cities, setCities] = useState<City[]>([]);
-  const [loadingCities, setLoadingCities] = useState(true);
-  const [selectedCity, setSelectedCity] = useState<City | null>(null);
-  const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [showTopicDropdown, setShowTopicDropdown] = useState(false);
-
-  useEffect(() => {
-    fetchCities()
-      .then((data) => { if (Array.isArray(data) && data.length > 0) setCities(data); })
-      .catch(() => {})
-      .finally(() => setLoadingCities(false));
-  }, []);
 
   const addSection = () => {
     if (sections.length >= 10) {
@@ -92,8 +82,8 @@ export default function CreateGuidePage() {
       Alert.alert("Validation Error", "Please enter a valid price");
       return false;
     }
-    if (!city) {
-      Alert.alert("Validation Error", "Please select a city");
+    if (!location?.city || !location?.state) {
+      Alert.alert("Validation Error", "Please select your country, state, and city");
       return false;
     }
     if (!topic) {
@@ -127,7 +117,7 @@ export default function CreateGuidePage() {
   };
 
   const handleSave = async (isDraft: boolean) => {
-    if (!validateForm()) return;
+    if (!validateForm() || !location) return;
 
     try {
       setLoading(true);
@@ -137,10 +127,22 @@ export default function CreateGuidePage() {
         return;
       }
 
-      // Find the selected city to get name and state
-      const selectedCity = cities.find(c => c._id === city);
-      if (!selectedCity) {
-        Alert.alert("Error", "Please select a valid city");
+      // Upload any newly-picked images (cover + per-section)
+      let coverUrl = "";
+      let sectionsPayload = sections;
+      try {
+        if (coverImage) {
+          [coverUrl] = await resolveImageUrls([coverImage], "guides", token);
+        }
+        sectionsPayload = await Promise.all(
+          sections.map(async (s) => {
+            if (!s.image) return s;
+            const [url] = await resolveImageUrls([s.image], "guides", token);
+            return { ...s, image: url };
+          })
+        );
+      } catch {
+        Alert.alert("Upload Error", "Failed to upload one or more images");
         setLoading(false);
         return;
       }
@@ -155,10 +157,12 @@ export default function CreateGuidePage() {
           title,
           description,
           price: parseFloat(price),
-          city: selectedCity.name,
-          cityState: selectedCity.state,
+          city: location.city,
+          cityState: location.state,
+          country: location.country,
+          coverImage: coverUrl,
           topic,
-          sections,
+          sections: sectionsPayload,
           isDraft,
         }),
       });
@@ -249,44 +253,12 @@ export default function CreateGuidePage() {
         </View>
 
         <View style={styles.inputGroup}>
-          <Text style={styles.label}>
-            City <Text style={styles.required}>*</Text>
-          </Text>
-          {loadingCities ? (
-            <View style={[styles.dropdownButton, styles.loadingContainer]}>
-              <ActivityIndicator size="small" color={Colors.primary} />
-              <Text style={styles.loadingText}>Loading cities...</Text>
-            </View>
-          ) : (
-            <>
-              <TouchableOpacity
-                style={styles.dropdownButton}
-                onPress={() => { setShowCityDropdown(!showCityDropdown); setShowTopicDropdown(false); }}
-              >
-                <Text style={[styles.dropdownText, !selectedCity && styles.dropdownPlaceholder]}>
-                  {selectedCity ? `${selectedCity.name}, ${selectedCity.state}` : "Select a city..."}
-                </Text>
-                <Ionicons name={showCityDropdown ? "chevron-up" : "chevron-down"} size={20} color="#9ca3af" />
-              </TouchableOpacity>
-              {showCityDropdown && (
-                <View style={styles.dropdown}>
-                  <ScrollView style={styles.dropdownScroll} nestedScrollEnabled keyboardShouldPersistTaps="handled">
-                    {cities.map((c) => (
-                      <TouchableOpacity
-                        key={c._id}
-                        style={[styles.dropdownItem, selectedCity?._id === c._id && styles.dropdownItemSelected]}
-                        onPress={() => { setSelectedCity(c); setCity(c._id); setShowCityDropdown(false); }}
-                      >
-                        <Text style={[styles.dropdownItemText, selectedCity?._id === c._id && styles.dropdownItemTextSelected]}>
-                          {c.name}, {c.state}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              )}
-            </>
-          )}
+          <LocationPicker
+            value={location ?? undefined}
+            onChange={setLocation}
+            label="City"
+            required
+          />
         </View>
 
         <View style={styles.inputGroup}>
@@ -295,7 +267,7 @@ export default function CreateGuidePage() {
           </Text>
           <TouchableOpacity
             style={styles.dropdownButton}
-            onPress={() => { setShowTopicDropdown(!showTopicDropdown); setShowCityDropdown(false); }}
+            onPress={() => { setShowTopicDropdown(!showTopicDropdown); }}
           >
             <Text style={[styles.dropdownText, !topic && styles.dropdownPlaceholder]}>
               {topic || "Select a topic..."}
@@ -319,6 +291,18 @@ export default function CreateGuidePage() {
               </ScrollView>
             </View>
           )}
+        </View>
+
+        <View style={styles.inputGroup}>
+          <Text style={styles.label}>Cover photo (optional)</Text>
+          <ImagePickerButton
+            imageUri={coverImage}
+            onImageSelected={setCoverImage}
+            label=""
+            showLabel={false}
+            size={140}
+            shape="square"
+          />
         </View>
 
         <View style={styles.sectionsContainer}>
@@ -388,6 +372,18 @@ export default function CreateGuidePage() {
                   multiline
                   numberOfLines={6}
                   maxLength={3000}
+                />
+              </View>
+
+              <View style={styles.sectionInputGroup}>
+                <Text style={styles.label}>Photo (optional)</Text>
+                <ImagePickerButton
+                  imageUri={section.image}
+                  onImageSelected={(uri) => updateSection(index, "image", uri)}
+                  label=""
+                  showLabel={false}
+                  size={120}
+                  shape="square"
                 />
               </View>
             </View>

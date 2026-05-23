@@ -264,6 +264,29 @@ export async function uploadBase64Image(
 }
 
 /**
+ * Resolve a mixed list of image URIs to remote URLs: anything already hosted
+ * (http...) is kept as-is, local file:// / data: URIs are uploaded. Preserves
+ * order. Used by forms that mix already-saved photos with newly-picked ones.
+ */
+export async function resolveImageUrls(
+  uris: string[],
+  folder: string,
+  token: string
+): Promise<string[]> {
+  const out: string[] = [];
+  for (const uri of uris) {
+    if (!uri) continue;
+    if (uri.startsWith("http")) {
+      out.push(uri);
+    } else {
+      const result = await uploadImage(uri, folder, token);
+      out.push(result.url);
+    }
+  }
+  return out;
+}
+
+/**
  * Transform Cloudinary URL for different sizes and effects
  */
 export function transformCloudinaryUrl(

@@ -26,11 +26,13 @@ const guideTopics = [
 const guideSectionSchema = mongoose.Schema({
   title: { type: String, required: true },
   rank: { type: Number, required: true },
-  description: { type: String, required: true, maxlength: 3000 }
+  description: { type: String, required: true, maxlength: 3000 },
+  image: { type: String, default: "" } // optional photo for this section
 });
 
 const guideSchema = mongoose.Schema({
   title: { type: String, required: true },
+  coverImage: { type: String, default: "" }, // optional cover photo
   author: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "user",
@@ -46,6 +48,7 @@ const guideSchema = mongoose.Schema({
     } },
   city: { type: String, required: true },
   cityState: { type: String, required: true },
+  country: { type: String, default: "United States" },
   topic: {
     type: String,
     required: true,
@@ -64,6 +67,11 @@ const guideSchema = mongoose.Schema({
   isDraft: { type: Boolean, default: false },
   isPurchased: { type: Boolean, default: false },
   purchasedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "user"
+  }],
+  // Users who bookmarked this guide (saved for later)
+  savedBy: [{
     type: mongoose.Schema.Types.ObjectId,
     ref: "user"
   }],

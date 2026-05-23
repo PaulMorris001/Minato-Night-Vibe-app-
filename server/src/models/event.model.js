@@ -4,7 +4,14 @@ const eventSchema = mongoose.Schema({
   title: { type: String, required: true },
   date: { type: Date, required: true },
   location: { type: String, required: true },
-  image: { type: String, default: "" },
+  // Precise street address / venue so attendees know exactly where to go
+  address: { type: String, default: "" },
+  // Structured location captured from the picker (location stays the display string)
+  city: { type: String },
+  state: { type: String },
+  country: { type: String },
+  image: { type: String, default: "" }, // primary/cover image (first of images)
+  images: { type: [String], default: [] }, // gallery — all event photos
   description: { type: String, default: "" },
 
   // Creator of the event
@@ -13,6 +20,13 @@ const eventSchema = mongoose.Schema({
     ref: "user",
     required: true
   },
+
+  // Unique users (excluding the creator) who opened the event detail — drives
+  // the "N seen" count shown to the organizer.
+  viewedBy: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "user"
+  }],
 
   // Confirmed attendees (accepted the invite or joined via link/purchase)
   invitedUsers: [{

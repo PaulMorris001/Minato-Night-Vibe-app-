@@ -39,7 +39,7 @@ export const adminApi = {
 
   // Cities
   getCities: () => cachedGet<City[]>("/admin/cities"),
-  createCity: (data: { name: string; state: string }) =>
+  createCity: (data: { name: string; state: string; country?: string }) =>
     client.post<City>("/admin/cities", data).then((r) => { bustCache("/admin/cities"); return r; }),
   deleteCity: (id: string) =>
     client.delete(`/admin/cities/${id}`).then((r) => { bustCache("/admin/cities"); return r; }),

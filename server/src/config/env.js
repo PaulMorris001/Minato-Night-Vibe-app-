@@ -97,6 +97,12 @@ export const config = {
     ),
   },
 
+  // Country-State-City API (location data source for pickers)
+  csc: {
+    apiKey: process.env.CSC_API_KEY || "",
+    baseUrl: process.env.CSC_BASE_URL || "https://api.countrystatecity.in/v1",
+  },
+
   // Stripe Configuration
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY || "",

@@ -20,6 +20,39 @@ export interface City {
   _id: string;
   name: string;
   state: string;
+  country?: string;
+}
+
+// CSC API picker types (from the /locations proxy)
+export interface CountryOption {
+  name: string;
+  iso2: string;
+}
+
+export interface StateOption {
+  name: string;
+  iso2: string;
+}
+
+export interface CityOption {
+  name: string;
+}
+
+// A location that has published guides (browse list)
+export interface GuideLocation {
+  city: string;
+  state: string;
+  country: string;
+  count: number;
+}
+
+// A resolved location selection from the cascading picker
+export interface LocationSelection {
+  country: string;
+  countryIso?: string;
+  state: string;
+  stateIso?: string;
+  city: string;
 }
 
 export interface VendorType {
@@ -64,11 +97,13 @@ export interface GuideSection {
   title: string;
   rank: number;
   description: string;
+  image?: string;
 }
 
 export interface Guide {
   _id: string;
   title: string;
+  coverImage?: string;
   author: {
     _id: string;
     username: string;
@@ -79,7 +114,8 @@ export interface Guide {
   description: string;
   price: number;
   city: string; // City name
-  cityState: string; // State name
+  cityState: string; // State / region name
+  country?: string; // Country name (defaults to United States for legacy guides)
   topic: string;
   sections: GuideSection[];
   isDraft: boolean;

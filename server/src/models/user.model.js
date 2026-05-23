@@ -15,6 +15,9 @@ const userSchema = mongoose.Schema({
   // Profile picture for all users
   profilePicture: { type: String, default: "" },
 
+  // Short bio shown on the user's profile
+  bio: { type: String, default: "", maxlength: 500 },
+
   // Client-specific fields (everyone has these)
   preferences: {
     type: [String],
@@ -28,11 +31,17 @@ const userSchema = mongoose.Schema({
   vendorType: { type: String },
   location: {
     city: { type: String },
+    state: { type: String },
+    country: { type: String },
     address: { type: String }
   },
   contactInfo: {
     phone: { type: String },
-    website: { type: String }
+    website: { type: String },
+    instagram: { type: String },
+    twitter: { type: String },
+    tiktok: { type: String },
+    facebook: { type: String }
   },
   verified: { type: Boolean, default: false },
 

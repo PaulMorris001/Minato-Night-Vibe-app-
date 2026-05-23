@@ -15,6 +15,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
+  Linking,
 } from "react-native";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Service } from "@/libs/interfaces";
@@ -66,6 +67,9 @@ export default function VendorDetails() {
   const router = useRouter();
   const formatPrice = useFormatPrice();
 
+  // Vendor (contact links, description, images)
+  const [vendor, setVendor] = useState<any>(null);
+
   // Services
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +98,56 @@ export default function VendorDetails() {
     ? Math.round((reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length) * 10) / 10
     : 0;
 
+  const socialUrl = (key: string, val: string): string | null => {
+    if (!val) return null;
+    const v = val.trim();
+    if (v.startsWith("http")) return v;
+    const handle = v.replace(/^@/, "");
+    switch (key) {
+      case "instagram": return `https://instagram.com/${handle}`;
+      case "tiktok": return `https://tiktok.com/@${handle}`;
+      case "twitter": return `https://x.com/${handle}`;
+      case "facebook": return `https://facebook.com/${handle}`;
+      case "website": return `https://${v}`;
+      case "phone": return `tel:${v}`;
+      default: return v;
+    }
+  };
+
+  const SOCIALS: { key: string; icon: any; color: string }[] = [
+    { key: "instagram", icon: "logo-instagram", color: "#E1306C" },
+    { key: "tiktok", icon: "logo-tiktok", color: "#fff" },
+    { key: "twitter", icon: "logo-twitter", color: "#1DA1F2" },
+    { key: "facebook", icon: "logo-facebook", color: "#1877F2" },
+    { key: "website", icon: "globe-outline", color: "#a855f7" },
+    { key: "phone", icon: "call-outline", color: "#22c55e" },
+  ];
+
+  const renderVendorHeader = () => {
+    const contact = vendor?.contact || {};
+    const links = SOCIALS.map((s) => ({ ...s, url: socialUrl(s.key, contact[s.key]) })).filter((s) => s.url);
+    if (!vendor?.description && links.length === 0) return null;
+    return (
+      <View style={styles.vendorHeaderCard}>
+        {!!vendor?.description && <Text style={styles.vendorDescription}>{vendor.description}</Text>}
+        {links.length > 0 && (
+          <View style={styles.socialRow}>
+            {links.map((s) => (
+              <TouchableOpacity
+                key={s.key}
+                style={styles.socialButton}
+                onPress={() => Linking.openURL(s.url as string).catch(() => {})}
+                activeOpacity={0.8}
+              >
+                <Ionicons name={s.icon} size={20} color={s.color} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+    );
+  };
+
   useEffect(() => {
     const loadServices = async () => {
       try {
@@ -106,6 +160,10 @@ export default function VendorDetails() {
       }
     };
     loadServices();
+    fetch(`${BASE_URL}/vendors/${vendorId}`)
+      .then((r) => r.json())
+      .then((data) => { if (data && data._id) setVendor(data); })
+      .catch(() => {});
     fetchReviews();
   }, [vendorId]);
 
@@ -442,6 +500,7 @@ export default function VendorDetails() {
         renderItem={renderServiceCard}
         contentContainerStyle={styles.listContent}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={renderVendorHeader()}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <LinearGradient
@@ -856,6 +915,36 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: Fonts.semiBold,
     color: "#fff",
+  },
+  vendorHeaderCard: {
+    backgroundColor: "#1a1a2e",
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#252538",
+  },
+  vendorDescription: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#d1d5db",
+    lineHeight: 20,
+    marginBottom: 12,
+  },
+  socialRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+  socialButton: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: "#0f0f1a",
+    borderWidth: 1,
+    borderColor: "#374151",
+    alignItems: "center",
+    justifyContent: "center",
   },
   // Reviews section
   reviewsSection: {

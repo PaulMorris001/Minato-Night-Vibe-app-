@@ -3,7 +3,11 @@ import mongoose from "mongoose";
 const citySchema = mongoose.Schema({
     name: { type: String, required: true },
     state: { type: String, required: true },
+    country: { type: String, default: "United States" },
 });
+
+// Dedupe target for find-or-create when a city is picked from the CSC API
+citySchema.index({ country: 1, state: 1, name: 1 }, { unique: true });
 
 const vendorTypeSchema = mongoose.Schema({
     name: { type: String, required: true },
@@ -20,8 +24,11 @@ const vendorSchema = mongoose.Schema({
     rating: { type: Number, default: 0 },
     contact: {
         phone: { type: String },
-        instagram: { type: String },
         website: { type: String },
+        instagram: { type: String },
+        twitter: { type: String },
+        tiktok: { type: String },
+        facebook: { type: String },
     },
     // Link to user account (if vendor has registered)
     user: { type: mongoose.Schema.Types.ObjectId, ref: "user" },
