@@ -12,7 +12,6 @@ import {
   Modal,
   Image,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { Fonts } from "@/constants/fonts";
 import { router } from "expo-router";
@@ -255,7 +254,7 @@ export default function VendorChatsTab() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["top"]}>
+    <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Customer Messages</Text>
@@ -398,20 +397,20 @@ export default function VendorChatsTab() {
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f0f1a",
+    backgroundColor: "#0B0613",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#0f0f1a",
+    backgroundColor: "#0B0613",
   },
   header: {
     flexDirection: "row",

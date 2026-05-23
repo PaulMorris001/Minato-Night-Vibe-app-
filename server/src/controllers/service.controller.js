@@ -1,6 +1,8 @@
 import { Service } from "../models/service.model.js";
 import User from "../models/user.model.js";
 import { Vendor } from "../models/vendor.model.js";
+import { Booking } from "../models/booking.model.js";
+import Review from "../models/review.model.js";
 
 // Get all services for a specific vendor (public - for clients to view)
 export async function getServicesByVendorId(req, res) {
@@ -148,13 +150,61 @@ export async function getVendorStats(req, res) {
       ? services.reduce((sum, s) => sum + s.price, 0) / services.length
       : 0;
 
+    // Rating + review count (from the linked Vendor doc)
+    const vendorDoc = await Vendor.findOne({ user: vendorId }).select("_id rating");
+    const rating = vendorDoc?.rating || 0;
+    const ratingCount = vendorDoc
+      ? await Review.countDocuments({ vendor: vendorDoc._id })
+      : 0;
+
+    // Bookings + earnings windows
+    const now = new Date();
+    const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+
+    const bookingsThisMonth = await Booking.countDocuments({
+      vendor: vendorId,
+      createdAt: { $gte: startOfThisMonth },
+    });
+
+    // Earnings = confirmed bookings' snapshot amount, by month
+    const confirmedSinceLastMonth = await Booking.find({
+      vendor: vendorId,
+      status: "confirmed",
+      createdAt: { $gte: startOfLastMonth },
+    }).select("priceSnapshot createdAt");
+
+    let earningsThisMonth = 0;
+    let earningsLastMonth = 0;
+    for (const b of confirmedSinceLastMonth) {
+      const amt = b.priceSnapshot?.amount || 0;
+      if (b.createdAt >= startOfThisMonth) earningsThisMonth += amt;
+      else earningsLastMonth += amt;
+    }
+
+    // Sparkline — confirmed earnings per day for the last 12 days (oldest → newest)
+    const dailyEarnings = new Array(12).fill(0);
+    const start12 = new Date(now);
+    start12.setHours(0, 0, 0, 0);
+    start12.setDate(start12.getDate() - 11);
+    for (const b of confirmedSinceLastMonth) {
+      const dayIdx = Math.floor((b.createdAt - start12) / 86400000);
+      if (dayIdx >= 0 && dayIdx < 12) dailyEarnings[dayIdx] += b.priceSnapshot?.amount || 0;
+    }
+
     res.status(200).json({
       totalServices,
       activeServices,
       unavailableServices,
       averagePrice: avgPrice.toFixed(2),
       recentServices,
-      servicesByCategory: await getServicesByCategory(vendorId)
+      servicesByCategory: await getServicesByCategory(vendorId),
+      rating,
+      ratingCount,
+      bookingsThisMonth,
+      earningsThisMonth,
+      earningsLastMonth,
+      dailyEarnings,
     });
   } catch (error) {
     res.status(500).json({ message: "Error fetching statistics", details: error.message });

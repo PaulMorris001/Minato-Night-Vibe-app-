@@ -26,6 +26,7 @@ import { Fonts } from "@/constants/fonts";
 import { useFormatPrice } from "@/hooks/useFormatPrice";
 import * as SecureStore from "expo-secure-store";
 import { BASE_URL } from "@/constants/constants";
+import { openUserProfile } from "@/utils/userNavigation";
 import VendorCardSkeleton from "@/components/skeletons/VendorCardSkeleton";
 
 interface Review {
@@ -435,7 +436,11 @@ export default function VendorDetails() {
         reviews.map((review) => (
           <View key={review._id} style={styles.reviewCard}>
             <View style={styles.reviewTop}>
-              <View style={styles.reviewUser}>
+              <TouchableOpacity
+                style={styles.reviewUser}
+                activeOpacity={0.7}
+                onPress={() => openUserProfile(review.user._id)}
+              >
                 {review.user.profilePicture ? (
                   <Image source={{ uri: review.user.profilePicture }} style={styles.reviewAvatar} />
                 ) : (
@@ -449,7 +454,7 @@ export default function VendorDetails() {
                   <Text style={styles.reviewUsername}>{review.user.username}</Text>
                   <Text style={styles.reviewTime}>{timeAgo(review.createdAt)}</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
               <StarRow rating={review.rating} size={14} />
             </View>
             {!!review.review && (

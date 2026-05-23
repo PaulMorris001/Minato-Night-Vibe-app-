@@ -15,7 +15,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as SecureStore from "expo-secure-store";
 import axios from "axios";
-import { Colors } from "@/constants/colors";
 import { capitalize } from "@/libs/helpers";
 import { Fonts } from "@/constants/fonts";
 import { BASE_URL } from "@/constants/constants";
@@ -109,35 +108,33 @@ export default function VendorLayout() {
       <View style={styles.navbar}>
         <View style={styles.navLeft}>
           <Text style={styles.logoText}>NightVibe</Text>
-          <LinearGradient
-            colors={["#22c55e", "#16a34a"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={styles.badge}
-          >
-            <Ionicons name="briefcase" size={12} color="#fff" />
-            <Text style={styles.badgeText}>Vendor</Text>
-          </LinearGradient>
+          <View style={styles.badge}>
+            <Ionicons name="briefcase" size={11} color="#C084FC" />
+            <Text style={styles.badgeText}>VENDOR</Text>
+          </View>
         </View>
-        <TouchableOpacity
-          onPress={handleProfilePress}
-          style={styles.profileButton}
-          activeOpacity={0.7}
-        >
-          {user.profilePicture ? (
-            <Image
-              source={{ uri: user.profilePicture }}
-              style={styles.profileImage}
-            />
-          ) : (
-            <LinearGradient
-              colors={["#a855f7", "#7c3aed"]}
-              style={styles.profileGradient}
-            >
-              <Ionicons name="person" size={20} color="#fff" />
-            </LinearGradient>
-          )}
-        </TouchableOpacity>
+        <View style={styles.navRight}>
+          <TouchableOpacity
+            style={styles.iconButton}
+            activeOpacity={0.7}
+            onPress={() => router.push("/notifications" as any)}
+          >
+            <Ionicons name="notifications-outline" size={17} color="#F4EEFF" />
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={handleProfilePress}
+            style={styles.profileButton}
+            activeOpacity={0.7}
+          >
+            {user.profilePicture ? (
+              <Image source={{ uri: user.profilePicture }} style={styles.profileImage} />
+            ) : (
+              <LinearGradient colors={["#a855f7", "#7c3aed"]} style={styles.profileGradient}>
+                <Ionicons name="person" size={18} color="#fff" />
+              </LinearGradient>
+            )}
+          </TouchableOpacity>
+        </View>
       </View>
 
       <Modal
@@ -248,7 +245,7 @@ export default function VendorLayout() {
       <Stack
         screenOptions={{
           headerShown: false,
-          contentStyle: { backgroundColor: Colors.darkBackground },
+          contentStyle: { backgroundColor: "#0B0613" },
         }}
       />
     </View>
@@ -258,44 +255,61 @@ export default function VendorLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#0f0f1a",
+    backgroundColor: "#0B0613",
   },
   navbar: {
     paddingTop: Platform.OS === "android" ? StatusBar.currentHeight! + 10 : 50,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    backgroundColor: "#0f0f1a",
+    paddingBottom: 14,
+    paddingHorizontal: 18,
+    backgroundColor: "#0B0613",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     borderBottomWidth: 1,
-    borderBottomColor: "#1f1f2e",
+    borderBottomColor: "rgba(255,255,255,0.08)",
   },
   navLeft: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 12,
+    gap: 10,
+  },
+  navRight: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  iconButton: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.08)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   logoText: {
-    fontFamily: Fonts.black,
-    fontSize: 24,
-    color: "#a855f7",
-    textShadowColor: "rgba(168, 85, 247, 0.3)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
+    fontFamily: "BricolageGrotesque_800ExtraBold",
+    fontSize: 22,
+    color: "#C084FC",
+    letterSpacing: -0.6,
   },
   badge: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
+    gap: 5,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(168,85,247,0.16)",
+    borderWidth: 1,
+    borderColor: "rgba(192,132,252,0.35)",
   },
   badgeText: {
-    color: "#fff",
-    fontSize: 12,
+    color: "#C084FC",
+    fontSize: 10.5,
     fontFamily: Fonts.bold,
+    letterSpacing: 0.8,
   },
   profileButton: {
     borderRadius: 20,

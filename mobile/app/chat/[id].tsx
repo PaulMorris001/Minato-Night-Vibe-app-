@@ -29,6 +29,7 @@ import socketService from "@/services/socket.service";
 import * as SecureStore from "expo-secure-store";
 import { capitalize } from "@/libs/helpers";
 import { uploadImage } from "@/utils/imageUpload";
+import { openUserProfile } from "@/utils/userNavigation";
 import { trackEvent } from "@/utils/analytics";
 
 const CH_BG = "#0B0613";
@@ -459,18 +460,27 @@ export default function ChatScreen() {
               <Ionicons name="chevron-back" size={18} color={CH_TEXT} />
             </TouchableOpacity>
 
-            <Avatar uri={getChatAvatar()} name={getChatName()} size={38} />
-
-            <View style={styles.headerText}>
-              <Text style={styles.headerTitle} numberOfLines={1}>
-                {capitalize(getChatName())}
-              </Text>
-              {isGroup && (
-                <Text style={styles.headerSubtitle}>
-                  {chat?.participants.length ?? 0} participants
+            <TouchableOpacity
+              style={styles.headerCenter}
+              activeOpacity={isGroup ? 1 : 0.7}
+              onPress={() => {
+                if (isGroup) return;
+                const other = chat?.participants.find((p) => p._id !== currentUserId);
+                openUserProfile(other?._id);
+              }}
+            >
+              <Avatar uri={getChatAvatar()} name={getChatName()} size={38} />
+              <View style={styles.headerText}>
+                <Text style={styles.headerTitle} numberOfLines={1}>
+                  {capitalize(getChatName())}
                 </Text>
-              )}
-            </View>
+                {isGroup && (
+                  <Text style={styles.headerSubtitle}>
+                    {chat?.participants.length ?? 0} participants
+                  </Text>
+                )}
+              </View>
+            </TouchableOpacity>
 
             <TouchableOpacity
               style={styles.iconBtn}
@@ -767,6 +777,12 @@ const styles = StyleSheet.create({
     borderColor: CH_STROKE,
     alignItems: "center",
     justifyContent: "center",
+  },
+  headerCenter: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   headerText: {
     flex: 1,

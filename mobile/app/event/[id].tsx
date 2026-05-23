@@ -44,6 +44,7 @@ import {
 } from "@/utils/eventDetails";
 import { formatLocation } from "@/utils/location";
 import { addEventToCalendar } from "@/utils/calendar";
+import { openUserProfile } from "@/utils/userNavigation";
 
 interface RsvpUser {
   _id: string;
@@ -963,30 +964,36 @@ export default function EventDetailsPage() {
           <GlassCard>
             <Text style={styles.microLabel}>HOSTED BY</Text>
             <View style={styles.hostRow}>
-              {event.createdBy.profilePicture ? (
-                <Image
-                  source={{ uri: event.createdBy.profilePicture }}
-                  style={styles.hostAvatar}
-                />
-              ) : (
-                <View style={styles.hostAvatarFallback}>
-                  <Text style={styles.hostAvatarInitials}>
-                    {initialsOf(event.createdBy.username)}
+              <TouchableOpacity
+                style={styles.hostTapTarget}
+                activeOpacity={0.7}
+                onPress={() => openUserProfile(event.createdBy._id)}
+              >
+                {event.createdBy.profilePicture ? (
+                  <Image
+                    source={{ uri: event.createdBy.profilePicture }}
+                    style={styles.hostAvatar}
+                  />
+                ) : (
+                  <View style={styles.hostAvatarFallback}>
+                    <Text style={styles.hostAvatarInitials}>
+                      {initialsOf(event.createdBy.username)}
+                    </Text>
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <View style={styles.hostNameRow}>
+                    <Text style={styles.hostName}>{event.createdBy.username}</Text>
+                    {event.createdBy.verified && (
+                      <Text style={styles.hostVerified}> ✦</Text>
+                    )}
+                  </View>
+                  <Text style={styles.hostSub}>
+                    @{event.createdBy.username} ·{" "}
+                    {event.createdBy.hostedEventsCount ?? 0} events hosted
                   </Text>
                 </View>
-              )}
-              <View style={{ flex: 1 }}>
-                <View style={styles.hostNameRow}>
-                  <Text style={styles.hostName}>{event.createdBy.username}</Text>
-                  {event.createdBy.verified && (
-                    <Text style={styles.hostVerified}> ✦</Text>
-                  )}
-                </View>
-                <Text style={styles.hostSub}>
-                  @{event.createdBy.username} ·{" "}
-                  {event.createdBy.hostedEventsCount ?? 0} events hosted
-                </Text>
-              </View>
+              </TouchableOpacity>
               {!isCreator && (
                 <TouchableOpacity
                   onPress={handleFollowToggle}
@@ -1115,8 +1122,10 @@ export default function EventDetailsPage() {
               </View>
               <View style={styles.avatarStack}>
                 {event.rsvpUsers.slice(0, 4).map((u, i) => (
-                  <View
+                  <TouchableOpacity
                     key={u._id}
+                    activeOpacity={0.7}
+                    onPress={() => openUserProfile(u._id)}
                     style={[
                       styles.attendeeAvatarWrap,
                       i > 0 && { marginLeft: -9 },
@@ -1135,7 +1144,7 @@ export default function EventDetailsPage() {
                         </Text>
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
                 ))}
                 {event.rsvpUsers.length > 4 && (
                   <View
@@ -2043,6 +2052,7 @@ const styles = StyleSheet.create({
 
   // Host
   hostRow: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 10 },
+  hostTapTarget: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   hostAvatar: {
     width: 44,
     height: 44,

@@ -89,36 +89,27 @@ export default function VendorDashboard() {
 
   const renderTabButton = (
     tab: TabType,
-    icon: keyof typeof Ionicons.glyphMap,
+    activeIcon: keyof typeof Ionicons.glyphMap,
+    inactiveIcon: keyof typeof Ionicons.glyphMap,
     label: string,
     badgeCount?: number
-  ) => (
-    <TouchableOpacity
-      style={[styles.tabButton, activeTab === tab && styles.tabButtonActive]}
-      onPress={() => setActiveTab(tab)}
-    >
-      <View style={{ position: "relative" }}>
-        <Ionicons
-          name={icon}
-          size={24}
-          color={activeTab === tab ? Colors.primary : "#9ca3af"}
-        />
-        {badgeCount != null && badgeCount > 0 && (
-          <View style={styles.tabBadge}>
-            <Text style={styles.tabBadgeText}>{badgeCount > 99 ? "99+" : badgeCount}</Text>
-          </View>
-        )}
-      </View>
-      <Text
-        style={[
-          styles.tabLabel,
-          activeTab === tab && styles.tabLabelActive,
-        ]}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
+  ) => {
+    const isActive = activeTab === tab;
+    const color = isActive ? "#A855F7" : "rgba(244,238,255,0.38)";
+    return (
+      <TouchableOpacity style={styles.tabButton} onPress={() => setActiveTab(tab)} activeOpacity={0.7}>
+        <View style={{ position: "relative" }}>
+          <Ionicons name={isActive ? activeIcon : inactiveIcon} size={23} color={color} />
+          {badgeCount != null && badgeCount > 0 && (
+            <View style={styles.tabBadge}>
+              <Text style={styles.tabBadgeText}>{badgeCount > 99 ? "99+" : badgeCount}</Text>
+            </View>
+          )}
+        </View>
+        <Text style={[styles.tabLabel, { color, fontWeight: isActive ? "700" : "500" }]}>{label}</Text>
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -138,6 +129,8 @@ export default function VendorDashboard() {
             stats={stats}
             onRefresh={handleRefresh}
             refreshing={refreshing}
+            onGoToServices={() => setActiveTab("services")}
+            onGoToAccount={() => setActiveTab("account")}
           />
         )}
         {activeTab === "services" && (
@@ -160,11 +153,11 @@ export default function VendorDashboard() {
 
       {/* Bottom Tab Navigation */}
       <View style={styles.tabContainer}>
-        {renderTabButton("dashboard", "grid-outline", "Dashboard")}
-        {renderTabButton("services", "briefcase-outline", "Services")}
-        {renderTabButton("bookings", "calendar-outline", "Bookings", pendingBookingsCount)}
-        {renderTabButton("chats", "chatbubbles-outline", "Chats")}
-        {renderTabButton("account", "person-outline", "Account")}
+        {renderTabButton("dashboard", "grid", "grid-outline", "Dashboard")}
+        {renderTabButton("services", "briefcase", "briefcase-outline", "Services")}
+        {renderTabButton("bookings", "calendar", "calendar-outline", "Bookings", pendingBookingsCount)}
+        {renderTabButton("chats", "chatbubbles", "chatbubbles-outline", "Chats")}
+        {renderTabButton("account", "person", "person-outline", "Account")}
       </View>
     </View>
   );
@@ -173,13 +166,13 @@ export default function VendorDashboard() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.darkBackground,
+    backgroundColor: "#0B0613",
   },
   loadingContainer: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: Colors.darkBackground,
+    backgroundColor: "#0B0613",
   },
   loadingText: {
     marginTop: 12,
@@ -188,42 +181,22 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: "row",
-    backgroundColor: "#1f1f2e",
-    paddingHorizontal: 8,
-    paddingBottom: 24,
-    paddingTop: 12,
+    backgroundColor: "#0B0613",
+    justifyContent: "space-around",
+    alignItems: "center",
+    paddingTop: 10,
+    paddingBottom: 26,
     borderTopWidth: 1,
-    borderTopColor: "#374151",
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: -2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    borderTopColor: "rgba(255,255,255,0.08)",
   },
   tabButton: {
-    flex: 1,
     flexDirection: "column",
     alignItems: "center",
-    paddingVertical: 8,
-    borderTopWidth: 3,
-    borderTopColor: "transparent",
-    marginTop: -12,
-  },
-  tabButtonActive: {
-    borderTopColor: Colors.primary,
+    gap: 4,
+    paddingVertical: 4,
   },
   tabLabel: {
-    marginTop: 4,
-    fontSize: 12,
-    color: "#9ca3af",
-    fontWeight: "500",
-  },
-  tabLabelActive: {
-    color: Colors.primary,
-    fontWeight: "700",
+    fontSize: 10.5,
   },
   tabBadge: {
     position: "absolute",

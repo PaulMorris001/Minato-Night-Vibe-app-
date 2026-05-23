@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -6,344 +6,463 @@ import {
   RefreshControl,
   ScrollView,
   TouchableOpacity,
-  Image,
 } from "react-native";
+import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
-import { Colors } from "@/constants/colors";
+import { LinearGradient } from "expo-linear-gradient";
+import * as SecureStore from "expo-secure-store";
 import { VendorStats } from "@/libs/interfaces";
 import { useFormatPrice } from "@/hooks/useFormatPrice";
+import {
+  VN,
+  VNF,
+  VN_CTA_GRADIENT,
+  VN_EARNINGS_GRADIENT,
+  coverGradient,
+  categoryEmoji,
+} from "./vendorTheme";
 
 interface DashboardTabProps {
   stats: VendorStats | null;
   onRefresh: () => void;
   refreshing: boolean;
+  onGoToServices?: () => void;
+  onGoToAccount?: () => void;
+}
+
+const ACCENTS: Record<string, string> = {
+  Chefs: VN.amber,
+  "Food and Restaurants": VN.pink,
+  Restaurants: VN.pink,
+};
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 12) return "Good morning";
+  if (h < 18) return "Good afternoon";
+  return "Good evening";
+}
+
+function StatCard({
+  icon,
+  accent,
+  label,
+  value,
+  sub,
+}: {
+  icon: keyof typeof Ionicons.glyphMap;
+  accent: string;
+  label: string;
+  value: string | number;
+  sub: string;
+}) {
+  return (
+    <View style={styles.statCard}>
+      <View style={styles.statTop}>
+        <View style={[styles.statIcon, { backgroundColor: accent + "22", borderColor: accent + "44" }]}>
+          <Ionicons name={icon} size={14} color={accent} />
+        </View>
+        <Text style={styles.statValue}>{value}</Text>
+      </View>
+      <Text style={styles.statLabel}>{label}</Text>
+      <Text style={styles.statSub}>{sub}</Text>
+    </View>
+  );
 }
 
 export default function DashboardTab({
   stats,
   onRefresh,
   refreshing,
+  onGoToServices,
+  onGoToAccount,
 }: DashboardTabProps) {
   const formatPrice = useFormatPrice();
+  const [firstName, setFirstName] = useState("");
 
-  const renderStatCard = (
-    icon: keyof typeof Ionicons.glyphMap,
-    title: string,
-    value: string | number,
-    color: string
-  ) => (
-    <View style={styles.statCard}>
-      <View style={[styles.iconContainer, { backgroundColor: color + "20" }]}>
-        <Ionicons name={icon} size={28} color={color} />
-      </View>
-      <View style={styles.statContent}>
-        <Text style={styles.statValue}>{value}</Text>
-        <Text style={styles.statTitle}>{title}</Text>
-      </View>
-    </View>
-  );
+  useEffect(() => {
+    (async () => {
+      try {
+        const userJson = await SecureStore.getItemAsync("user");
+        if (userJson) {
+          const u = JSON.parse(userJson);
+          setFirstName((u.username || "").split(" ")[0]);
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const earningsThis = stats?.earningsThisMonth ?? 0;
+  const earningsLast = stats?.earningsLastMonth ?? 0;
+  const delta = earningsThis - earningsLast;
+  const pct = earningsLast > 0 ? Math.round((delta / earningsLast) * 100) : earningsThis > 0 ? 100 : 0;
+  const up = delta >= 0;
+  const hasBookings = (stats?.bookingsThisMonth ?? 0) > 0 || earningsThis > 0;
+
+  const bars = useMemo(() => {
+    const daily = stats?.dailyEarnings && stats.dailyEarnings.length ? stats.dailyEarnings : [];
+    const max = Math.max(1, ...daily);
+    const src = daily.length ? daily : [24, 32, 18, 40, 22, 36, 28, 44, 30, 38, 50, 46];
+    return src.map((v) => {
+      const pctH = daily.length ? Math.round((v / max) * 100) : v;
+      return Math.max(8, Math.min(100, pctH));
+    });
+  }, [stats?.dailyEarnings]);
+
+  const categories = stats?.servicesByCategory ?? [];
 
   return (
     <ScrollView
       style={styles.container}
+      contentContainerStyle={{ paddingBottom: 24 }}
+      showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={Colors.primary}
-        />
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={VN.purple} />
       }
     >
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Dashboard Overview</Text>
-        <Text style={styles.headerSubtitle}>
-          Monitor your services and performance
+      {/* Aurora glow */}
+      <View pointerEvents="none" style={styles.aurora} />
+
+      {/* Greeting */}
+      <View style={styles.section}>
+        <Text style={styles.kicker}>{greeting()}</Text>
+        <Text style={styles.greetingHeadline}>
+          Welcome back, <Text style={styles.greetingName}>{firstName || "vendor"}</Text>
         </Text>
       </View>
 
-      {/* Statistics Grid */}
-      <View style={styles.statsGrid}>
-        {renderStatCard(
-          "briefcase",
-          "Total Services",
-          stats?.totalServices || 0,
-          Colors.primary
-        )}
-        {renderStatCard(
-          "checkmark-circle",
-          "Active Services",
-          stats?.activeServices || 0,
-          "#22c55e"
-        )}
-        {renderStatCard(
-          "alert-circle",
-          "Unavailable",
-          stats?.unavailableServices || 0,
-          "#f59e0b"
-        )}
-        {renderStatCard(
-          "cash",
-          "Avg. Price",
-          `$${formatPrice(stats?.averagePrice || 0)}`,
-          "#3b82f6"
-        )}
+      {/* Earnings hero */}
+      <View style={styles.sectionH}>
+        <LinearGradient
+          colors={VN_EARNINGS_GRADIENT}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.earningsCard}
+        >
+          <View style={[styles.blob, { right: -60, top: -60, backgroundColor: "rgba(236,72,153,0.35)" }]} />
+          <View style={[styles.blob, { left: -40, bottom: -60, backgroundColor: "rgba(34,211,238,0.18)" }]} />
+          <View style={styles.earningsTopRow}>
+            <Text style={styles.earningsKicker}>EARNINGS · THIS MONTH</Text>
+            <View
+              style={[
+                styles.trendChip,
+                up
+                  ? { backgroundColor: "rgba(52,211,153,0.18)", borderColor: "rgba(52,211,153,0.35)" }
+                  : { backgroundColor: "rgba(236,72,153,0.18)", borderColor: "rgba(236,72,153,0.35)" },
+              ]}
+            >
+              <Ionicons name={up ? "chevron-up" : "chevron-down"} size={10} color={up ? VN.greenSoft : "#FBCFE8"} />
+              <Text style={[styles.trendText, { color: up ? VN.greenSoft : "#FBCFE8" }]}>{Math.abs(pct)}%</Text>
+            </View>
+          </View>
+          <Text style={styles.earningsAmount}>
+            ${formatPrice(earningsThis)}
+          </Text>
+          <Text style={styles.earningsDelta}>
+            {up ? "+" : "-"}${formatPrice(Math.abs(delta))} vs. last month
+          </Text>
+          <View style={styles.sparkline}>
+            {bars.map((h, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.bar,
+                  { height: `${h}%` },
+                  i > 8
+                    ? { backgroundColor: VN.pink }
+                    : { backgroundColor: "rgba(255,255,255,0.18)" },
+                ]}
+              />
+            ))}
+          </View>
+        </LinearGradient>
       </View>
 
-      {/* Services by Category */}
-      {stats && stats.servicesByCategory.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Services by Category</Text>
-          {stats.servicesByCategory.map((item, index) => (
-            <View key={index} style={styles.categoryItem}>
-              <View style={styles.categoryLeft}>
-                <View style={styles.categoryDot} />
-                <Text style={styles.categoryName}>{item.category}</Text>
-              </View>
-              <View style={styles.categoryBadge}>
-                <Text style={styles.categoryCount}>{item.count}</Text>
-              </View>
-            </View>
-          ))}
+      {/* Stats grid */}
+      <View style={styles.sectionH}>
+        <View style={styles.statsGrid}>
+          <StatCard
+            icon="briefcase"
+            accent={VN.purpleSoft}
+            label="Total services"
+            value={stats?.totalServices ?? 0}
+            sub={`${stats?.activeServices ?? 0} active`}
+          />
+          <StatCard
+            icon="calendar"
+            accent={VN.pink}
+            label="Bookings"
+            value={stats?.bookingsThisMonth ?? 0}
+            sub={hasBookings ? "this month" : "no bookings yet"}
+          />
+          <StatCard
+            icon="star"
+            accent={VN.amber}
+            label="Rating"
+            value={(stats?.rating ?? 0).toFixed(1)}
+            sub={`${stats?.ratingCount ?? 0} reviews`}
+          />
+          <StatCard
+            icon="cash-outline"
+            accent={VN.green}
+            label="Avg. price"
+            value={`$${formatPrice(Number(stats?.averagePrice ?? 0))}`}
+            sub="per service"
+          />
         </View>
-      )}
+      </View>
 
-      {/* Recent Services */}
-      {stats && stats.recentServices.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Services</Text>
-          {stats.recentServices.map((service) => (
-            <View key={service._id} style={styles.serviceCard}>
-              {service.images && service.images.length > 0 && (
-                <Image
-                  source={{ uri: service.images[0] }}
-                  style={styles.serviceThumbnail}
-                />
-              )}
-              <View style={styles.serviceContent}>
-                <View style={styles.serviceHeader}>
-                  <Text style={styles.serviceName}>{service.name}</Text>
-                  <View
-                    style={[
-                      styles.availabilityBadge,
-                      service.availability === "available" && styles.availableBadge,
-                      service.availability === "unavailable" &&
-                        styles.unavailableBadge,
-                    ]}
-                  >
-                    <Text style={styles.availabilityText}>
-                      {service.availability}
+      {/* Quick actions */}
+      <View style={styles.sectionH}>
+        <Text style={styles.sectionTitle}>Quick actions</Text>
+        <View style={styles.actionsRow}>
+          <TouchableOpacity activeOpacity={0.85} style={{ flex: 1 }} onPress={onGoToServices}>
+            <LinearGradient
+              colors={VN_CTA_GRADIENT}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.primaryBtn}
+            >
+              <Ionicons name="add" size={16} color="#fff" />
+              <Text style={styles.primaryBtnText}>New service</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+          <TouchableOpacity activeOpacity={0.85} style={styles.glassBtn} onPress={onGoToAccount}>
+            <Ionicons name="cash-outline" size={16} color={VN.text} />
+            <Text style={styles.glassBtnText}>View payouts</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* By category */}
+      {categories.length > 0 && (
+        <View style={styles.sectionH}>
+          <View style={styles.sectionTitleRow}>
+            <Text style={styles.sectionTitle}>By category</Text>
+            <TouchableOpacity onPress={onGoToServices}>
+              <Text style={styles.actionLink}>Manage</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={{ gap: 8 }}>
+            {categories.map((c) => {
+              const accent = ACCENTS[c.category] || VN.purple;
+              return (
+                <TouchableOpacity key={c.category} style={styles.catRow} activeOpacity={0.8} onPress={onGoToServices}>
+                  <View style={[styles.catIcon, { borderColor: accent + "44" }]}>
+                    <Text style={{ fontSize: 18 }}>{categoryEmoji(c.category)}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.catName}>{c.category}</Text>
+                    <Text style={styles.catSub}>
+                      {c.count} service{c.count !== 1 ? "s" : ""}
                     </Text>
                   </View>
-                </View>
-                <Text style={styles.serviceCategory}>{service.category}</Text>
-                <View style={styles.serviceFooter}>
-                  <Text style={styles.servicePrice}>
-                    ${service.price} {service.currency}
-                  </Text>
-                  <Text style={styles.serviceDate}>
-                    {new Date(service.createdAt).toLocaleDateString()}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))}
+                  <View style={[styles.catPill, { backgroundColor: accent + "22", borderColor: accent + "44" }]}>
+                    <Text style={[styles.catPillText, { color: accent }]}>{c.count}</Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
       )}
 
-      {/* Empty State */}
-      {stats && stats.totalServices === 0 && (
-        <View style={styles.emptyState}>
-          <Ionicons name="briefcase-outline" size={64} color="#4b5563" />
-          <Text style={styles.emptyTitle}>No Services Yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Start adding services to see your dashboard statistics
-          </Text>
+      {/* Recent services */}
+      <View style={styles.sectionH}>
+        <View style={styles.sectionTitleRow}>
+          <Text style={styles.sectionTitle}>Recent services</Text>
+          {(stats?.recentServices?.length ?? 0) > 0 && (
+            <TouchableOpacity onPress={onGoToServices}>
+              <Text style={styles.actionLink}>See all</Text>
+            </TouchableOpacity>
+          )}
         </View>
-      )}
+        {stats?.recentServices && stats.recentServices.length > 0 ? (
+          <View style={{ gap: 8 }}>
+            {stats.recentServices.map((s) => {
+              const [c1, c2] = coverGradient(s._id);
+              const available = s.availability === "available" && s.isActive;
+              return (
+                <TouchableOpacity key={s._id} style={styles.recentRow} activeOpacity={0.85} onPress={onGoToServices}>
+                  {s.images && s.images.length > 0 ? (
+                    <Image source={{ uri: s.images[0] }} style={styles.recentThumb} contentFit="cover" />
+                  ) : (
+                    <LinearGradient colors={[c1, c2]} style={styles.recentThumb}>
+                      <Text style={styles.recentThumbEmoji}>{categoryEmoji(s.category)}</Text>
+                    </LinearGradient>
+                  )}
+                  <View style={{ flex: 1, minWidth: 0 }}>
+                    <Text style={styles.recentTitle} numberOfLines={1}>{s.name}</Text>
+                    <View style={styles.recentMeta}>
+                      <Text style={styles.recentMetaText} numberOfLines={1}>{s.category}</Text>
+                      <View style={styles.metaDot} />
+                      <Text style={styles.recentPrice}>${formatPrice(s.price)}</Text>
+                    </View>
+                  </View>
+                  <View
+                    style={[
+                      styles.statusPill,
+                      available
+                        ? { backgroundColor: "rgba(52,211,153,0.16)" }
+                        : { backgroundColor: "rgba(244,238,255,0.06)" },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.statusDot,
+                        { backgroundColor: available ? VN.green : VN.textMute },
+                      ]}
+                    />
+                    <Text style={[styles.statusText, { color: available ? VN.greenSoft : VN.textMute }]}>
+                      {available ? "available" : "unavailable"}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : (
+          <TouchableOpacity onPress={onGoToServices} style={styles.recentEmpty}>
+            <Text style={styles.recentEmptyText}>+ Add your first service</Text>
+          </TouchableOpacity>
+        )}
+      </View>
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 16,
+  container: { flex: 1, backgroundColor: VN.bg },
+  aurora: {
+    position: "absolute",
+    top: -160,
+    alignSelf: "center",
+    width: 360,
+    height: 280,
+    borderRadius: 180,
+    backgroundColor: "rgba(168,85,247,0.16)",
   },
-  header: {
-    marginBottom: 20,
-  },
-  headerTitle: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 4,
-  },
-  headerSubtitle: {
-    fontSize: 14,
-    color: "#9ca3af",
-  },
-  statsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 12,
-    marginBottom: 20,
-  },
-  statCard: {
-    flex: 1,
-    minWidth: "47%",
-    backgroundColor: "#1f1f2e",
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  iconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
-  },
-  statContent: {
-    flex: 1,
-  },
-  statValue: {
-    fontSize: 24,
-    fontWeight: "bold",
-    color: "#fff",
-    marginBottom: 2,
-  },
-  statTitle: {
-    fontSize: 12,
-    color: "#9ca3af",
-  },
-  section: {
-    backgroundColor: "#1f1f2e",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: Colors.primary,
-    marginBottom: 16,
-  },
-  categoryItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "#374151",
-  },
-  categoryLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.primary,
-    marginRight: 12,
-  },
-  categoryName: {
-    fontSize: 16,
-    color: "#e5e7eb",
-  },
-  categoryBadge: {
-    backgroundColor: "#374151",
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  categoryCount: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: Colors.primary,
-  },
-  serviceCard: {
-    backgroundColor: "#374151",
-    borderRadius: 8,
-    flexDirection: "row",
+  section: { paddingHorizontal: 18, paddingTop: 14, paddingBottom: 18 },
+  sectionH: { paddingHorizontal: 18, paddingBottom: 18 },
+  kicker: { fontFamily: VNF.medium, fontSize: 12, color: VN.textDim, marginBottom: 4 },
+  greetingHeadline: { fontFamily: VNF.display, fontSize: 30, color: VN.text, letterSpacing: -0.8, lineHeight: 33 },
+  greetingName: { color: VN.purpleSoft },
+
+  earningsCard: {
+    borderRadius: 20,
     overflow: "hidden",
-    marginBottom: 12,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: VN.strokeHi,
+    shadowColor: VN.purpleDeep,
+    shadowOffset: { width: 0, height: 20 },
+    shadowOpacity: 0.45,
+    shadowRadius: 30,
+    elevation: 10,
   },
-  serviceThumbnail: {
-    width: 80,
-    height: 80,
-    backgroundColor: "#4b5563",
-  },
-  serviceContent: {
-    flex: 1,
+  blob: { position: "absolute", width: 200, height: 200, borderRadius: 100 },
+  earningsTopRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  earningsKicker: { fontFamily: VNF.bold, fontSize: 10, color: "rgba(255,255,255,0.7)", letterSpacing: 1.2 },
+  trendChip: { flexDirection: "row", alignItems: "center", gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
+  trendText: { fontFamily: VNF.bold, fontSize: 10 },
+  earningsAmount: { fontFamily: VNF.display, fontSize: 42, color: "#fff", letterSpacing: -1.6, marginTop: 6 },
+  earningsDelta: { fontFamily: VNF.medium, fontSize: 12, color: "rgba(255,255,255,0.75)", marginTop: 4 },
+  sparkline: { flexDirection: "row", alignItems: "flex-end", gap: 3, height: 28, marginTop: 14 },
+  bar: { flex: 1, borderRadius: 2 },
+
+  statsGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  statCard: {
+    width: "47.8%",
+    flexGrow: 1,
     padding: 12,
+    borderRadius: 14,
+    backgroundColor: VN.surface,
+    borderWidth: 1,
+    borderColor: VN.stroke,
   },
-  serviceHeader: {
+  statTop: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  statIcon: { width: 28, height: 28, borderRadius: 8, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  statValue: { fontFamily: VNF.heading, fontSize: 22, color: VN.text, letterSpacing: -0.4 },
+  statLabel: { fontFamily: VNF.semibold, fontSize: 11.5, color: VN.text, marginTop: 8 },
+  statSub: { fontFamily: VNF.medium, fontSize: 10.5, color: VN.textMute, marginTop: 2 },
+
+  sectionTitle: { fontFamily: VNF.heading, fontSize: 18, color: VN.text, letterSpacing: -0.4, marginBottom: 12 },
+  sectionTitleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  actionLink: { fontFamily: VNF.bold, fontSize: 11.5, color: VN.purpleSoft, marginBottom: 12 },
+
+  actionsRow: { flexDirection: "row", gap: 8 },
+  primaryBtn: {
+    height: 44,
+    borderRadius: 12,
     flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 8,
-  },
-  serviceName: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#fff",
-    flex: 1,
-  },
-  availabilityBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  availableBadge: {
-    backgroundColor: "#22c55e",
-  },
-  unavailableBadge: {
-    backgroundColor: "#ef4444",
-  },
-  availabilityText: {
-    fontSize: 10,
-    fontWeight: "600",
-    color: "#fff",
-    textTransform: "capitalize",
-  },
-  serviceCategory: {
-    fontSize: 14,
-    color: "#9ca3af",
-    marginBottom: 8,
-  },
-  serviceFooter: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  servicePrice: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: Colors.primary,
-  },
-  serviceDate: {
-    fontSize: 12,
-    color: "#6b7280",
-  },
-  emptyState: {
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: 60,
+    gap: 6,
+    shadowColor: VN.purple,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.45,
+    shadowRadius: 18,
+    elevation: 8,
   },
-  emptyTitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#9ca3af",
-    marginTop: 16,
-    marginBottom: 8,
+  primaryBtnText: { fontFamily: VNF.heading, fontSize: 13, color: "#fff" },
+  glassBtn: {
+    flex: 1,
+    height: 44,
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: VN.strokeHi,
   },
-  emptySubtitle: {
-    fontSize: 14,
-    color: "#6b7280",
-    textAlign: "center",
-    paddingHorizontal: 40,
+  glassBtnText: { fontFamily: VNF.sub, fontSize: 13, color: VN.text },
+
+  catRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: VN.surface,
+    borderWidth: 1,
+    borderColor: VN.stroke,
   },
+  catIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    backgroundColor: "rgba(168,85,247,0.12)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  catName: { fontFamily: VNF.sub, fontSize: 14, color: VN.text },
+  catSub: { fontFamily: VNF.medium, fontSize: 11, color: VN.textDim, marginTop: 2 },
+  catPill: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 999, borderWidth: 1 },
+  catPillText: { fontFamily: VNF.bold, fontSize: 11 },
+
+  recentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 10,
+    borderRadius: 14,
+    backgroundColor: VN.surface,
+    borderWidth: 1,
+    borderColor: VN.stroke,
+  },
+  recentThumb: { width: 52, height: 52, borderRadius: 12, alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  recentThumbEmoji: { fontSize: 26 },
+  recentTitle: { fontFamily: VNF.sub, fontSize: 14.5, color: VN.text },
+  recentMeta: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 3 },
+  recentMetaText: { fontFamily: VNF.medium, fontSize: 11.5, color: VN.textDim, flexShrink: 1 },
+  metaDot: { width: 2.5, height: 2.5, borderRadius: 2, backgroundColor: VN.textMute },
+  recentPrice: { fontFamily: VNF.bold, fontSize: 11.5, color: VN.purpleSoft },
+  statusPill: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 999 },
+  statusDot: { width: 5, height: 5, borderRadius: 3 },
+  statusText: { fontFamily: VNF.bold, fontSize: 10, letterSpacing: 0.5, textTransform: "uppercase" },
+  recentEmpty: { paddingVertical: 24, alignItems: "center" },
+  recentEmptyText: { fontFamily: VNF.bold, fontSize: 14, color: VN.purpleSoft },
 });

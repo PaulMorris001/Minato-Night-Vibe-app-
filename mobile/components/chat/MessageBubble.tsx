@@ -14,6 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import type { Message, MessageReaction } from "@/services/chat.service";
 import chatService from "@/services/chat.service";
+import { openUserProfile } from "@/utils/userNavigation";
 import { Avatar } from "@/components/shared/Avatar";
 
 const CH_TEXT = "#F4EEFF";
@@ -407,19 +408,29 @@ export default function MessageBubble({
       {showAvatarSlot && (
         <View style={styles.avatarSlot}>
           {showSender && (
-            <Avatar
-              uri={message.sender.profilePicture}
-              name={senderName}
-              size={26}
-              bgColor={senderTint}
-            />
+            <TouchableOpacity
+              activeOpacity={0.7}
+              onPress={() => openUserProfile(message.sender?._id)}
+            >
+              <Avatar
+                uri={message.sender.profilePicture}
+                name={senderName}
+                size={26}
+                bgColor={senderTint}
+              />
+            </TouchableOpacity>
           )}
         </View>
       )}
 
       <View style={styles.bubbleColumn}>
         {isGroup && !isOwnMessage && showSender && (
-          <Text style={[styles.senderLabel, { color: senderTint }]}>{senderName}</Text>
+          <Text
+            style={[styles.senderLabel, { color: senderTint }]}
+            onPress={() => openUserProfile(message.sender?._id)}
+          >
+            {senderName}
+          </Text>
         )}
 
         <View style={{ position: "relative" }}>

@@ -91,6 +91,12 @@ export interface VendorStats {
     category: string;
     count: number;
   }[];
+  rating?: number;
+  ratingCount?: number;
+  bookingsThisMonth?: number;
+  earningsThisMonth?: number;
+  earningsLastMonth?: number;
+  dailyEarnings?: number[];
 }
 
 export interface GuideSection {
