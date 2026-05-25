@@ -108,6 +108,7 @@ interface TopGuide {
   authorName: string;
   price: number;
   city: string;
+  coverImage?: string;
   topic: string;
   views: number;
   salesCount: number;
@@ -258,9 +259,17 @@ function GuideCard({ guide, onPress }: { guide: TopGuide; onPress: () => void })
   const emoji = TOPIC_EMOJI[guide.topic] || "📍";
   return (
     <TouchableOpacity style={styles.guideCard} onPress={onPress} activeOpacity={0.85}>
-      <LinearGradient colors={["#2D1B69", "#1A1030"]} style={styles.guideCardBanner}>
-        <Text style={styles.guideCardEmoji}>{emoji}</Text>
-      </LinearGradient>
+      {guide.coverImage ? (
+        <Image
+          source={{ uri: guide.coverImage }}
+          style={styles.guideCardBanner}
+          contentFit="cover"
+        />
+      ) : (
+        <LinearGradient colors={["#2D1B69", "#1A1030"]} style={styles.guideCardBanner}>
+          <Text style={styles.guideCardEmoji}>{emoji}</Text>
+        </LinearGradient>
+      )}
       <View style={styles.guideCardContent}>
         <Text style={styles.guideCardTitle} numberOfLines={2}>{guide.title}</Text>
         <Text style={styles.guideCardMeta} numberOfLines={1}>

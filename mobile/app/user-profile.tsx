@@ -17,6 +17,8 @@ import { router, useLocalSearchParams } from "expo-router";
 import { BASE_URL } from "@/constants/constants";
 import { scaleFontSize } from "@/utils/responsive";
 import { capitalize } from "@/libs/helpers";
+import { Guide } from "@/libs/interfaces";
+import { useFormatPrice } from "@/hooks/useFormatPrice";
 import * as SecureStore from "expo-secure-store";
 import axios from "axios";
 import followService from "@/services/follow.service";
@@ -31,6 +33,7 @@ interface UserData {
   username: string;
   email: string;
   profilePicture?: string;
+  bio?: string;
   isVendor?: boolean;
   businessName?: string;
   verified?: boolean;
@@ -47,6 +50,7 @@ interface UserEvent {
 
 export default function UserProfileScreen() {
   const { userId } = useLocalSearchParams<{ userId: string }>();
+  const formatPrice = useFormatPrice();
   const [user, setUser] = useState<UserData | null>(null);
   const [followersCount, setFollowersCount] = useState(0);
   const [followingCount, setFollowingCount] = useState(0);
@@ -54,6 +58,7 @@ export default function UserProfileScreen() {
   const [isFollowedBy, setIsFollowedBy] = useState(false);
   const [isMutual, setIsMutual] = useState(false);
   const [events, setEvents] = useState<UserEvent[]>([]);
+  const [guides, setGuides] = useState<Guide[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [reportSheetVisible, setReportSheetVisible] = useState(false);
@@ -82,14 +87,17 @@ export default function UserProfileScreen() {
       if (!userId) return;
       const token = await SecureStore.getItemAsync("token");
 
-      // Fetch follow status, counts, user profile and events in parallel
-      const [countsRes, statusRes, userRes, eventsRes] = await Promise.all([
+      // Fetch follow status, counts, user profile, events and guides in parallel
+      const [countsRes, statusRes, userRes, eventsRes, guidesRes] = await Promise.all([
         followService.getFollowCounts(userId),
         followService.getFollowStatus(userId),
         axios.get(`${BASE_URL}/users/${userId}`, {
           headers: { Authorization: `Bearer ${token}` },
         }).catch(() => null),
         axios.get(`${BASE_URL}/users/${userId}/events`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }).catch(() => null),
+        axios.get(`${BASE_URL}/users/${userId}/guides`, {
           headers: { Authorization: `Bearer ${token}` },
         }).catch(() => null),
       ]);
@@ -106,6 +114,10 @@ export default function UserProfileScreen() {
 
       if (eventsRes?.data?.events) {
         setEvents(eventsRes.data.events);
+      }
+
+      if (guidesRes?.data?.guides) {
+        setGuides(guidesRes.data.guides);
       }
     } catch (error) {
       console.error("Error loading user profile:", error);
@@ -188,9 +200,16 @@ export default function UserProfileScreen() {
               <Text style={styles.statNumber}>{events.length}</Text>
               <Text style={styles.statLabel}>Events</Text>
             </View>
+            <View style={styles.statDivider} />
+            <View>
+              <Text style={styles.statNumber}>{guides.length}</Text>
+              <Text style={styles.statLabel}>Guides</Text>
+            </View>
           </View>
         </View>
       </View>
+
+      {!!user?.bio && <Text style={styles.bio}>{user.bio}</Text>}
 
       {/* Action Buttons */}
       <View style={styles.actionRow}>
@@ -226,6 +245,45 @@ export default function UserProfileScreen() {
       )}
     </View>
   );
+
+  const renderGuidesSection = () => {
+    if (guides.length === 0) return null;
+    return (
+      <View style={{ marginTop: events.length > 0 ? 24 : 0 }}>
+        <Text style={styles.sectionTitle}>Guides</Text>
+        {guides.map((guide) => (
+          <TouchableOpacity
+            key={guide._id}
+            style={styles.guideCard}
+            onPress={() =>
+              router.push({ pathname: "/guide/[id]", params: { id: guide._id } })
+            }
+            activeOpacity={0.7}
+          >
+            {guide.coverImage ? (
+              <Image source={{ uri: guide.coverImage }} style={styles.eventImage} />
+            ) : (
+              <LinearGradient
+                colors={["#a855f7", "#7c3aed"]}
+                style={styles.eventImagePlaceholder}
+              >
+                <Ionicons name="book" size={20} color="#fff" />
+              </LinearGradient>
+            )}
+            <View style={styles.eventInfo}>
+              <Text style={styles.eventTitle} numberOfLines={1}>{guide.title}</Text>
+              <Text style={styles.eventLocation} numberOfLines={1}>
+                {guide.city}{guide.cityState ? `, ${guide.cityState}` : ""} • {guide.topic}
+              </Text>
+              <Text style={styles.guidePrice}>
+                {guide.price === 0 ? "FREE" : `$${formatPrice(guide.price)}`}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  };
 
   const renderEventItem = ({ item }: { item: UserEvent }) => (
     <TouchableOpacity
@@ -289,6 +347,7 @@ export default function UserProfileScreen() {
           keyExtractor={(item) => item._id}
           renderItem={renderEventItem}
           ListHeaderComponent={renderHeader}
+          ListFooterComponent={renderGuidesSection}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl
@@ -421,6 +480,13 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     marginTop: 1,
   },
+  bio: {
+    fontSize: 14,
+    fontFamily: Fonts.regular,
+    color: "#d1d5db",
+    lineHeight: 20,
+    marginBottom: 16,
+  },
   sectionTitle: {
     fontSize: 18,
     fontFamily: Fonts.bold,
@@ -468,6 +534,20 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     color: "#6b7280",
     marginTop: 2,
+  },
+  guideCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(55, 65, 81, 0.5)",
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+  },
+  guidePrice: {
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+    color: "#a855f7",
+    marginTop: 4,
   },
   actionRow: {
     flexDirection: "row",

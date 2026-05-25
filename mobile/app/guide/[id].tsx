@@ -23,6 +23,7 @@ import { useStripePayment } from "@/hooks/useStripePayment";
 import GuideCardSkeleton from "@/components/skeletons/GuideCardSkeleton";
 import ReportBlockSheet from "@/components/shared/ReportBlockSheet";
 import ShareSheet, { ShareTarget } from "@/components/shared/ShareSheet";
+import { Avatar } from "@/components/shared/Avatar";
 
 export default function GuideDetailPage() {
   const router = useRouter();
@@ -247,10 +248,30 @@ export default function GuideDetailPage() {
 
         <View style={styles.titleSection}>
           <Text style={styles.title}>{guide.title}</Text>
-          <View style={styles.authorRow}>
-            <Ionicons name="person-circle-outline" size={20} color="#9ca3af" />
+          <TouchableOpacity
+            style={styles.authorRow}
+            activeOpacity={0.7}
+            disabled={!guide.author?._id}
+            onPress={() => {
+              if (guide.author?._id) {
+                router.push({
+                  pathname: "/user-profile",
+                  params: { userId: guide.author._id },
+                } as any);
+              }
+            }}
+            accessibilityLabel={`View ${guide.authorName}'s profile`}
+          >
+            <Avatar
+              uri={guide.author?.profilePicture}
+              name={guide.author?.username || guide.authorName}
+              size={24}
+            />
             <Text style={styles.authorText}>by {guide.authorName}</Text>
-          </View>
+            {!!guide.author?._id && (
+              <Ionicons name="chevron-forward" size={14} color="#6b7280" />
+            )}
+          </TouchableOpacity>
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
               <Ionicons name="location" size={16} color="#a855f7" />

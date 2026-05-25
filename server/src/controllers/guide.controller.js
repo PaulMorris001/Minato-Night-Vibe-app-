@@ -207,6 +207,7 @@ export const getTopGuides = async (req, res) => {
           price: 1,
           city: 1,
           cityState: 1,
+          coverImage: 1,
           topic: 1,
           sections: 1,
           views: 1,
@@ -237,6 +238,34 @@ export const getUserGuides = async (req, res) => {
     res.status(200).json({ guides });
   } catch (error) {
     console.error("Get user guides error:", error);
+    res.status(500).json({ message: "Failed to fetch user guides" });
+  }
+};
+
+// Get a specific user's published guides (for their public profile)
+export const getUserPublicGuides = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Respect blocks in either direction — hide guides from blocked users
+    if (req.user?.id) {
+      const blockedIds = await getBlockedIds(req.user.id);
+      if (blockedIds.some((id) => String(id) === String(userId))) {
+        return res.status(200).json({ guides: [] });
+      }
+    }
+
+    const guides = await Guide.find({
+      author: userId,
+      isDraft: false,
+      isActive: true,
+    })
+      .populate("author", "username email profilePicture")
+      .sort({ createdAt: -1 });
+
+    res.status(200).json({ guides });
+  } catch (error) {
+    console.error("Get user public guides error:", error);
     res.status(500).json({ message: "Failed to fetch user guides" });
   }
 };

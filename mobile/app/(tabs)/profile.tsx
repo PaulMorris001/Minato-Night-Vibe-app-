@@ -22,6 +22,8 @@ import { AU } from "@/components/auth/tokens";
 import { BASE_URL } from "@/constants/constants";
 import { Fonts } from "@/constants/fonts";
 import { heroEmojiFor } from "@/utils/eventDetails";
+import { useFormatPrice } from "@/hooks/useFormatPrice";
+import { Guide } from "@/libs/interfaces";
 
 interface UserProfile {
   _id: string;
@@ -49,6 +51,7 @@ type TabKey = "hosted" | "attended";
 export default function ProfileScreen() {
   const [user, setUser] = useState<UserProfile | null>(null);
   const [events, setEvents] = useState<UserEvent[]>([]);
+  const [guides, setGuides] = useState<Guide[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [tab, setTab] = useState<TabKey>("hosted");
@@ -92,9 +95,22 @@ export default function ProfileScreen() {
     }
   };
 
+  const fetchGuides = async () => {
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) return;
+      const res = await axios.get(`${BASE_URL}/guides/my-guides`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setGuides(res.data.guides || []);
+    } catch (err) {
+      console.error("Error fetching guides:", err);
+    }
+  };
+
   const loadData = async (silent = false) => {
     if (!silent) setLoading(true);
-    await Promise.all([fetchProfile(), fetchEvents()]);
+    await Promise.all([fetchProfile(), fetchEvents(), fetchGuides()]);
     if (!silent) setLoading(false);
     setRefreshing(false);
   };
@@ -135,6 +151,7 @@ export default function ProfileScreen() {
             <Header
               user={user}
               eventsTotal={events.length}
+              guidesTotal={guides.length}
               tab={tab}
               setTab={setTab}
               loading={loading}
@@ -142,6 +159,9 @@ export default function ProfileScreen() {
           }
           ListEmptyComponent={
             loading ? null : <EmptyState tab={tab} />
+          }
+          ListFooterComponent={
+            loading ? null : <GuidesSection guides={guides} />
           }
           contentContainerStyle={styles.listContent}
           ItemSeparatorComponent={() => <View style={{ height: 8 }} />}
@@ -164,12 +184,14 @@ export default function ProfileScreen() {
 function Header({
   user,
   eventsTotal,
+  guidesTotal,
   tab,
   setTab,
   loading,
 }: {
   user: UserProfile | null;
   eventsTotal: number;
+  guidesTotal: number;
   tab: TabKey;
   setTab: (t: TabKey) => void;
   loading: boolean;
@@ -257,6 +279,10 @@ function Header({
           <View style={styles.stat}>
             <Text style={styles.statValue}>{eventsTotal}</Text>
             <Text style={styles.statLabel}>Events</Text>
+          </View>
+          <View style={styles.stat}>
+            <Text style={styles.statValue}>{guidesTotal}</Text>
+            <Text style={styles.statLabel}>Guides</Text>
           </View>
         </View>
       </View>
@@ -416,6 +442,108 @@ function EventRow({ event }: { event: UserEvent }) {
           {created ? "CREATED" : "ATTENDED"}
         </Text>
       </View>
+    </TouchableOpacity>
+  );
+}
+
+// ─── Guides section ───────────────────────────────────────────────────────────
+function GuidesSection({ guides }: { guides: Guide[] }) {
+  return (
+    <View style={styles.guidesSection}>
+      <View style={styles.guidesHeader}>
+        <Text style={styles.sectionTitle}>Guides</Text>
+        <TouchableOpacity
+          onPress={() => router.push("/my-guides" as any)}
+          activeOpacity={0.7}
+          style={styles.manageBtn}
+        >
+          <Ionicons name="add" size={14} color={AU.purpleSoft} />
+          <Text style={styles.manageText}>Manage</Text>
+        </TouchableOpacity>
+      </View>
+
+      {guides.length === 0 ? (
+        <TouchableOpacity
+          onPress={() => router.push("/guide/create" as any)}
+          activeOpacity={0.85}
+          style={styles.guidesEmpty}
+        >
+          <Ionicons name="book-outline" size={18} color={AU.textMute} />
+          <Text style={styles.guidesEmptyText}>
+            Share your local knowledge — create a guide
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <View style={{ gap: 8 }}>
+          {guides.map((guide) => (
+            <GuideRow key={guide._id} guide={guide} />
+          ))}
+        </View>
+      )}
+    </View>
+  );
+}
+
+// ─── Guide row ──────────────────────────────────────────────────────────────
+function GuideRow({ guide }: { guide: Guide }) {
+  const formatPrice = useFormatPrice();
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={() =>
+        router.push({ pathname: "/guide/[id]", params: { id: guide._id } })
+      }
+      style={styles.eventRow}
+    >
+      <View style={styles.thumbWrap}>
+        {guide.coverImage ? (
+          <Image
+            source={{ uri: guide.coverImage }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
+        ) : (
+          <LinearGradient
+            colors={["#7C3AED", "#EC4899"]}
+            start={{ x: 0.2, y: 0 }}
+            end={{ x: 0.8, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+        )}
+        <Ionicons
+          name="book"
+          size={20}
+          color="rgba(255,255,255,0.85)"
+          style={styles.guideThumbIcon}
+        />
+      </View>
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={styles.eventTitle} numberOfLines={1}>
+          {guide.title}
+        </Text>
+        <View style={styles.subRow}>
+          <Text style={styles.subText} numberOfLines={1}>
+            {guide.city}
+            {guide.cityState ? `, ${guide.cityState}` : ""}
+          </Text>
+          <View style={styles.subDot} />
+          <Text style={styles.subText} numberOfLines={1}>
+            {guide.price === 0 ? "FREE" : `$${formatPrice(guide.price)}`}
+          </Text>
+        </View>
+      </View>
+      {guide.isDraft ? (
+        <View style={styles.draftBadge}>
+          <Text style={styles.draftBadgeText}>DRAFT</Text>
+        </View>
+      ) : (
+        <View style={styles.roleIndicator}>
+          <Ionicons name="eye-outline" size={13} color={AU.textMute} />
+          <Text style={[styles.roleLabel, { color: AU.textMute }]}>
+            {guide.views}
+          </Text>
+        </View>
+      )}
     </TouchableOpacity>
   );
 }
@@ -687,6 +815,71 @@ const styles = StyleSheet.create({
   roleLabel: {
     fontFamily: Fonts.bold,
     fontSize: 10.5,
+    letterSpacing: 0.5,
+  },
+
+  // Guides section
+  guidesSection: {
+    paddingTop: 28,
+  },
+  guidesHeader: {
+    paddingHorizontal: 22,
+    paddingBottom: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  manageBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: AU.strokeHi,
+  },
+  manageText: {
+    color: AU.purpleSoft,
+    fontFamily: Fonts.bold,
+    fontSize: 12,
+  },
+  guidesEmpty: {
+    marginHorizontal: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: AU.stroke,
+    borderStyle: "dashed",
+    backgroundColor: "rgba(255,255,255,0.03)",
+  },
+  guidesEmptyText: {
+    flex: 1,
+    color: AU.textDim,
+    fontFamily: Fonts.medium,
+    fontSize: 13,
+  },
+  guideThumbIcon: {
+    position: "absolute",
+    right: 4,
+    bottom: 4,
+  },
+  draftBadge: {
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    backgroundColor: "rgba(251,191,36,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(251,191,36,0.4)",
+  },
+  draftBadgeText: {
+    color: "#fbbf24",
+    fontFamily: Fonts.bold,
+    fontSize: 9.5,
     letterSpacing: 0.5,
   },
 

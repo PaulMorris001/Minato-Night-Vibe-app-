@@ -484,7 +484,7 @@ export async function searchUsers(req, res) {
 export async function getUserById(req, res) {
   try {
     const user = await User.findById(req.params.userId)
-      .select("_id username email profilePicture isVendor businessName verified isBanned blockedUsers")
+      .select("_id username email profilePicture bio isVendor businessName verified isBanned blockedUsers")
       .lean();
 
     if (!user || user.isBanned) {

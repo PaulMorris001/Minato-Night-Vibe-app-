@@ -4,6 +4,7 @@ import {
   getGuides,
   getTopGuides,
   getUserGuides,
+  getUserPublicGuides,
   getGuideById,
   updateGuide,
   deleteGuide,
@@ -28,6 +29,7 @@ router.get("/guide/locations", optionalAuth, getGuideLocations);
 
 // Protected user routes - MUST come before /guides/:id to avoid route conflicts
 router.get("/guides/my-guides", authenticate, getUserGuides);
+router.get("/users/:userId/guides", authenticate, getUserPublicGuides);
 router.get("/guides/purchased", authenticate, getPurchasedGuides);
 router.get("/guides/saved", authenticate, getSavedGuides);
 
