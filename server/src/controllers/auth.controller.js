@@ -2,6 +2,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import crypto from "crypto";
 import { OAuth2Client } from "google-auth-library";
+import { createRemoteJWKSet, jwtVerify } from "jose";
 import config from "../config/env.js";
 import User from "../models/user.model.js";
 import { Vendor, City } from "../models/vendor.model.js";
@@ -646,6 +647,122 @@ export async function googleAuth(req, res) {
   } catch (error) {
     console.error("Google auth error:", error);
     res.status(400).json({ message: "Google authentication failed", details: error.message });
+  }
+}
+
+// Apple's public keys for verifying Sign in with Apple identity tokens.
+// `jose` caches and refreshes the key set automatically.
+const appleJWKS = createRemoteJWKSet(
+  new URL("https://appleid.apple.com/auth/keys")
+);
+
+/**
+ * Sign in with Apple. The client sends the `identityToken` (a JWT) returned by
+ * `expo-apple-authentication`, plus `fullName`/`email` which Apple only
+ * provides on the FIRST authorization. We verify the token against Apple's
+ * public keys, then find-or-create the user (matching first by appleId, then
+ * by email so an existing email/Google account gets linked rather than
+ * duplicated).
+ */
+export async function appleAuth(req, res) {
+  const { identityToken, fullName, email: emailFromClient } = req.body;
+
+  try {
+    if (!identityToken) {
+      return res.status(400).json({ message: "identityToken is required" });
+    }
+
+    // Verify signature, issuer, and audience (our app's bundle identifier).
+    const { payload } = await jwtVerify(identityToken, appleJWKS, {
+      issuer: "https://appleid.apple.com",
+      audience: config.apple.clientId,
+    });
+
+    const appleId = payload.sub;
+    if (!appleId) {
+      return res.status(400).json({ message: "Invalid Apple identity token" });
+    }
+
+    // Email comes from the token when available, else the client payload
+    // (first sign-in only). Returning users are matched by appleId instead.
+    const tokenEmail = typeof payload.email === "string" ? payload.email : "";
+    const normalizedEmail = (tokenEmail || emailFromClient || "")
+      .toLowerCase()
+      .trim();
+
+    let user = await User.findOne({
+      $or: [
+        { appleId },
+        ...(normalizedEmail ? [{ email: normalizedEmail }] : []),
+      ],
+    });
+
+    if (user) {
+      if (user.isBanned) {
+        return res.status(403).json({
+          message:
+            "This account has been suspended for violating our content policy.",
+        });
+      }
+      // Link Apple to an existing account if not already linked.
+      if (!user.appleId) {
+        user.appleId = appleId;
+        if (user.authProvider === "local") user.authProvider = "apple";
+        await user.save();
+      }
+    } else {
+      if (!normalizedEmail) {
+        return res.status(400).json({
+          message:
+            "Apple did not share an email. Please sign up with email first, or remove this app from your Apple ID settings and try again.",
+        });
+      }
+
+      // Build a username from the provided name, else the email local part,
+      // ensuring uniqueness against existing usernames.
+      let baseUsername =
+        (fullName && fullName.trim()) || normalizedEmail.split("@")[0];
+      baseUsername = baseUsername.replace(/\s+/g, "").slice(0, 20) || "user";
+      let username = baseUsername;
+      let suffix = 0;
+      // eslint-disable-next-line no-await-in-loop
+      while (await User.exists({ username })) {
+        suffix += 1;
+        username = `${baseUsername}${suffix}`;
+      }
+
+      user = new User({
+        username,
+        email: normalizedEmail,
+        authProvider: "apple",
+        appleId,
+        isVendor: false,
+        termsAcceptedAt: new Date(),
+      });
+      await user.save();
+    }
+
+    const token = jwt.sign({ id: user._id }, config.jwt.secret, {
+      expiresIn: config.jwt.expiresIn,
+    });
+
+    res.json({
+      message: "Apple authentication successful",
+      token,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        profilePicture: user.profilePicture,
+        isVendor: user.isVendor,
+        authProvider: user.authProvider,
+      },
+    });
+  } catch (error) {
+    console.error("Apple auth error:", error);
+    res
+      .status(400)
+      .json({ message: "Apple authentication failed", details: error.message });
   }
 }
 

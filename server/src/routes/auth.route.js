@@ -10,6 +10,7 @@ import {
   getUserById,
   getUserEvents,
   googleAuth,
+  appleAuth,
   forgotPassword,
   verifyOTP,
   resetPassword,
@@ -24,6 +25,7 @@ const router = express.Router();
 router.post('/register', register)
 router.post("/login", login);
 router.post("/google-auth", googleAuth);
+router.post("/apple-auth", appleAuth);
 
 // Password reset routes
 router.post("/auth/forgot-password", forgotPassword);

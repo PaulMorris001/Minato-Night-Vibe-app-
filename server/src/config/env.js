@@ -114,6 +114,12 @@ export const config = {
     // HTTPS server URL used as Stripe's required return/refresh URLs
     serverUrl: process.env.SERVER_URL || "https://night-vibe.onrender.com",
   },
+
+  // Sign in with Apple. For native iOS sign-in, the identity token's `aud`
+  // claim is the app's bundle identifier, so that's the expected audience.
+  apple: {
+    clientId: process.env.APPLE_CLIENT_ID || "com.nightvibe.minato",
+  },
 };
 
 export default config;

@@ -28,6 +28,7 @@ import {
   Wordmark,
 } from "@/components/auth/AuthPrimitives";
 import { AU } from "@/components/auth/tokens";
+import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 
 type StepKey = "username" | "email" | "password" | "confirm";
 
@@ -408,6 +409,12 @@ export default function Signup() {
                 })}
               </View>
 
+              {step === 0 && (
+                <View style={styles.socialWrap}>
+                  <SocialAuthButtons />
+                </View>
+              )}
+
               <Text style={styles.footerText}>
                 Already on NightVibe?{" "}
                 <Text
@@ -537,6 +544,7 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   bottomBlock: { paddingHorizontal: 22, paddingBottom: 0 },
+  socialWrap: { marginTop: 18, gap: 10 },
   dotsRow: {
     flexDirection: "row",
     justifyContent: "center",

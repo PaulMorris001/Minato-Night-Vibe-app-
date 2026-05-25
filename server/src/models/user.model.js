@@ -6,8 +6,9 @@ const userSchema = mongoose.Schema({
   password: { type: String, required: false }, // Optional for OAuth users
 
   // OAuth authentication fields
-  authProvider: { type: String, enum: ['local', 'google'], default: 'local' },
+  authProvider: { type: String, enum: ['local', 'google', 'apple'], default: 'local' },
   googleId: { type: String, sparse: true, unique: true },
+  appleId: { type: String, sparse: true, unique: true },
 
   // User is always a client by default, can optionally become a vendor
   isVendor: { type: Boolean, default: false },

@@ -2,7 +2,7 @@
 module.exports = {
   name: "Nightvibe",
   slug: "nightvibe",
-  version: "1.0.1",
+  version: "1.1.0",
   orientation: "portrait",
   icon: "./assets/images/ios/icon.png",
   scheme: "mobile",
@@ -26,6 +26,7 @@ module.exports = {
   ios: {
     supportsTablet: true,
     bundleIdentifier: "com.nightvibe.minato",
+    usesAppleSignIn: true,
     associatedDomains: ["applinks:night-vibe.onrender.com"],
     // In EAS Build, GOOGLE_SERVICES_PLIST is the path to the secret file.
     // Locally, fall back to the file in the project root.
@@ -72,6 +73,7 @@ module.exports = {
     "@react-native-firebase/app",
     "@react-native-firebase/messaging",
     "./plugins/withFirebaseFix",
+    "expo-apple-authentication",
     "expo-router",
     [
       "expo-splash-screen",

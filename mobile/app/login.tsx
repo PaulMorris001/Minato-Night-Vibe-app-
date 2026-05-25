@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -21,9 +21,9 @@ import * as Sentry from "@sentry/react-native";
 import { BASE_URL } from "@/constants/constants";
 import { capitalize } from "@/libs/helpers";
 import { useAccount } from "@/contexts/AccountContext";
-import { configureGoogleSignIn, signInWithGoogle } from "@/utils/googleAuth";
 import { registerForPushNotifications } from "@/utils/pushNotifications";
 import { PosterBackground } from "@/components/auth/PosterBackground";
+import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 import {
   GlassRoundButton,
   GradientAccent,
@@ -40,13 +40,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [googleLoading, setGoogleLoading] = useState(false);
   const [showRolePicker, setShowRolePicker] = useState(false);
   const [userData, setUserData] = useState<any>(null);
-
-  useEffect(() => {
-    configureGoogleSignIn();
-  }, []);
 
   const ctaEnabled = email.trim().length > 0 && password.length > 0;
 
@@ -115,39 +110,6 @@ export default function Login() {
     await setActiveAccount(role);
     if (role === "vendor") router.replace("/(vendor)/dashboard");
     else router.replace("/(tabs)/home");
-  };
-
-  const handleGoogleSignIn = async () => {
-    setGoogleLoading(true);
-    try {
-      const userInfo = await signInWithGoogle();
-      if (!userInfo.data?.idToken && !userInfo.data?.accessToken) {
-        throw new Error("No token received from Google");
-      }
-      const res = await axios.post(`${BASE_URL}/google-auth`, {
-        idToken: userInfo.data.idToken,
-        accessToken: userInfo.data.accessToken,
-      });
-      const user = res.data.user;
-      const token = res.data.token;
-      await SecureStore.setItemAsync("token", token);
-      await SecureStore.setItemAsync("user", JSON.stringify(user));
-      registerForPushNotifications();
-      if (user.isVendor) {
-        setUserData(user);
-        setShowRolePicker(true);
-        setGoogleLoading(false);
-      } else {
-        await setActiveAccount("client");
-        router.replace("/(tabs)/home");
-      }
-    } catch (error: any) {
-      Alert.alert(
-        "Error",
-        error.response?.data?.message || "Google sign-in failed. Please try again."
-      );
-      setGoogleLoading(false);
-    }
   };
 
   const handleClose = () => {
@@ -257,43 +219,8 @@ export default function Login() {
                   <Text style={styles.forgotLink}>Forgot password?</Text>
                 </TouchableOpacity>
 
-                {/* OR divider */}
-                <View style={styles.divider}>
-                  <View style={styles.dividerLine} />
-                  <Text style={styles.dividerText}>OR</Text>
-                  <View style={styles.dividerLine} />
-                </View>
-
-                {/* Social buttons */}
-                <View style={styles.socialRow}>
-                  <TouchableOpacity
-                    style={styles.socialBtn}
-                    onPress={() =>
-                      Alert.alert("Coming soon", "Sign in with Apple isn't ready yet.")
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="logo-apple" size={18} color={AU.text} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.socialBtn}
-                    onPress={() =>
-                      Alert.alert("Coming soon", "Sign in with Google isn't ready yet.")
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <Ionicons name="logo-google" size={18} color={AU.text} />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={styles.socialBtn}
-                    onPress={() =>
-                      Alert.alert("Coming soon", "Sign in with X isn't ready yet.")
-                    }
-                    activeOpacity={0.7}
-                  >
-                    <Text style={styles.socialX}>𝕏</Text>
-                  </TouchableOpacity>
-                </View>
+                {/* Social sign-in (Apple on iOS, Google everywhere) */}
+                <SocialAuthButtons />
               </View>
 
               <Text style={styles.footerText}>
@@ -457,36 +384,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-  },
-  divider: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginHorizontal: 4,
-    marginVertical: 4,
-  },
-  dividerLine: { flex: 1, height: 1, backgroundColor: AU.stroke },
-  dividerText: {
-    fontFamily: "Outfit_600SemiBold",
-    fontSize: 10,
-    color: AU.textMute,
-    letterSpacing: 1.2,
-  },
-  socialRow: { flexDirection: "row", gap: 8 },
-  socialBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: "rgba(255,255,255,0.05)",
-    borderWidth: 1,
-    borderColor: AU.stroke,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  socialX: {
-    color: AU.text,
-    fontSize: 18,
-    fontFamily: "Outfit_700Bold",
   },
   footerText: {
     textAlign: "center",
