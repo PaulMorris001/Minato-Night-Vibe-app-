@@ -1,6 +1,7 @@
 import { Stack, router } from "expo-router";
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useState } from "react";
 import { Platform, Linking } from "react-native";
+import { BASE_URL } from "@/constants/constants";
 import messaging from "@react-native-firebase/messaging";
 import * as Notifications from "expo-notifications";
 import { registerForPushNotifications } from "@/utils/pushNotifications";
@@ -115,6 +116,35 @@ export default Sentry.wrap(function RootLayout() {
     BricolageGrotesque_700Bold,
     BricolageGrotesque_800ExtraBold,
   });
+
+  // Publishable key: start from the build-time value as a fallback, then
+  // override with the key the SERVER reports so it always matches the secret
+  // key used to create PaymentIntents (same Stripe account + test/live mode).
+  // This prevents the "client_secret does not match any associated
+  // PaymentIntent" error that occurs when a build's baked-in key drifts out of
+  // sync with the server's mode.
+  const [stripeKey, setStripeKey] = useState(
+    process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ""
+  );
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${BASE_URL}/stripe/config`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && data?.publishableKey) {
+          setStripeKey(data.publishableKey);
+        }
+      } catch {
+        // Keep the build-time fallback if the server is unreachable.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (fontsLoaded) {
@@ -283,7 +313,7 @@ export default Sentry.wrap(function RootLayout() {
   return (
     <ErrorBoundary>
       <StripeProvider
-        publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? ""}
+        publishableKey={stripeKey}
         merchantIdentifier="merchant.com.nightvibe.minato"
       >
         <AccountProvider>

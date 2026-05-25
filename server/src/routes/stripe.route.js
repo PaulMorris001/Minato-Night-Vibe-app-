@@ -13,11 +13,16 @@ import {
   refundOwnTicket,
   cancelEventByOrganizer,
   adminRefundTicket,
+  getStripeConfig,
 } from "../controllers/stripe.controller.js";
 import { authenticateAdmin } from "../middleware/admin.middleware.js";
 import { authenticate } from "../middleware/auth.middleware.js";
 
 const router = express.Router();
+
+// Public — lets the mobile app fetch the publishable key that matches this
+// server's secret key (same account/mode), avoiding test/live key mismatches.
+router.get("/stripe/config", getStripeConfig);
 
 // Webhook uses raw body — the raw parser is applied at app level in index.js
 // before express.json(), so req.body here is already a Buffer

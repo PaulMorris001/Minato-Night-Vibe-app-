@@ -10,6 +10,23 @@ import { invalidateCachePattern } from "../utils/cache.js";
 const PLATFORM_FEE_PERCENT = config.stripe.platformFeePercent; // e.g. 10
 
 /**
+ * Return the publishable key that matches THIS server's secret key (same
+ * Stripe account and same test/live mode). The mobile app fetches this at
+ * startup so its publishable key can never drift out of sync with the secret
+ * key used to create PaymentIntents — which previously produced
+ * "client_secret does not match any associated PaymentIntent" errors when a
+ * build baked in a test key against a live server (or vice versa).
+ */
+export const getStripeConfig = async (req, res) => {
+  try {
+    res.status(200).json({ publishableKey: config.stripe.publishableKey || "" });
+  } catch (error) {
+    console.error("Get stripe config error:", error);
+    res.status(500).json({ message: "Failed to fetch Stripe config" });
+  }
+};
+
+/**
  * Translate a Stripe SDK error into something safe to return to the client.
  * We pass through Stripe's `code` and `message` so the mobile app can show
  * the real reason ("No such account...", "Your platform has not been activated
