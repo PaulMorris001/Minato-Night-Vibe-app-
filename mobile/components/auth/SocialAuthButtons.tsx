@@ -129,22 +129,95 @@ export function SocialAuthButtons() {
   const handleAppleSignIn = async () => {
     if (busy) return;
     setAppleLoading(true);
+    const startedAt = Date.now();
+    console.log("[SocialAuth] handleAppleSignIn: tapped");
+    Sentry.addBreadcrumb({
+      category: "auth.apple",
+      message: "handleAppleSignIn: tapped",
+      level: "info",
+      data: { platform: Platform.OS, baseUrl: BASE_URL },
+    });
+
     try {
       const { identityToken, fullName, email } = await signInWithApple();
-      const res = await axios.post(`${BASE_URL}/apple-auth`, {
-        identityToken,
-        fullName,
-        email,
+      console.log("[SocialAuth] got Apple credential, calling server", {
+        identityTokenLen: identityToken.length,
+        hasEmail: !!email,
+        hasFullName: !!fullName,
+        elapsedMs: Date.now() - startedAt,
       });
+
+      let res;
+      try {
+        res = await axios.post(`${BASE_URL}/apple-auth`, {
+          identityToken,
+          fullName,
+          email,
+        });
+      } catch (httpErr: any) {
+        const errData = {
+          platform: Platform.OS,
+          isAxios: !!httpErr?.isAxiosError,
+          code: httpErr?.code,
+          message: httpErr?.message,
+          status: httpErr?.response?.status,
+          serverMessage: httpErr?.response?.data?.message,
+          serverDetails: httpErr?.response?.data?.details,
+          url: `${BASE_URL}/apple-auth`,
+          elapsedMs: Date.now() - startedAt,
+        };
+        console.warn("[SocialAuth] server /apple-auth call failed", errData);
+        Sentry.addBreadcrumb({
+          category: "auth.apple",
+          message: "server /apple-auth call failed",
+          level: "error",
+          data: errData,
+        });
+        Sentry.captureException(httpErr, {
+          tags: { action: "apple.serverPost", platform: Platform.OS },
+          contexts: { apple: errData },
+        });
+        throw httpErr;
+      }
+
+      console.log("[SocialAuth] server /apple-auth OK", {
+        userId: res.data?.user?.id,
+        isVendor: res.data?.user?.isVendor,
+        elapsedMs: Date.now() - startedAt,
+      });
+      Sentry.addBreadcrumb({
+        category: "auth.apple",
+        message: "server /apple-auth OK",
+        level: "info",
+        data: { userId: res.data?.user?.id },
+      });
+
       await finishAuth(res.data.user, res.data.token);
     } catch (error: any) {
       // Apple throws ERR_REQUEST_CANCELED when the user dismisses the sheet.
       if (error?.code !== "ERR_REQUEST_CANCELED") {
-        Alert.alert(
-          "Error",
-          error.response?.data?.message ||
-            "Apple sign-in failed. Please try again."
-        );
+        console.warn("[SocialAuth] Apple sign-in failed", {
+          platform: Platform.OS,
+          code: error?.code,
+          message: error?.message,
+          status: error?.response?.status,
+          serverMessage: error?.response?.data?.message,
+        });
+        // Build a more informative message based on Apple's error codes so the
+        // user sees something more actionable than "Apple sign-in failed".
+        const friendly =
+          error?.response?.data?.message ||
+          (error?.code === "ERR_REQUEST_NOT_HANDLED"
+            ? "Sign in with Apple isn't enabled for this build. Please update the app."
+            : error?.code === "ERR_REQUEST_FAILED"
+            ? "Apple couldn't process the request. Check your connection and try again."
+            : error?.code === "ERR_REQUEST_NOT_INTERACTIVE"
+            ? "Apple sign-in couldn't open. Please try again."
+            : error?.message ||
+              "Apple sign-in failed. Please try again.");
+        Alert.alert("Error", friendly);
+      } else {
+        console.log("[SocialAuth] Apple sign-in cancelled by user");
       }
     } finally {
       setAppleLoading(false);
