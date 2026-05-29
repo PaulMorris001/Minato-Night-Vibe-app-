@@ -194,13 +194,24 @@ function parseCallbackQuery(url: string): Record<string, string> {
   return out;
 }
 
+// Where the server bounces the in-app browser to at the end of OAuth. Must
+// match the `APP_RETURN_PATH` in the server controller AND the path served
+// by `googleWebComplete` (deepLinks.route.js). MUST stay an HTTPS URL on a
+// path that is NOT registered as a Universal Link (iOS) or App Link (Android)
+// — otherwise the OS routes it to the app, expo-router tries to handle it,
+// and the user sees an "Unmatched Route" screen while WebBrowser is also
+// trying to consume the URL. /auth/google/complete is safe today; if you
+// ever add Universal Link paths under /auth, revisit this.
+const SERVER_BASE_FOR_RETURN = BASE_URL.replace(/\/api\/?$/, "");
+const RETURN_URL = `${SERVER_BASE_FOR_RETURN}/auth/google/complete`;
+
 export const signInWithGoogleWeb = async (): Promise<GoogleWebSignInResult> => {
   const startedAt = Date.now();
   // BASE_URL ends with /api in production; in dev it also ends with /api.
   // Server routes are mounted under /api, and we registered them as
   // /auth/google/web/start — so the full path is BASE_URL + that.
   const startUrl = `${BASE_URL}/auth/google/web/start`;
-  const returnUrl = "mobile://auth/google";
+  const returnUrl = RETURN_URL;
 
   remoteLog("info", "google.web.start", {
     platform: Platform.OS,
