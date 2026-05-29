@@ -38,6 +38,8 @@ import { StripeProvider } from "@stripe/stripe-react-native";
 import { theme } from "@/constants/theme";
 import { StatusBar } from "expo-status-bar";
 import { setupGlobalErrorHandler, setupConsoleOverride } from "@/utils/errorHandler";
+import { setupApiClient } from "@/utils/apiClient";
+import { checkBackendReachable } from "@/utils/reachability";
 import * as Sentry from '@sentry/react-native';
 import ErrorBoundary from "@/components/ErrorBoundary";
 
@@ -107,6 +109,16 @@ SplashScreen.setOptions({
 // Setup global error handlers
 setupGlobalErrorHandler();
 setupConsoleOverride();
+
+// Configure axios defaults (20s timeout, retry on transient network errors)
+// for every call site in the app — no per-screen changes needed.
+setupApiClient();
+
+// Fire a /health probe (3 staggered attempts) so we know IMMEDIATELY when a
+// user's network can't reach the backend, instead of waiting for a login
+// attempt to silently hang. Sentry gets a single capture if all attempts
+// fail; the rest of the app can read `getReachability()` to show a banner.
+checkBackendReachable();
 
 // Push notification `type` values that should deep-link to the event details
 // screen. The payload carries an `eventId`. Add new types here as they ship.
