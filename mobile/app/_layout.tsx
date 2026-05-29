@@ -49,11 +49,16 @@ Sentry.init({
   // For more information, visit: https://docs.sentry.io/platforms/react-native/data-management/data-collected/
   sendDefaultPii: true,
 
-  // Enable Logs
-  enableLogs: true,
-
-  // Configure Session Replay
-  replaysSessionSampleRate: 0.1,
+  // Crashes-only policy:
+  // - We don't use Sentry.logger.* — disable to stop accidental log shipping.
+  // - replaysSessionSampleRate=0 stops Sentry from recording a video for 10%
+  //   of *every* session regardless of whether anything went wrong. Only
+  //   sessions that experience an actual error get a replay (the
+  //   replaysOnErrorSampleRate=1 path).
+  // - Status/breadcrumb traces from the app go to Render via remoteLog
+  //   (utils/remoteLog.ts) instead of Sentry.
+  enableLogs: false,
+  replaysSessionSampleRate: 0,
   replaysOnErrorSampleRate: 1,
   integrations: [Sentry.mobileReplayIntegration()],
 

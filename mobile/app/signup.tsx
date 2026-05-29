@@ -19,6 +19,7 @@ import * as SecureStore from "expo-secure-store";
 import * as Sentry from "@sentry/react-native";
 
 import { BASE_URL } from "@/constants/constants";
+import { remoteLog } from "@/utils/remoteLog";
 import { PosterBackground } from "@/components/auth/PosterBackground";
 import {
   GradientAccent,
@@ -146,14 +147,11 @@ export default function Signup() {
 
   const submitRegister = async () => {
     setSubmitting(true);
+    remoteLog("info", "signup attempt", {
+      email: values.email,
+      username: values.username,
+    });
     try {
-      Sentry.addBreadcrumb({
-        category: "auth",
-        message: "Signup attempt",
-        level: "info",
-        data: { email: values.email, username: values.username },
-      });
-
       const res = await axios.post(`${BASE_URL}/register`, {
         username: values.username,
         email: values.email,
@@ -165,6 +163,7 @@ export default function Signup() {
       const token = res.data.token;
 
       Sentry.setUser({ id: user._id, email: user.email, username: user.username });
+      remoteLog("info", "signup success", { userId: user._id });
 
       await SecureStore.setItemAsync("token", token);
       await SecureStore.setItemAsync("user", JSON.stringify(user));
@@ -178,16 +177,38 @@ export default function Signup() {
         router.replace("/(tabs)/home");
       }
     } catch (error: any) {
-      Sentry.captureException(error, {
-        tags: { action: "signup" },
-        contexts: {
-          signup: { email: values.email, username: values.username },
-          response: { status: error.response?.status, data: error.response?.data },
+      const status = error.response?.status;
+      const isNetworkError =
+        error.code === "ECONNREFUSED" ||
+        error.code === "ENOTFOUND" ||
+        error.message?.includes("Network Error");
+      const isServerError = typeof status === "number" && status >= 500;
+      // 4xx (409 username/email taken, 400 invalid input) are expected user
+      // errors — Render log only. 5xx / network are real problems → Sentry.
+      if (isServerError || isNetworkError) {
+        Sentry.captureException(error, {
+          tags: { action: "signup" },
+          contexts: {
+            signup: { email: values.email, username: values.username },
+            response: { status, data: error.response?.data },
+          },
+        });
+      }
+      remoteLog(
+        isServerError || isNetworkError ? "error" : "warn",
+        "signup failed",
+        {
+          email: values.email,
+          username: values.username,
+          status,
+          code: error?.code,
+          message: error?.message,
+          serverMessage: error.response?.data?.message,
         },
-      });
+        error
+      );
 
       let msg = "Signup failed. Please try again.";
-      const status = error.response?.status;
       const serverMsg: string = (error.response?.data?.message ?? "").toLowerCase();
       if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND")
         msg = "Cannot connect to server. Check your internet connection.";

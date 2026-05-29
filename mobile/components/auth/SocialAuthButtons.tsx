@@ -13,7 +13,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import axios from "axios";
 import * as SecureStore from "expo-secure-store";
-import * as Sentry from "@sentry/react-native";
 
 import { BASE_URL } from "@/constants/constants";
 import { capitalize } from "@/libs/helpers";
@@ -21,7 +20,30 @@ import { useAccount } from "@/contexts/AccountContext";
 import { configureGoogleSignIn, signInWithGoogleWeb } from "@/utils/googleAuth";
 import { isAppleAuthAvailable, signInWithApple } from "@/utils/appleAuth";
 import { registerForPushNotifications } from "@/utils/pushNotifications";
+import { remoteLog } from "@/utils/remoteLog";
 import { AU } from "@/components/auth/tokens";
+
+// `isUnexpectedAuthError` decides whether a sign-in failure deserves a
+// Sentry alert vs. just a Render log. The rule of thumb: anything we can
+// explain (user cancel, expected server-side rejection, missing entitlement)
+// stays in Render; anything that looks like a real bug or unreachable server
+// escalates. Keep this in sync with the messages thrown from googleAuth.ts /
+// appleAuth.ts and the server's web-callback error params.
+const KNOWN_USER_FACING_ERRORS = [
+  "cancel",
+  "account has been suspended",
+  "session expired",
+  "isn't enabled for this build",
+  "couldn't process the request",
+  "couldn't open",
+];
+function isExpectedAuthError(error: any): boolean {
+  // Apple cancel
+  if (error?.code === "ERR_REQUEST_CANCELED") return true;
+  const msg = typeof error?.message === "string" ? error.message.toLowerCase() : "";
+  if (!msg) return false;
+  return KNOWN_USER_FACING_ERRORS.some((needle) => msg.includes(needle));
+}
 
 /**
  * OR divider + "Continue with Apple / Google" buttons, shared between the login
@@ -71,14 +93,9 @@ export function SocialAuthButtons() {
     if (busy) return;
     setGoogleLoading(true);
     const startedAt = Date.now();
-    Sentry.addBreadcrumb({
-      category: "auth.google",
-      message: "handleGoogleSignIn: tapped (web flow)",
-      level: "info",
-      data: { platform: Platform.OS, baseUrl: BASE_URL },
-    });
-    console.log("[SocialAuth] handleGoogleSignIn: tapped (web flow)", {
+    remoteLog("info", "google.handler tapped", {
       platform: Platform.OS,
+      baseUrl: BASE_URL,
     });
 
     try {
@@ -87,28 +104,33 @@ export function SocialAuthButtons() {
       // shipped binary (placeholder iOS URL scheme + missing Android OAuth
       // client). The server returns our JWT + user in the deep-link params.
       const { token, user } = await signInWithGoogleWeb();
-      console.log("[SocialAuth] web sign-in OK", {
+      remoteLog("info", "google.handler success", {
         userId: user.id,
         isVendor: user.isVendor,
         elapsedMs: Date.now() - startedAt,
       });
-      Sentry.addBreadcrumb({
-        category: "auth.google",
-        message: "web sign-in OK",
-        level: "info",
-        data: { userId: user.id },
-      });
       await finishAuth(user, token);
     } catch (error: any) {
-      const cancelled =
-        typeof error?.message === "string" &&
-        error.message.toLowerCase().includes("cancel");
-
-      if (!cancelled) {
-        console.warn("[SocialAuth] Google sign-in failed", {
+      if (isExpectedAuthError(error)) {
+        // User cancel or known server-side rejection — log and move on.
+        remoteLog("info", "google.handler expected failure", {
           platform: Platform.OS,
           message: error?.message,
         });
+        // Cancel is silent; surface known errors with the message they threw.
+        const cancelled = error?.message?.toLowerCase().includes("cancel");
+        if (!cancelled) Alert.alert("Sign-in failed", error.message);
+      } else {
+        // Genuine unexpected failure → user sees an alert AND we Sentry.
+        remoteLog(
+          "error",
+          "google.handler unexpected failure",
+          { platform: Platform.OS, message: error?.message },
+          error
+        );
+        // Lazy import keeps Sentry off the hot path of the common success
+        // case (and out of pre-init code paths if Sentry was deferred).
+        const Sentry = require("@sentry/react-native");
         Sentry.captureException(error, {
           tags: { action: "google.handleSignIn", platform: Platform.OS },
         });
@@ -118,8 +140,6 @@ export function SocialAuthButtons() {
             ? error.message
             : "Google sign-in failed. Please try again."
         );
-      } else {
-        console.log("[SocialAuth] Google sign-in cancelled by user");
       }
     } finally {
       setGoogleLoading(false);
@@ -130,17 +150,14 @@ export function SocialAuthButtons() {
     if (busy) return;
     setAppleLoading(true);
     const startedAt = Date.now();
-    console.log("[SocialAuth] handleAppleSignIn: tapped");
-    Sentry.addBreadcrumb({
-      category: "auth.apple",
-      message: "handleAppleSignIn: tapped",
-      level: "info",
-      data: { platform: Platform.OS, baseUrl: BASE_URL },
+    remoteLog("info", "apple.handler tapped", {
+      platform: Platform.OS,
+      baseUrl: BASE_URL,
     });
 
     try {
       const { identityToken, fullName, email } = await signInWithApple();
-      console.log("[SocialAuth] got Apple credential, calling server", {
+      remoteLog("info", "apple.handler got credential", {
         identityTokenLen: identityToken.length,
         hasEmail: !!email,
         hasFullName: !!fullName,
@@ -155,70 +172,61 @@ export function SocialAuthButtons() {
           email,
         });
       } catch (httpErr: any) {
+        const status = httpErr?.response?.status;
         const errData = {
           platform: Platform.OS,
           isAxios: !!httpErr?.isAxiosError,
           code: httpErr?.code,
           message: httpErr?.message,
-          status: httpErr?.response?.status,
+          status,
           serverMessage: httpErr?.response?.data?.message,
           serverDetails: httpErr?.response?.data?.details,
           url: `${BASE_URL}/apple-auth`,
           elapsedMs: Date.now() - startedAt,
         };
-        console.warn("[SocialAuth] server /apple-auth call failed", errData);
-        Sentry.addBreadcrumb({
-          category: "auth.apple",
-          message: "server /apple-auth call failed",
-          level: "error",
-          data: errData,
-        });
-        Sentry.captureException(httpErr, {
-          tags: { action: "apple.serverPost", platform: Platform.OS },
-          contexts: { apple: errData },
-        });
+        // 4xx is the server saying "no" politely — log to Render. Network
+        // failure or 5xx is unexpected — escalate.
+        const expected = status && status >= 400 && status < 500;
+        remoteLog(
+          expected ? "warn" : "error",
+          "apple.handler server post failed",
+          errData,
+          httpErr
+        );
+        if (!expected) {
+          const Sentry = require("@sentry/react-native");
+          Sentry.captureException(httpErr, {
+            tags: { action: "apple.serverPost", platform: Platform.OS },
+            contexts: { apple: errData },
+          });
+        }
         throw httpErr;
       }
 
-      console.log("[SocialAuth] server /apple-auth OK", {
+      remoteLog("info", "apple.handler success", {
         userId: res.data?.user?.id,
         isVendor: res.data?.user?.isVendor,
         elapsedMs: Date.now() - startedAt,
       });
-      Sentry.addBreadcrumb({
-        category: "auth.apple",
-        message: "server /apple-auth OK",
-        level: "info",
-        data: { userId: res.data?.user?.id },
-      });
-
       await finishAuth(res.data.user, res.data.token);
     } catch (error: any) {
-      // Apple throws ERR_REQUEST_CANCELED when the user dismisses the sheet.
-      if (error?.code !== "ERR_REQUEST_CANCELED") {
-        console.warn("[SocialAuth] Apple sign-in failed", {
-          platform: Platform.OS,
-          code: error?.code,
-          message: error?.message,
-          status: error?.response?.status,
-          serverMessage: error?.response?.data?.message,
-        });
-        // Build a more informative message based on Apple's error codes so the
-        // user sees something more actionable than "Apple sign-in failed".
-        const friendly =
-          error?.response?.data?.message ||
-          (error?.code === "ERR_REQUEST_NOT_HANDLED"
-            ? "Sign in with Apple isn't enabled for this build. Please update the app."
-            : error?.code === "ERR_REQUEST_FAILED"
-            ? "Apple couldn't process the request. Check your connection and try again."
-            : error?.code === "ERR_REQUEST_NOT_INTERACTIVE"
-            ? "Apple sign-in couldn't open. Please try again."
-            : error?.message ||
-              "Apple sign-in failed. Please try again.");
-        Alert.alert("Error", friendly);
-      } else {
-        console.log("[SocialAuth] Apple sign-in cancelled by user");
-      }
+      // Apple throws ERR_REQUEST_CANCELED when the user dismisses the sheet —
+      // silent (already logged at info level inside signInWithApple).
+      if (error?.code === "ERR_REQUEST_CANCELED") return;
+
+      const friendly =
+        error?.response?.data?.message ||
+        (error?.code === "ERR_REQUEST_NOT_HANDLED"
+          ? "Sign in with Apple isn't enabled for this build. Please update the app."
+          : error?.code === "ERR_REQUEST_FAILED"
+          ? "Apple couldn't process the request. Check your connection and try again."
+          : error?.code === "ERR_REQUEST_NOT_INTERACTIVE"
+          ? "Apple sign-in couldn't open. Please try again."
+          : error?.message ||
+            "Apple sign-in failed. Please try again.");
+      Alert.alert("Error", friendly);
+      // Sentry is only invoked from the inner HTTP catch (for 5xx/network)
+      // — Apple SDK errors are environment problems, not bugs in our code.
     } finally {
       setAppleLoading(false);
     }

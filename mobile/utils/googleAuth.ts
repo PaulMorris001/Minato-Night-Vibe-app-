@@ -1,9 +1,9 @@
 import { Platform } from "react-native";
 import { GoogleSignin } from "@react-native-google-signin/google-signin";
 import * as WebBrowser from "expo-web-browser";
-import * as Sentry from "@sentry/react-native";
 
 import { BASE_URL } from "@/constants/constants";
+import { remoteLog } from "@/utils/remoteLog";
 
 // Web client ID — used as the idToken audience so the SERVER can verify it
 // (server's GOOGLE_CLIENT_ID must equal this value).
@@ -16,13 +16,18 @@ export interface GoogleSignInResult {
 }
 
 // Show only enough of the client id to confirm which one is in play without
-// leaking the full credential into Sentry/console.
+// leaking the full credential into log lines.
 const idPreview = (s: string) =>
   s ? `${s.slice(0, 12)}…${s.slice(-20)}` : "EMPTY";
 
 /**
  * Configure native Google Sign-In. Safe to call multiple times. Must run
  * before `signInWithGoogle`.
+ *
+ * Logging policy: this is a low-importance setup call. We log the input
+ * shape to Render (helpful for diagnosing OAuth issues), but a configure
+ * failure is not Sentry-worthy on its own — the user only sees something
+ * if they then try to sign in.
  */
 export const configureGoogleSignIn = () => {
   const info = {
@@ -32,13 +37,7 @@ export const configureGoogleSignIn = () => {
     iosClientIdPresent: !!IOS_CLIENT_ID,
     iosClientIdPreview: idPreview(IOS_CLIENT_ID),
   };
-  console.log("[googleAuth] configureGoogleSignIn", info);
-  Sentry.addBreadcrumb({
-    category: "auth.google",
-    message: "configureGoogleSignIn",
-    level: "info",
-    data: info,
-  });
+  remoteLog("info", "google.configure", info);
 
   try {
     GoogleSignin.configure({
@@ -48,11 +47,9 @@ export const configureGoogleSignIn = () => {
       scopes: ["profile", "email"],
     });
   } catch (err: any) {
-    console.warn("[googleAuth] configure threw", err?.message);
-    Sentry.captureException(err, {
-      tags: { action: "google.configure" },
-      contexts: { google: info },
-    });
+    // Don't escalate to Sentry — caller will retry on next sign-in tap, and
+    // any actual user-facing failure is reported there.
+    remoteLog("warn", "google.configure threw", { ...info, message: err?.message }, err);
     throw err;
   }
 };
@@ -61,37 +58,31 @@ export const configureGoogleSignIn = () => {
  * Trigger the native Google account sheet and return the idToken for the
  * backend to verify. Throws on cancellation (caller treats a "cancel" message
  * as a silent dismissal).
+ *
+ * NOTE: the shipped binary's native config is broken on both platforms; in
+ * practice `signInWithGoogleWeb` below is what the app calls. This function
+ * is kept around for the eventual binary rebuild that fixes the placeholder
+ * iOS URL scheme and the missing Android OAuth client.
  */
 export const signInWithGoogle = async (): Promise<GoogleSignInResult> => {
   const startedAt = Date.now();
-  Sentry.addBreadcrumb({
-    category: "auth.google",
-    message: "signInWithGoogle: start",
-    level: "info",
-    data: {
-      platform: Platform.OS,
-      webClientIdPresent: !!WEB_CLIENT_ID,
-      iosClientIdPresent: !!IOS_CLIENT_ID,
-    },
-  });
-  console.log("[googleAuth] signInWithGoogle: start", {
+  remoteLog("info", "google.native.start", {
     platform: Platform.OS,
+    webClientIdPresent: !!WEB_CLIENT_ID,
+    iosClientIdPresent: !!IOS_CLIENT_ID,
   });
 
   // No-op on iOS; on Android ensures Play Services are available.
   try {
     await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
-    console.log("[googleAuth] hasPlayServices OK");
-    Sentry.addBreadcrumb({
-      category: "auth.google",
-      message: "hasPlayServices OK",
-      level: "info",
-    });
   } catch (err: any) {
-    console.warn("[googleAuth] hasPlayServices failed", err?.code, err?.message);
-    Sentry.captureException(err, {
-      tags: { action: "google.hasPlayServices", platform: Platform.OS },
-    });
+    // Play Services unavailable is an environment problem, not our bug.
+    remoteLog(
+      "warn",
+      "google.native.hasPlayServices failed",
+      { platform: Platform.OS, code: err?.code, message: err?.message },
+      err
+    );
     throw err;
   }
 
@@ -101,46 +92,29 @@ export const signInWithGoogle = async (): Promise<GoogleSignInResult> => {
   } catch (err: any) {
     // The native SDK error includes a numeric `code` on Android
     // (DEVELOPER_ERROR=10, SIGN_IN_CANCELLED=12501, NETWORK_ERROR=7,
-    // SIGN_IN_REQUIRED=4, INVALID_ACCOUNT=5). Capture all of it.
-    const data = {
-      platform: Platform.OS,
-      code: err?.code,
-      name: err?.name,
-      message: err?.message,
-      domain: err?.domain,
-      userInfo: err?.userInfo,
-      elapsedMs: Date.now() - startedAt,
-    };
-    console.warn("[googleAuth] GoogleSignin.signIn threw", data);
-    Sentry.addBreadcrumb({
-      category: "auth.google",
-      message: "GoogleSignin.signIn threw",
-      level: "error",
-      data,
-    });
-    Sentry.captureException(err, {
-      tags: { action: "google.signIn", platform: Platform.OS },
-      contexts: { google: data },
-    });
+    // SIGN_IN_REQUIRED=4, INVALID_ACCOUNT=5). Log to Render — the caller
+    // decides whether the user-facing failure is Sentry-worthy.
+    remoteLog(
+      "warn",
+      "google.native.signIn threw",
+      {
+        platform: Platform.OS,
+        code: err?.code,
+        name: err?.name,
+        message: err?.message,
+        elapsedMs: Date.now() - startedAt,
+      },
+      err
+    );
     throw err;
   }
 
-  const data = {
+  remoteLog("info", "google.native.signIn resolved", {
     platform: Platform.OS,
     type: response?.type,
-    hasData: !!response?.data,
     hasIdToken: !!response?.data?.idToken,
     idTokenLen: response?.data?.idToken?.length || 0,
-    hasUser: !!response?.data?.user,
-    userEmail: response?.data?.user?.email,
     elapsedMs: Date.now() - startedAt,
-  };
-  console.log("[googleAuth] GoogleSignin.signIn resolved", data);
-  Sentry.addBreadcrumb({
-    category: "auth.google",
-    message: "GoogleSignin.signIn resolved",
-    level: "info",
-    data,
   });
 
   if (response.type === "cancelled") {
@@ -148,10 +122,9 @@ export const signInWithGoogle = async (): Promise<GoogleSignInResult> => {
   }
   const idToken = response.data?.idToken;
   if (!idToken) {
-    Sentry.captureMessage("Google returned no ID token", {
-      level: "error",
-      tags: { action: "google.signIn.noToken", platform: Platform.OS },
-      contexts: { google: data },
+    remoteLog("error", "google.native.signIn returned no ID token", {
+      platform: Platform.OS,
+      type: response?.type,
     });
     throw new Error("No ID token returned from Google");
   }
@@ -229,38 +202,32 @@ export const signInWithGoogleWeb = async (): Promise<GoogleWebSignInResult> => {
   const startUrl = `${BASE_URL}/auth/google/web/start`;
   const returnUrl = "mobile://auth/google";
 
-  Sentry.addBreadcrumb({
-    category: "auth.google",
-    message: "signInWithGoogleWeb: start",
-    level: "info",
-    data: { platform: Platform.OS, startUrl, returnUrl },
+  remoteLog("info", "google.web.start", {
+    platform: Platform.OS,
+    startUrl,
+    returnUrl,
   });
-  console.log("[googleAuth.web] start", { platform: Platform.OS, startUrl, returnUrl });
 
   let result: WebBrowser.WebBrowserAuthSessionResult;
   try {
-    // `dismissButtonStyle: "cancel"` keeps the iOS sheet behaving like other
-    // OAuth sheets (Stripe Connect uses the same pattern in this app).
     result = await WebBrowser.openAuthSessionAsync(startUrl, returnUrl);
   } catch (err: any) {
-    console.warn("[googleAuth.web] openAuthSessionAsync threw", err?.message);
-    Sentry.captureException(err, {
-      tags: { action: "google.web.openAuth", platform: Platform.OS },
-    });
+    // WebBrowser failing to even present is unusual — re-throw and let the
+    // caller decide whether to escalate. Logged for visibility on Render.
+    remoteLog(
+      "error",
+      "google.web.openAuthSessionAsync threw",
+      { platform: Platform.OS, message: err?.message },
+      err
+    );
     throw err;
   }
 
-  const elapsedMs = Date.now() - startedAt;
-  console.log("[googleAuth.web] openAuthSessionAsync resolved", {
+  remoteLog("info", "google.web.openAuthSessionAsync resolved", {
+    platform: Platform.OS,
     type: result.type,
-    hasUrl: result.type === "success" && !!result.url,
-    elapsedMs,
-  });
-  Sentry.addBreadcrumb({
-    category: "auth.google",
-    message: "openAuthSessionAsync resolved",
-    level: "info",
-    data: { type: result.type, elapsedMs },
+    hasUrl: result.type === "success" && !!(result as any).url,
+    elapsedMs: Date.now() - startedAt,
   });
 
   if (result.type === "cancel" || result.type === "dismiss") {
@@ -272,25 +239,28 @@ export const signInWithGoogleWeb = async (): Promise<GoogleWebSignInResult> => {
 
   const params = parseCallbackQuery(result.url);
   if (params.error) {
+    // Server-known failure mode (suspended account, expired state). User-
+    // visible but expected — Render is the right destination, not Sentry.
+    remoteLog("warn", "google.web.callback returned error", {
+      platform: Platform.OS,
+      error: params.error,
+    });
     const msg =
       params.error === "account_suspended"
         ? "This account has been suspended for violating our content policy."
         : params.error === "invalid_state"
         ? "Sign-in session expired. Please try again."
         : `Google sign-in failed: ${params.error}`;
-    Sentry.captureMessage("Google web callback returned error", {
-      level: "error",
-      tags: { action: "google.web.callbackError", platform: Platform.OS },
-      contexts: { google: { error: params.error } },
-    });
     throw new Error(msg);
   }
 
   if (!params.token || !params.user) {
-    Sentry.captureMessage("Google web callback missing token/user", {
-      level: "error",
-      tags: { action: "google.web.malformedCallback", platform: Platform.OS },
-      contexts: { google: { params: Object.keys(params) } },
+    // Indicates a real bug in our server or a malformed redirect — error level
+    // so it stands out in Render. Caller will Sentry-capture the thrown error
+    // since the user sees a failure they can't recover from.
+    remoteLog("error", "google.web.callback missing token/user", {
+      platform: Platform.OS,
+      paramsPresent: Object.keys(params),
     });
     throw new Error("Sign-in succeeded but the response was malformed.");
   }
@@ -299,22 +269,20 @@ export const signInWithGoogleWeb = async (): Promise<GoogleWebSignInResult> => {
   try {
     user = JSON.parse(params.user);
   } catch (parseErr: any) {
-    Sentry.captureException(parseErr, {
-      tags: { action: "google.web.userParse", platform: Platform.OS },
-    });
+    remoteLog(
+      "error",
+      "google.web.user JSON.parse failed",
+      { platform: Platform.OS, message: parseErr?.message },
+      parseErr
+    );
     throw new Error("Sign-in response could not be parsed.");
   }
 
-  console.log("[googleAuth.web] success", {
+  remoteLog("info", "google.web.success", {
+    platform: Platform.OS,
     userId: user.id,
     isVendor: user.isVendor,
     elapsedMs: Date.now() - startedAt,
-  });
-  Sentry.addBreadcrumb({
-    category: "auth.google",
-    message: "signInWithGoogleWeb: success",
-    level: "info",
-    data: { userId: user.id, isVendor: user.isVendor },
   });
 
   return { token: params.token, user };

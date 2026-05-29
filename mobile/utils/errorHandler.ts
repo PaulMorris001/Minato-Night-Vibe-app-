@@ -1,47 +1,74 @@
-import * as Sentry from '@sentry/react-native';
+import { remoteLog } from "./remoteLog";
 
-// Global error handler - Sentry will automatically catch unhandled errors
-// But we can still add custom handling if needed
+/**
+ * Global JS error handling. Sentry's React Native SDK is initialized in
+ * `app/_layout.tsx`, where it auto-installs handlers for:
+ *   - unhandled JS exceptions
+ *   - unhandled promise rejections
+ *   - native crashes (iOS/Android)
+ *   - the React error boundary (via the `ErrorBoundary` component)
+ *
+ * Those are the "major errors/crashes" we WANT in Sentry. Everything else
+ * (console.warn lines, recoverable errors, status logs) goes to Render via
+ * `remoteLog`.
+ */
 export const setupGlobalErrorHandler = () => {
-  // Sentry automatically handles global errors when initialized
-  // No additional setup needed - Sentry.init() in _layout.tsx handles this
+  // Nothing extra to wire — Sentry.init() in _layout.tsx already attaches
+  // global error/promise-rejection handlers. Left as a hook for future use.
 };
 
-// Override console methods in production to send to Sentry
+/**
+ * Forward console.error and console.warn to Render (via `remoteLog`) in
+ * production builds, so we can see them in the server log stream.
+ *
+ * Why not Sentry? console.warn is used very liberally throughout RN and the
+ * libraries we depend on — forwarding every one to Sentry buries real errors
+ * in noise and burns the quota. Render's free log stream is the right place
+ * for those.
+ *
+ * Genuine crashes still reach Sentry through its global handlers; this only
+ * affects calls that came through `console.error` / `console.warn`.
+ */
 export const setupConsoleOverride = () => {
-  if (!__DEV__) {
-    const originalError = console.error;
-    const originalWarn = console.warn;
+  if (__DEV__) return; // dev keeps the native console behavior
 
-    console.error = (...args) => {
-      // Send console.error to Sentry
-      const message = args[0]?.toString() || 'Console Error';
-      const error = args[1] instanceof Error ? args[1] : new Error(message);
+  const originalError = console.error;
+  const originalWarn = console.warn;
 
-      Sentry.captureException(error, {
-        level: 'error',
-        contexts: {
-          console: {
-            args: args.map(arg => String(arg)),
-          }
-        }
-      });
+  console.error = (...args: any[]) => {
+    const message = stringifyFirstArg(args);
+    const err = args[1] instanceof Error ? args[1] : undefined;
+    remoteLog(
+      "error",
+      message,
+      { args: args.map((a) => safeString(a)) },
+      err
+    );
+    originalError(...args);
+  };
 
-      originalError(...args);
-    };
-
-    console.warn = (...args) => {
-      // Send console.warn to Sentry
-      Sentry.captureMessage(args[0]?.toString() || 'Console Warning', {
-        level: 'warning',
-        contexts: {
-          console: {
-            args: args.map(arg => String(arg)),
-          }
-        }
-      });
-
-      originalWarn(...args);
-    };
-  }
+  console.warn = (...args: any[]) => {
+    const message = stringifyFirstArg(args);
+    remoteLog("warn", message, { args: args.map((a) => safeString(a)) });
+    originalWarn(...args);
+  };
 };
+
+function stringifyFirstArg(args: any[]): string {
+  const first = args[0];
+  if (typeof first === "string") return first.slice(0, 200);
+  if (first instanceof Error) return first.message.slice(0, 200);
+  return safeString(first).slice(0, 200);
+}
+
+function safeString(v: any): string {
+  try {
+    if (v == null) return String(v);
+    if (typeof v === "string") return v;
+    if (typeof v === "number" || typeof v === "boolean") return String(v);
+    if (v instanceof Error) return `${v.name}: ${v.message}`;
+    return JSON.stringify(v);
+  } catch {
+    return "[unserializable]";
+  }
+}

@@ -22,6 +22,7 @@ import { BASE_URL } from "@/constants/constants";
 import { capitalize } from "@/libs/helpers";
 import { useAccount } from "@/contexts/AccountContext";
 import { registerForPushNotifications } from "@/utils/pushNotifications";
+import { remoteLog } from "@/utils/remoteLog";
 import { PosterBackground } from "@/components/auth/PosterBackground";
 import { SocialAuthButtons } from "@/components/auth/SocialAuthButtons";
 import {
@@ -51,18 +52,16 @@ export default function Login() {
       return;
     }
     setLoading(true);
+    remoteLog("info", "login attempt", { email });
     try {
-      Sentry.addBreadcrumb({
-        category: "auth",
-        message: "Login attempt",
-        level: "info",
-        data: { email },
-      });
       const res = await axios.post(`${BASE_URL}/login`, { email, password });
       const user = res.data.user;
       const token = res.data.token;
 
+      // setUser is cheap and only takes effect if Sentry later captures a
+      // crash — keep it so post-login exceptions are tied to the right user.
       Sentry.setUser({ id: user._id, email: user.email, username: user.username });
+      remoteLog("info", "login success", { userId: user._id, isVendor: user.isVendor });
 
       await SecureStore.setItemAsync("token", token);
       await SecureStore.setItemAsync("user", JSON.stringify(user));
@@ -77,18 +76,39 @@ export default function Login() {
         router.replace("/(tabs)/home");
       }
     } catch (error: any) {
-      Sentry.captureException(error, {
-        tags: { action: "login" },
-        contexts: {
-          login: { email, statusCode: error.response?.status },
-          response: { status: error.response?.status, data: error.response?.data },
+      const status = error.response?.status;
+      const isNetworkError =
+        error.code === "ECONNREFUSED" ||
+        error.code === "ENOTFOUND" ||
+        error.message?.includes("Network Error");
+      const isServerError = typeof status === "number" && status >= 500;
+      // Send to Sentry only when something is genuinely wrong (server 5xx or
+      // unreachable). 4xx is the server saying "wrong password / not found" —
+      // expected, log to Render only.
+      if (isServerError || isNetworkError) {
+        Sentry.captureException(error, {
+          tags: { action: "login", platform: "any" },
+          contexts: {
+            login: { email, statusCode: status },
+            response: { status, data: error.response?.data },
+          },
+        });
+      }
+      remoteLog(
+        isServerError || isNetworkError ? "error" : "warn",
+        "login failed",
+        {
+          email,
+          status,
+          code: error?.code,
+          message: error?.message,
+          serverMessage: error.response?.data?.message,
         },
-      });
+        error
+      );
 
       let msg = "Login failed. Please try again.";
-      const status = error.response?.status;
-      if (error.code === "ECONNREFUSED" || error.code === "ENOTFOUND")
-        msg = "Cannot connect to server.";
+      if (isNetworkError) msg = "Cannot connect to server.";
       else if (error.message?.includes("Network Error"))
         msg = "No internet connection.";
       else if (status === 401) msg = "Incorrect email or password.";
@@ -97,7 +117,7 @@ export default function Login() {
       else if (status === 403)
         msg = "Your account has been suspended. Contact Support@nvibez.com.";
       else if (status === 429) msg = "Too many attempts. Try again in a few minutes.";
-      else if (status >= 500) msg = "Server error. Try again later.";
+      else if (isServerError) msg = "Server error. Try again later.";
       else if (error.response?.data?.message) msg = error.response.data.message;
 
       Alert.alert("Login failed", msg);
