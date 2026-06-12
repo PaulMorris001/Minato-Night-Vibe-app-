@@ -422,14 +422,31 @@ export default function ChatScreen() {
 
   const hydrateReply = useCallback(
     (msg: Message): Message => {
-      const r = msg.replyTo;
-      if (r && !r.sender?.username) {
-        const full = messagesById.get(r._id);
+      // replyTo may arrive fully populated, as a doc whose sender is just an id,
+      // or (from an older backend) as a bare id string. Normalize all of these
+      // so the quote always shows the real author + content.
+      const r = msg.replyTo as (Message & { sender: any }) | string | undefined;
+      if (!r) return msg;
+      if (typeof r !== "string" && r.sender?.username) return msg; // already good
+
+      const replyId = typeof r === "string" ? r : r._id;
+
+      // Best: pull the full original from the loaded conversation (author + content).
+      if (replyId) {
+        const full = messagesById.get(replyId);
         if (full) return { ...msg, replyTo: full };
+      }
+
+      // Fallback: resolve just the author from the chat's participant list, so
+      // the quote shows who wrote it even when the original isn't loaded.
+      if (typeof r !== "string") {
+        const senderId = typeof r.sender === "string" ? r.sender : r.sender?._id;
+        const participant = chat?.participants.find((p) => p._id === senderId);
+        if (participant) return { ...msg, replyTo: { ...r, sender: participant } as Message };
       }
       return msg;
     },
-    [messagesById]
+    [messagesById, chat]
   );
 
   // Tap a quoted reply → scroll to (and briefly highlight) the original message.

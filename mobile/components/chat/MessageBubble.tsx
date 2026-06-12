@@ -78,9 +78,13 @@ interface MessageBubbleProps {
   isHighlighted?: boolean;
 }
 
-/** Short label for a quoted/replied message (handles non-text types). */
-export function replyPreviewLabel(msg: Pick<Message, "type" | "content">): string {
-  if (msg.content && msg.content.trim()) return msg.content;
+/**
+ * Short label for a quoted/replied message (handles non-text types, and the
+ * degraded case where replyTo arrived as a bare id / without content).
+ */
+export function replyPreviewLabel(msg: any): string {
+  if (!msg || typeof msg === "string") return "Message";
+  if (msg.content && String(msg.content).trim()) return msg.content;
   switch (msg.type) {
     case "image":
       return "📷 Photo";
@@ -89,7 +93,7 @@ export function replyPreviewLabel(msg: Pick<Message, "type" | "content">): strin
     case "guide":
       return "📖 Guide";
     default:
-      return "";
+      return "Message";
   }
 }
 
@@ -447,25 +451,34 @@ export default function MessageBubble({
       default:
         return (
           <View>
-            {message.replyTo && (
-              <TouchableOpacity
-                style={styles.replyContainer}
-                activeOpacity={0.7}
-                onPress={() => message.replyTo && onReplyPress?.(message.replyTo._id)}
-              >
-                <View style={styles.replyBar} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.replyUsername}>
-                    {message.replyTo.sender?._id === currentUserId
-                      ? "You"
-                      : message.replyTo.sender?.username || "Unknown"}
-                  </Text>
-                  <Text style={styles.replyText} numberOfLines={2}>
-                    {replyPreviewLabel(message.replyTo)}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            )}
+            {message.replyTo && (() => {
+              const rt: any = message.replyTo;
+              const isStringRef = typeof rt === "string";
+              const replyName =
+                !isStringRef && rt.sender?._id === currentUserId
+                  ? "You"
+                  : !isStringRef
+                  ? rt.sender?.username
+                  : undefined;
+              const replyId = isStringRef ? rt : rt._id;
+              return (
+                <TouchableOpacity
+                  style={styles.replyContainer}
+                  activeOpacity={0.7}
+                  onPress={() => replyId && onReplyPress?.(replyId)}
+                >
+                  <View style={styles.replyBar} />
+                  <View style={{ flex: 1 }}>
+                    {!!replyName && (
+                      <Text style={styles.replyUsername}>{replyName}</Text>
+                    )}
+                    <Text style={styles.replyText} numberOfLines={2}>
+                      {replyPreviewLabel(message.replyTo)}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              );
+            })()}
             <Text style={[styles.messageText, isOwnMessage ? styles.ownText : styles.otherText]}>
               {message.content}
             </Text>
