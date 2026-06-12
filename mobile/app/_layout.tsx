@@ -31,6 +31,7 @@ import {
 import * as SplashScreen from "expo-splash-screen";
 import * as NavigationBar from "expo-navigation-bar";
 import { PortalProvider } from "@gorhom/portal";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { AccountProvider } from "@/contexts/AccountContext";
 import { UnreadProvider } from "@/contexts/UnreadContext";
 import socketService from "@/services/socket.service";
@@ -346,24 +347,26 @@ export default Sentry.wrap(function RootLayout() {
   }
 
   return (
-    <ErrorBoundary>
-      <StripeProvider publishableKey={stripeKey}>
-        <AccountProvider>
-          <UnreadProvider>
-          <PortalProvider>
-            <StatusBar style="light" />
-            <Stack
-              screenOptions={{
-                headerShown: false,
-                contentStyle: {
-                  backgroundColor: theme.colors.dark.background,
-                },
-              }}
-            />
-          </PortalProvider>
-          </UnreadProvider>
-        </AccountProvider>
-      </StripeProvider>
-    </ErrorBoundary>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ErrorBoundary>
+        <StripeProvider publishableKey={stripeKey}>
+          <AccountProvider>
+            <UnreadProvider>
+            <PortalProvider>
+              <StatusBar style="light" />
+              <Stack
+                screenOptions={{
+                  headerShown: false,
+                  contentStyle: {
+                    backgroundColor: theme.colors.dark.background,
+                  },
+                }}
+              />
+            </PortalProvider>
+            </UnreadProvider>
+          </AccountProvider>
+        </StripeProvider>
+      </ErrorBoundary>
+    </GestureHandlerRootView>
   );
 });

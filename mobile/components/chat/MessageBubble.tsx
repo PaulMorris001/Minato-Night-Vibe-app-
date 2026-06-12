@@ -12,6 +12,16 @@ import { Image } from "expo-image";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+  runOnJS,
+  interpolate,
+  Extrapolation,
+} from "react-native-reanimated";
 import type { Message, MessageReaction } from "@/services/chat.service";
 import chatService from "@/services/chat.service";
 import { openUserProfile } from "@/utils/userNavigation";
@@ -45,6 +55,11 @@ function senderColor(seed: string): string {
   return SENDER_PALETTE[Math.abs(h) % SENDER_PALETTE.length];
 }
 
+// Swipe-to-reply tuning (WhatsApp-style): how far the bubble can slide and the
+// point past which releasing fires the reply action.
+const REPLY_MAX_SLIDE = 80;
+const REPLY_THRESHOLD = 52;
+
 interface MessageBubbleProps {
   message: Message;
   isOwnMessage: boolean;
@@ -54,6 +69,23 @@ interface MessageBubbleProps {
   currentUserId?: string;
   onImagePress?: (imageUrl: string) => void;
   onReactionsChanged?: (messageId: string, reactions: MessageReaction[]) => void;
+  /** Fired when the user swipes the message to reply/reference it. */
+  onReply?: (message: Message) => void;
+}
+
+/** Short label for a quoted/replied message (handles non-text types). */
+export function replyPreviewLabel(msg: Pick<Message, "type" | "content">): string {
+  if (msg.content && msg.content.trim()) return msg.content;
+  switch (msg.type) {
+    case "image":
+      return "📷 Photo";
+    case "event":
+      return "📅 Event";
+    case "guide":
+      return "📖 Guide";
+    default:
+      return "";
+  }
 }
 
 function formatTime(dateString: string) {
@@ -73,6 +105,7 @@ export default function MessageBubble({
   currentUserId,
   onImagePress,
   onReactionsChanged,
+  onReply,
 }: MessageBubbleProps) {
   const router = useRouter();
   const [pickerVisible, setPickerVisible] = useState(false);
@@ -101,6 +134,69 @@ export default function MessageBubble({
     }
     return Object.values(map);
   }, [reactions, currentUserId]);
+
+  // ---- Swipe-to-reply (WhatsApp-style) -------------------------------------
+  // A short right-swipe slides the bubble and, past a threshold, fires onReply.
+  // activeOffsetX / failOffsetY keep vertical list scrolling untouched.
+  const translateX = useSharedValue(0);
+  const reachedThreshold = useSharedValue(false);
+
+  const fireHaptic = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {});
+  };
+  const notifyReply = () => onReply?.(message);
+
+  const swipeGesture = useMemo(
+    () =>
+      Gesture.Pan()
+        .enabled(!!onReply && !message._id.startsWith("temp_"))
+        .activeOffsetX(12)
+        .failOffsetY([-14, 14])
+        .onUpdate((e) => {
+          "worklet";
+          const x = Math.min(Math.max(e.translationX, 0), REPLY_MAX_SLIDE);
+          translateX.value = x;
+          if (x >= REPLY_THRESHOLD && !reachedThreshold.value) {
+            reachedThreshold.value = true;
+            runOnJS(fireHaptic)();
+          } else if (x < REPLY_THRESHOLD && reachedThreshold.value) {
+            reachedThreshold.value = false;
+          }
+        })
+        .onEnd(() => {
+          "worklet";
+          if (translateX.value >= REPLY_THRESHOLD) {
+            runOnJS(notifyReply)();
+          }
+          translateX.value = withSpring(0, { damping: 18, stiffness: 220 });
+          reachedThreshold.value = false;
+        }),
+    // message identity is what matters for the reply payload
+    [message._id, onReply]
+  );
+
+  const rowSwipeStyle = useAnimatedStyle(() => ({
+    transform: [{ translateX: translateX.value }],
+  }));
+
+  const replyIconStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(
+      translateX.value,
+      [0, REPLY_THRESHOLD],
+      [0, 1],
+      Extrapolation.CLAMP
+    ),
+    transform: [
+      {
+        scale: interpolate(
+          translateX.value,
+          [0, REPLY_THRESHOLD],
+          [0.4, 1],
+          Extrapolation.CLAMP
+        ),
+      },
+    ],
+  }));
 
   const senderName = message.sender?.username || "";
   const senderInitial = senderName.charAt(0).toUpperCase() || "?";
@@ -338,10 +434,10 @@ export default function MessageBubble({
                 <View style={styles.replyBar} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.replyUsername}>
-                    {message.replyTo.sender.username}
+                    {message.replyTo.sender?.username || "Unknown"}
                   </Text>
                   <Text style={styles.replyText} numberOfLines={2}>
-                    {message.replyTo.content}
+                    {replyPreviewLabel(message.replyTo)}
                   </Text>
                 </View>
               </View>
@@ -398,126 +494,163 @@ export default function MessageBubble({
   const showAvatarSlot = !isOwnMessage && isGroup;
 
   return (
-    <View
-      style={[
-        styles.row,
-        rowAlign,
-        { marginBottom: groupedReactions.length > 0 ? 14 : 4 },
-      ]}
-    >
-      {showAvatarSlot && (
-        <View style={styles.avatarSlot}>
-          {showSender && (
-            <TouchableOpacity
-              activeOpacity={0.7}
-              onPress={() => openUserProfile(message.sender?._id)}
-            >
-              <Avatar
-                uri={message.sender.profilePicture}
-                name={senderName}
-                size={26}
-                bgColor={senderTint}
-              />
-            </TouchableOpacity>
-          )}
-        </View>
-      )}
-
-      <View style={styles.bubbleColumn}>
-        {isGroup && !isOwnMessage && showSender && (
-          <Text
-            style={[styles.senderLabel, { color: senderTint }]}
-            onPress={() => openUserProfile(message.sender?._id)}
-          >
-            {senderName}
-          </Text>
-        )}
-
-        <View style={{ position: "relative" }}>
-          {renderBubble()}
-
-          {/* Reactions chip */}
-          {groupedReactions.length > 0 && (
-            <View
-              style={[
-                styles.reactionsChip,
-                isOwnMessage ? { right: 6 } : { left: 6 },
-              ]}
-            >
-              {groupedReactions.map((r) => (
-                <TouchableOpacity
-                  key={r.emoji}
-                  onPress={() => handleToggleReaction(r.emoji)}
-                  activeOpacity={0.7}
-                  style={styles.reactionItem}
-                >
-                  <Text style={styles.reactionEmoji}>{r.emoji}</Text>
-                  {r.count > 1 && (
-                    <Text style={[styles.reactionCount, r.mine && { color: CH_PURPLE_SOFT }]}>
-                      {r.count}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-        </View>
-
-        {/* Time + status */}
-        <View
-          style={[
-            styles.timeRow,
-            isOwnMessage ? styles.timeRowEnd : styles.timeRowStart,
-          ]}
-        >
-          <Text style={styles.timeText}>{formatTime(message.createdAt)}</Text>
-          {isOwnMessage && (
-            <View style={{ marginLeft: 4, justifyContent: "center" }}>
-              {message.status === "sending" ? (
-                <Ionicons name="time-outline" size={12} color={CH_TEXT_MUTE} />
-              ) : message.status === "failed" ? (
-                <Ionicons name="alert-circle" size={13} color="#ef4444" />
-              ) : message.status === "read" || message.status === "delivered" ? (
-                <Ionicons
-                  name="checkmark-done"
-                  size={13}
-                  color={message.status === "read" ? CH_PURPLE_SOFT : CH_TEXT_MUTE}
-                />
-              ) : (
-                <Ionicons name="checkmark" size={13} color={CH_TEXT_MUTE} />
-              )}
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* Quick reaction picker */}
-      <Modal
-        visible={pickerVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setPickerVisible(false)}
+    <GestureDetector gesture={swipeGesture}>
+      <View
+        style={[
+          styles.swipeWrap,
+          { marginBottom: groupedReactions.length > 0 ? 14 : 4 },
+        ]}
       >
-        <Pressable style={styles.pickerOverlay} onPress={() => setPickerVisible(false)}>
-          <View style={styles.pickerPill}>
-            {QUICK_REACTIONS.map((e) => (
-              <TouchableOpacity
-                key={e}
-                style={styles.pickerEmoji}
-                onPress={() => handleToggleReaction(e)}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.pickerEmojiText}>{e}</Text>
-              </TouchableOpacity>
-            ))}
+        {/* Reply affordance — fades/scales in as the bubble slides right */}
+        <Animated.View
+          style={[styles.replyIconUnderlay, replyIconStyle]}
+          pointerEvents="none"
+        >
+          <View style={styles.replyIconCircle}>
+            <Ionicons name="arrow-undo" size={16} color={CH_PURPLE_SOFT} />
           </View>
-        </Pressable>
-      </Modal>
-    </View>
+        </Animated.View>
+
+        <Animated.View style={rowSwipeStyle}>
+          <View style={[styles.row, rowAlign]}>
+            {showAvatarSlot && (
+              <View style={styles.avatarSlot}>
+                {showSender && (
+                  <TouchableOpacity
+                    activeOpacity={0.7}
+                    onPress={() => openUserProfile(message.sender?._id)}
+                  >
+                    <Avatar
+                      uri={message.sender.profilePicture}
+                      name={senderName}
+                      size={26}
+                      bgColor={senderTint}
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+
+            <View style={styles.bubbleColumn}>
+              {isGroup && !isOwnMessage && showSender && (
+                <Text
+                  style={[styles.senderLabel, { color: senderTint }]}
+                  onPress={() => openUserProfile(message.sender?._id)}
+                >
+                  {senderName}
+                </Text>
+              )}
+
+              <View style={{ position: "relative" }}>
+                {renderBubble()}
+
+                {/* Reactions chip */}
+                {groupedReactions.length > 0 && (
+                  <View
+                    style={[
+                      styles.reactionsChip,
+                      isOwnMessage ? { right: 6 } : { left: 6 },
+                    ]}
+                  >
+                    {groupedReactions.map((r) => (
+                      <TouchableOpacity
+                        key={r.emoji}
+                        onPress={() => handleToggleReaction(r.emoji)}
+                        activeOpacity={0.7}
+                        style={styles.reactionItem}
+                      >
+                        <Text style={styles.reactionEmoji}>{r.emoji}</Text>
+                        {r.count > 1 && (
+                          <Text style={[styles.reactionCount, r.mine && { color: CH_PURPLE_SOFT }]}>
+                            {r.count}
+                          </Text>
+                        )}
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Time + status */}
+              <View
+                style={[
+                  styles.timeRow,
+                  isOwnMessage ? styles.timeRowEnd : styles.timeRowStart,
+                ]}
+              >
+                <Text style={styles.timeText}>{formatTime(message.createdAt)}</Text>
+                {isOwnMessage && (
+                  <View style={{ marginLeft: 4, justifyContent: "center" }}>
+                    {message.status === "sending" ? (
+                      <Ionicons name="time-outline" size={12} color={CH_TEXT_MUTE} />
+                    ) : message.status === "failed" ? (
+                      <Ionicons name="alert-circle" size={13} color="#ef4444" />
+                    ) : message.status === "read" || message.status === "delivered" ? (
+                      <Ionicons
+                        name="checkmark-done"
+                        size={13}
+                        color={message.status === "read" ? CH_PURPLE_SOFT : CH_TEXT_MUTE}
+                      />
+                    ) : (
+                      <Ionicons name="checkmark" size={13} color={CH_TEXT_MUTE} />
+                    )}
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Quick reaction picker */}
+            <Modal
+              visible={pickerVisible}
+              transparent
+              animationType="fade"
+              onRequestClose={() => setPickerVisible(false)}
+            >
+              <Pressable style={styles.pickerOverlay} onPress={() => setPickerVisible(false)}>
+                <View style={styles.pickerPill}>
+                  {QUICK_REACTIONS.map((e) => (
+                    <TouchableOpacity
+                      key={e}
+                      style={styles.pickerEmoji}
+                      onPress={() => handleToggleReaction(e)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.pickerEmojiText}>{e}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </Pressable>
+            </Modal>
+          </View>
+        </Animated.View>
+      </View>
+    </GestureDetector>
   );
 }
 
 const styles = StyleSheet.create({
+  swipeWrap: {
+    position: "relative",
+    justifyContent: "center",
+  },
+  replyIconUnderlay: {
+    position: "absolute",
+    left: 18,
+    top: 0,
+    bottom: 0,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  replyIconCircle: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(168,85,247,0.18)",
+    borderWidth: 1,
+    borderColor: "rgba(192,132,252,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
   row: {
     flexDirection: "row",
     alignItems: "flex-end",

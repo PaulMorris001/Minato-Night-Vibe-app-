@@ -1,9 +1,13 @@
 import React, { useState, useRef } from "react";
-import { View, TextInput, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, Platform } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import type { Message } from "@/services/chat.service";
+import { replyPreviewLabel } from "@/components/chat/MessageBubble";
+import { capitalize } from "@/libs/helpers";
 
 const CH_TEXT = "#F4EEFF";
+const CH_TEXT_DIM = "rgba(244,238,255,0.62)";
 const CH_TEXT_MUTE = "rgba(244,238,255,0.42)";
 const CH_PURPLE_SOFT = "#C084FC";
 const CH_STROKE = "rgba(255,255,255,0.08)";
@@ -14,6 +18,10 @@ interface ChatInputProps {
   onTypingChange?: (isTyping: boolean) => void;
   placeholder?: string;
   disabled?: boolean;
+  /** Message being replied to, shown as a preview strip above the input. */
+  replyingTo?: Message | null;
+  onCancelReply?: () => void;
+  currentUserId?: string;
 }
 
 export default function ChatInput({
@@ -22,6 +30,9 @@ export default function ChatInput({
   onTypingChange,
   placeholder = "Type a message…",
   disabled = false,
+  replyingTo,
+  onCancelReply,
+  currentUserId,
 }: ChatInputProps) {
   const [message, setMessage] = useState("");
   const typingTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -61,8 +72,32 @@ export default function ChatInput({
     }
   };
 
+  const isOwnReply = !!replyingTo && replyingTo.sender?._id === currentUserId;
+
   return (
     <View style={styles.outer}>
+      {replyingTo && (
+        <View style={styles.replyPreview}>
+          <View style={styles.replyBar} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.replyName} numberOfLines={1}>
+              Replying to{" "}
+              {isOwnReply ? "yourself" : capitalize(replyingTo.sender?.username || "user")}
+            </Text>
+            <Text style={styles.replyText} numberOfLines={1}>
+              {replyPreviewLabel(replyingTo)}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={onCancelReply}
+            hitSlop={10}
+            activeOpacity={0.7}
+            style={styles.replyClose}
+          >
+            <Ionicons name="close" size={16} color={CH_TEXT_MUTE} />
+          </TouchableOpacity>
+        </View>
+      )}
       <View style={styles.container}>
         <View style={styles.inputPill}>
           <TextInput
@@ -115,6 +150,44 @@ export default function ChatInput({
 const styles = StyleSheet.create({
   outer: {
     backgroundColor: "#0B0613",
+  },
+  replyPreview: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginHorizontal: 14,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: CH_STROKE,
+  },
+  replyBar: {
+    width: 3,
+    alignSelf: "stretch",
+    borderRadius: 2,
+    backgroundColor: CH_PURPLE_SOFT,
+  },
+  replyName: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 11.5,
+    color: CH_PURPLE_SOFT,
+    marginBottom: 1,
+  },
+  replyText: {
+    fontFamily: "Outfit_500Medium",
+    fontSize: 12.5,
+    color: CH_TEXT_DIM,
+  },
+  replyClose: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.06)",
   },
   container: {
     flexDirection: "row",

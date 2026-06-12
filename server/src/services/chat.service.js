@@ -176,7 +176,10 @@ class ChatService {
 
     // Populate message data
     await message.populate('sender', 'username email profilePicture');
-    await message.populate('replyTo');
+    await message.populate({
+      path: 'replyTo',
+      populate: { path: 'sender', select: 'username profilePicture' }
+    });
     await message.populate('event');
     await message.populate('guide', 'title authorName city cityState topic price');
 
@@ -236,7 +239,10 @@ class ChatService {
       .skip(skip)
       .limit(limit)
       .populate('sender', 'username email profilePicture')
-      .populate('replyTo')
+      .populate({
+        path: 'replyTo',
+        populate: { path: 'sender', select: 'username profilePicture' }
+      })
       .populate('event')
       .populate('guide', 'title authorName city cityState topic price')
       .populate('reactions.user', 'username profilePicture');

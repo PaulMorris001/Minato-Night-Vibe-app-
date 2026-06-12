@@ -14,6 +14,7 @@ import {
   ScrollView,
   Pressable,
   Switch,
+  BackHandler,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -55,6 +56,7 @@ export default function ChatScreen() {
   const [editGroupName, setEditGroupName] = useState("");
   const [editGroupImage, setEditGroupImage] = useState<string | null>(null);
   const [savingGroup, setSavingGroup] = useState(false);
+  const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   const loadCurrentUser = async () => {
@@ -95,6 +97,27 @@ export default function ChatScreen() {
   useEffect(() => {
     loadCurrentUser();
   }, []);
+
+  // Leaving a chat should always land on the chats list. When the chat was
+  // opened from a push notification (cold start), there's no back stack, so
+  // router.back() would silently no-op — fall back to /messages in that case.
+  const handleBack = useCallback(() => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace("/messages");
+    }
+  }, []);
+
+  // Android hardware back button: route to the chats list too (otherwise a
+  // notification cold-start would exit the app instead of opening the inbox).
+  useEffect(() => {
+    const sub = BackHandler.addEventListener("hardwareBackPress", () => {
+      handleBack();
+      return true;
+    });
+    return () => sub.remove();
+  }, [handleBack]);
 
   useEffect(() => {
     if (!id || !currentUserId) return;
@@ -170,6 +193,11 @@ export default function ChatScreen() {
     const senderProfile = chat?.participants.find((p) => p._id === currentUserId)
       ?? { _id: currentUserId, username: "", email: "" };
 
+    // Capture and clear the reply target up front so the composer resets
+    // immediately and a follow-up message isn't accidentally threaded.
+    const replyTarget = replyingTo;
+    setReplyingTo(null);
+
     const tempMessage: Message = {
       _id: tempId,
       chat: id as string,
@@ -179,6 +207,7 @@ export default function ChatScreen() {
       status: "sending",
       isDeleted: false,
       isEdited: false,
+      replyTo: replyTarget ?? undefined,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -191,6 +220,7 @@ export default function ChatScreen() {
       const newMessage = await chatService.sendMessage(id as string, {
         type: "text",
         content: content.trim(),
+        replyTo: replyTarget?._id,
       });
       setMessages((prev) => {
         if (prev.some((m) => m._id === newMessage._id)) {
@@ -411,6 +441,7 @@ export default function ChatScreen() {
         currentUserId={currentUserId}
         onImagePress={(url) => setSelectedImage(url)}
         onReactionsChanged={handleReactionsChanged}
+        onReply={setReplyingTo}
       />
     );
   };
@@ -454,7 +485,7 @@ export default function ChatScreen() {
           <View style={styles.header}>
             <TouchableOpacity
               style={styles.iconBtn}
-              onPress={() => router.back()}
+              onPress={handleBack}
               activeOpacity={0.7}
             >
               <Ionicons name="chevron-back" size={18} color={CH_TEXT} />
@@ -576,6 +607,9 @@ export default function ChatScreen() {
             onImagePick={handleImagePick}
             onTypingChange={(isTyping) => socketService.sendTyping(id, isTyping)}
             disabled={sending}
+            replyingTo={replyingTo}
+            onCancelReply={() => setReplyingTo(null)}
+            currentUserId={currentUserId}
           />
         </KeyboardAvoidingView>
       </SafeAreaView>
