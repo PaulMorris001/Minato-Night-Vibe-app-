@@ -28,7 +28,7 @@ import { Avatar } from "@/components/shared/Avatar";
 
 export default function TabsLayout() {
   const { activeAccount } = useAccount();
-  const { totalUnread } = useUnread();
+  const { totalUnread, notifUnread } = useUnread();
   const isGlassAvailable = Platform.OS === "ios" && isLiquidGlassAvailable();
   const segments = useSegments();
   const currentTab = segments[1]; // Gets the current tab name (home, vendors, bests, etc.)
@@ -304,6 +304,13 @@ export default function TabsLayout() {
                 style={styles.ticketGradient}
               >
                 <Ionicons name="notifications-outline" size={20} color="#fff" />
+                {notifUnread > 0 && (
+                  <View style={styles.unreadBadge}>
+                    <Text style={styles.unreadBadgeText}>
+                      {notifUnread > 99 ? "99+" : notifUnread}
+                    </Text>
+                  </View>
+                )}
               </LinearGradient>
             </TouchableOpacity>
             <TouchableOpacity

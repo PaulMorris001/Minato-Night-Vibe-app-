@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,7 @@ import { BASE_URL } from "@/constants/constants";
 import { Fonts } from "@/constants/fonts";
 import { scaleFontSize, getResponsivePadding } from "@/utils/responsive";
 import NotificationItemSkeleton from "@/components/skeletons/NotificationItemSkeleton";
-import * as Notifications from "expo-notifications";
+import { useUnread } from "@/contexts/UnreadContext";
 
 interface Notification {
   _id: string;
@@ -55,6 +55,7 @@ function notifIcon(type: string) {
 
 export default function NotificationsScreen() {
   const router = useRouter();
+  const { refreshUnread } = useUnread();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -85,7 +86,7 @@ export default function NotificationsScreen() {
         headers: { Authorization: `Bearer ${token}` },
       });
       setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-      Notifications.setBadgeCountAsync(0);
+      refreshUnread();
     } catch {}
   };
 
@@ -99,16 +100,19 @@ export default function NotificationsScreen() {
       setNotifications((prev) =>
         prev.map((n) => (n._id === id ? { ...n, read: true } : n))
       );
+      refreshUnread();
     } catch {}
   };
 
-  useFocusEffect(useCallback(() => { fetchNotifications(); }, []));
+  // Re-fetch the list and reconcile the global counts/badge on every focus.
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+      refreshUnread();
+    }, [refreshUnread])
+  );
 
   const unreadCount = notifications.filter((n) => !n.read).length;
-
-  useEffect(() => {
-    Notifications.setBadgeCountAsync(unreadCount);
-  }, [unreadCount]);
 
   const handleNotifPress = (item: Notification) => {
     markRead(item._id);

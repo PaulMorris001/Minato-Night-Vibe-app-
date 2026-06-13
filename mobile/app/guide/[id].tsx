@@ -368,7 +368,14 @@ export default function GuideDetailPage() {
                     <View style={styles.rankBadge}>
                       <Text style={styles.rankText}>#{section.rank}</Text>
                     </View>
-                    <Text style={styles.sectionTitle}>{section.title}</Text>
+                    {/* flex:1 + numberOfLines so a long title wraps/truncates
+                        inside the card instead of overflowing past its edge. */}
+                    <Text
+                      style={[styles.sectionTitle, { flex: 1, marginBottom: 0 }]}
+                      numberOfLines={2}
+                    >
+                      {section.title}
+                    </Text>
                   </View>
                   {!!section.image && (
                     <Image source={{ uri: section.image }} style={styles.sectionImage} contentFit="cover" />

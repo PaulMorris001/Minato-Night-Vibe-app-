@@ -889,7 +889,7 @@ export default function EventDetailsPage() {
 
           {/* Title + meta */}
           <View style={styles.heroBottom}>
-            <Text style={styles.heroTitle}>{event.title}</Text>
+            <Text style={styles.heroTitle} numberOfLines={3}>{event.title}</Text>
             <View style={styles.heroMetaRow}>
               <Ionicons name="calendar-outline" size={14} color={AU.purpleSoft} />
               <Text style={styles.heroMetaText}>{dateLine}</Text>

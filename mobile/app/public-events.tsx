@@ -355,16 +355,16 @@ export default function PublicEventsPage() {
       const ext = feedItem.data;
       const priceLine =
         ext.priceMin == null && ext.priceMax == null
-          ? "See on Ticketmaster"
+          ? "See tickets"
           : ext.priceMin != null && ext.priceMax != null && ext.priceMin !== ext.priceMax
           ? `$${Math.round(ext.priceMin)}–$${Math.round(ext.priceMax)}`
           : `From $${Math.round((ext.priceMin ?? ext.priceMax) as number)}`;
       const moreDates = ext.additionalDates ?? 0;
 
       // Same outer shape, poster, body, footer layout as the native renderCard
-      // below — only swaps in a "Ticketmaster" tag pill and a "Get tickets" CTA
-      // that opens the detail screen (the floating CTA in the detail screen
-      // is what actually sends users to Ticketmaster).
+      // below — only swaps in a "Get tickets" CTA that opens the detail screen
+      // (the floating CTA in the detail screen is what actually sends users to
+      // the external provider).
       return (
         <TouchableOpacity
           style={styles.card}
@@ -390,13 +390,6 @@ export default function PublicEventsPage() {
               colors={["transparent", "rgba(11,6,19,0.35)"]}
               style={StyleSheet.absoluteFill}
             />
-
-            {/* Source pill replaces the native city tag */}
-            <View style={[styles.tagPill, { backgroundColor: "#026CDF" }]}>
-              <Text style={styles.tagPillText} numberOfLines={1}>
-                TICKETMASTER
-              </Text>
-            </View>
           </View>
 
           <View style={styles.cardBody}>

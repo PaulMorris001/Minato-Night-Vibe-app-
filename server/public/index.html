@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CityVibe — Discover nightlife & live events near you</title>
+  <title>CityVibe — Plan together. Experience more.</title>
   <meta
     name="description"
-    content="CityVibe is a consumer nightlife and live-event discovery app. Find events, venues and things to do in your city, plan the night with friends, and get tickets through trusted partners."
+    content="CityVibe is your AI-powered guide to the best events, venues, and experiences in your city — designed to help you discover, coordinate, and book everything in one place."
   />
   <meta name="theme-color" content="#0B0613" />
   <link rel="icon" type="image/png" href="/logo.png" />
@@ -142,6 +142,11 @@
       font-size: clamp(17px, 2.2vw, 20px);
       color: var(--dim);
       max-width: 580px;
+    }
+    .hero p.support {
+      font-size: 16px;
+      color: var(--mute);
+      margin-top: 16px;
     }
     .cta-row {
       display: flex;
@@ -322,17 +327,29 @@
 
     <!-- HERO -->
     <div class="hero">
-      <span class="eyebrow"><span class="pulse"></span> Nightlife &amp; live-event discovery</span>
-      <h1>Find your city's<br /><span class="gradient-text">best nights out.</span></h1>
+      <span class="eyebrow"><span class="pulse"></span> AI-powered event discovery &amp; planning</span>
+      <h1>Plan together.<br /><span class="gradient-text">Experience more.</span></h1>
       <p>
-        CityVibe helps you discover live events, venues and nightlife happening
-        around you — then plan the night with friends and grab tickets in a few taps.
+        CityVibe is your AI-powered guide to the best events, venues, and experiences in
+        your city — designed to help you discover, coordinate, and book everything in one place.
+      </p>
+      <p class="support">
+        Stop jumping between apps and group chats just to make plans. CityVibe brings your
+        friends, your city, and your next experience together — with personalized
+        recommendations that get smarter every time you use it.
       </p>
       <div class="cta-row">
-        <a class="btn btn-primary" href="mailto:Support@nvibez.com?subject=CityVibe%20early%20access">
-          Request early access →
+        <a class="btn btn-primary" href="#" aria-label="Download on the App Store">
+          Download on the App Store
         </a>
-        <a class="btn btn-ghost" href="#what">See what's inside</a>
+        <a
+          class="btn btn-ghost"
+          href="https://play.google.com/store/apps/details?id=com.obito.cityvibe"
+          target="_blank"
+          rel="noopener"
+        >
+          Get it on Google Play
+        </a>
       </div>
       <div class="vibes">
         <span class="vibe">🎤 Concerts</span>
@@ -372,36 +389,36 @@
           <div class="ico">🎟️</div>
           <h3>Get tickets</h3>
           <p>
-            For ticketed events, CityVibe sends you straight to the official ticketing
-            partner to complete your purchase securely — no resale, no markup.
+            Buy tickets to CityVibe events with secure in-app checkout — and for events
+            from partners like Ticketmaster, we link you straight to their official page.
           </p>
         </div>
       </div>
     </section>
 
-    <!-- TICKETS / PARTNERS -->
+    <!-- TICKETS & DISCOVERY -->
     <section id="tickets">
       <div class="panel">
-        <div class="section-label">Discovery → Tickets</div>
-        <h2>We help people find live events. Partners handle the sale.</h2>
+        <div class="section-label">Tickets &amp; discovery</div>
+        <h2>Buy tickets in CityVibe — and discover everything else, too.</h2>
         <p class="lead">
-          CityVibe is a discovery platform, not a ticket seller. When you find a live
-          event you love, we hand you off to a trusted ticketing partner such as
-          <strong>Ticketmaster</strong> to complete your purchase on their site — the
-          official source, every time.
+          For events on CityVibe, you buy your ticket right in the app with secure
+          checkout — fast, simple, all in one place. We also bring in live events from
+          trusted partners like <strong>Ticketmaster</strong>, so your feed shows
+          everything happening around you; for those, we link you straight to the partner
+          to finish the purchase on their official page.
         </p>
         <div class="flow">
           <div class="flow-step"><span class="n">1</span> Discover an event in CityVibe</div>
           <span class="arrow">→</span>
           <div class="flow-step"><span class="n">2</span> Tap “Get Tickets”</div>
           <span class="arrow">→</span>
-          <div class="flow-step"><span class="n">3</span> Complete checkout on the partner's site</div>
+          <div class="flow-step"><span class="n">3</span> Pay in-app, or finish on the partner's site</div>
         </div>
         <p class="note">
-          CityVibe never processes, resells or marks up tickets, and we don't deal in
-          presale codes. Eligible live events surface in your feed with a partner badge,
-          and every “Get Tickets” action links directly to that partner's official
-          event page so the purchase is completed there.
+          Tickets for CityVibe events are sold and processed securely in the app. External
+          events appear right alongside them in your feed, and their “Get Tickets” action
+          opens the partner's official event page to complete the purchase there.
         </p>
       </div>
     </section>

@@ -309,7 +309,10 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: "60%",
+    // Tall enough that the bottom-anchored content (incl. the 2-line title)
+    // always sits over the dark zone — on narrow screens the title wraps more
+    // and a shorter gradient pushed it up onto the bright image.
+    height: "72%",
     justifyContent: "flex-end",
   },
   eventCardContent: {

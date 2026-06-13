@@ -1,68 +1,121 @@
-import React, { createContext, useContext, useEffect, useRef, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from "react";
+import { AppState } from "react-native";
 import * as SecureStore from "expo-secure-store";
+import * as Notifications from "expo-notifications";
 import { BASE_URL } from "@/constants/constants";
 import socketService from "@/services/socket.service";
 
 interface UnreadContextType {
+  /** Unread chat messages — drives the chat tab badge. */
   totalUnread: number;
+  /** Unread in-app notifications — drives the notifications surfaces. */
+  notifUnread: number;
+  /** Force a re-fetch of both counts (call after marking things read). */
   refreshUnread: () => void;
 }
 
-const UnreadContext = createContext<UnreadContextType>({ totalUnread: 0, refreshUnread: () => {} });
+const UnreadContext = createContext<UnreadContextType>({
+  totalUnread: 0,
+  notifUnread: 0,
+  refreshUnread: () => {},
+});
 
 export function UnreadProvider({ children }: { children: React.ReactNode }) {
-  const [totalUnread, setTotalUnread] = useState(0);
+  const [chatUnread, setChatUnread] = useState(0);
+  const [notifUnread, setNotifUnread] = useState(0);
   const currentUserIdRef = useRef<string | null>(null);
+  const chatTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const refreshUnread = async () => {
+  const getAuth = useCallback(async () => {
+    const token = await SecureStore.getItemAsync("token");
+    const userJson = await SecureStore.getItemAsync("user");
+    if (!token || !userJson) return null;
+    const user = JSON.parse(userJson);
+    currentUserIdRef.current = user.id;
+    return { token, userId: user.id as string };
+  }, []);
+
+  // The counts are always read from the server (the source of truth) rather
+  // than guessed optimistically — that's what kept drifting out of sync.
+  const refreshChats = useCallback(async () => {
     try {
-      const token = await SecureStore.getItemAsync("token");
-      const userJson = await SecureStore.getItemAsync("user");
-      if (!token || !userJson) return;
-
-      const user = JSON.parse(userJson);
-      currentUserIdRef.current = user.id;
-
+      const auth = await getAuth();
+      if (!auth) return;
       const res = await fetch(`${BASE_URL}/chats`, {
-        headers: { Authorization: `Bearer ${token}` },
+        headers: { Authorization: `Bearer ${auth.token}` },
       });
       if (!res.ok) return;
       const data = await res.json();
       const chats: any[] = data.chats || [];
-
       const total = chats.reduce((sum, chat) => {
         const unreadObj = (chat.unreadCount as Record<string, number>) || {};
-        return sum + (unreadObj[user.id] || 0);
+        return sum + (unreadObj[auth.userId] || 0);
       }, 0);
-
-      setTotalUnread(total);
+      setChatUnread(total);
     } catch {}
-  };
+  }, [getAuth]);
+
+  const refreshNotifs = useCallback(async () => {
+    try {
+      const auth = await getAuth();
+      if (!auth) return;
+      const res = await fetch(`${BASE_URL}/notifications`, {
+        headers: { Authorization: `Bearer ${auth.token}` },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const notifs: any[] = data.notifications || [];
+      setNotifUnread(notifs.filter((n) => !n.read).length);
+    } catch {}
+  }, [getAuth]);
+
+  const refreshUnread = useCallback(() => {
+    refreshChats();
+    refreshNotifs();
+  }, [refreshChats, refreshNotifs]);
+
+  // Coalesce bursts of incoming messages into a single server read.
+  const scheduleChatRefresh = useCallback(() => {
+    if (chatTimer.current) clearTimeout(chatTimer.current);
+    chatTimer.current = setTimeout(refreshChats, 600);
+  }, [refreshChats]);
+
+  // App icon badge = unread chats + unread notifications. This context is the
+  // single writer so the badge can't be left stale by an individual screen.
+  useEffect(() => {
+    Notifications.setBadgeCountAsync(chatUnread + notifUnread).catch(() => {});
+  }, [chatUnread, notifUnread]);
 
   useEffect(() => {
     refreshUnread();
 
-    const handleNewMessage = (message: any) => {
-      if (message.sender?._id !== currentUserIdRef.current) {
-        setTotalUnread(n => n + 1);
-      }
-    };
+    // NOTE: socketService.on takes (id, eventsObject). The previous version
+    // passed a bare function, so the listeners never fired and the chat badge
+    // froze at its launch value.
+    socketService.on("unread-context", {
+      onNewMessage: (message: any) => {
+        if (message?.sender?._id !== currentUserIdRef.current) scheduleChatRefresh();
+      },
+      onMessageRead: () => scheduleChatRefresh(),
+      onEventInvite: () => refreshNotifs(),
+      onFollowNew: () => refreshNotifs(),
+    });
 
-    const handleRead = () => {
-      refreshUnread();
-    };
-
-    socketService.on("message:new", handleNewMessage, "unread-context");
-    socketService.on("message:read", handleRead, "unread-context-read");
+    // Reconcile whenever the app returns to the foreground (covers pushes that
+    // arrived while backgrounded, since our pushes don't carry a badge count).
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshUnread();
+    });
 
     return () => {
-      socketService.off("message:new", "unread-context");
-      socketService.off("message:read", "unread-context-read");
+      socketService.off("unread-context");
+      sub.remove();
+      if (chatTimer.current) clearTimeout(chatTimer.current);
     };
-  }, []);
+  }, [refreshUnread, refreshNotifs, scheduleChatRefresh]);
 
   return (
-    <UnreadContext.Provider value={{ totalUnread, refreshUnread }}>
+    <UnreadContext.Provider value={{ totalUnread: chatUnread, notifUnread, refreshUnread }}>
       {children}
     </UnreadContext.Provider>
   );

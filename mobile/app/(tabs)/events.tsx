@@ -675,7 +675,7 @@ export default function EventsPage() {
 
         <View style={styles.eventContent}>
           <View style={styles.eventTitleRow}>
-            <Text style={styles.eventTitle}>{event.title}</Text>
+            <Text style={styles.eventTitle} numberOfLines={2}>{event.title}</Text>
             <View style={styles.privateBadge}>
               <Ionicons name="lock-closed-outline" size={12} color="#a855f7" />
               <Text style={styles.privateBadgeText}>PRIVATE</Text>

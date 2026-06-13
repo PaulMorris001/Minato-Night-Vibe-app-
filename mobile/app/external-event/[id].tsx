@@ -32,7 +32,7 @@ import { externalEventService, ExternalEvent } from "@/services/externalEvent.se
  *   - No RSVP / share / group chat / favorite (we're a referrer here)
  *   - No purchase sheet — the floating CTA opens the provider checkout in
  *     an in-app browser sheet
- *   - A provider chip ("TICKETMASTER") replaces the native PUBLIC / PRIVATE chip
+ *   - No PUBLIC / PRIVATE chip (these are third-party listings)
  *
  * Most styling is copy-pasted from the native screen so the design tokens
  * stay in sync. If the native screen evolves, mirror changes here too.
@@ -240,14 +240,6 @@ export default function ExternalEventDetail() {
 
           {/* Chip row */}
           <View style={styles.chipRow}>
-            <View
-              style={[
-                styles.chip,
-                { backgroundColor: sourceMeta.chipBg, borderColor: sourceMeta.chipBorder },
-              ]}
-            >
-              <Text style={[styles.chipText, { color: "#fff" }]}>{sourceMeta.label}</Text>
-            </View>
             {priceLine && (
               <View style={[styles.chip, styles.chipDark]}>
                 <Text style={[styles.chipText, { color: AU.text }]}>

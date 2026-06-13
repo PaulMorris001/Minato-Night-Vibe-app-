@@ -126,9 +126,17 @@ export default function SettingsScreen() {
       return;
     }
 
-    // Let the layout useEffects handle navigation after context updates —
-    // calling router.replace() here too causes double-navigation that corrupts the tab state.
+    const switchingToClient = activeAccount === "vendor";
     switchAccount();
+
+    // client → vendor is handled by the tabs layout effect, so we let that
+    // navigate (adding one here too would double-navigate). But the vendor
+    // layout intentionally suppresses its redirect while settings is open, so
+    // for vendor → client we navigate to the client side ourselves — otherwise
+    // the switch doesn't take effect until you leave settings.
+    if (switchingToClient) {
+      router.replace("/(tabs)/home");
+    }
   };
 
   const handleSaveProfile = async () => {

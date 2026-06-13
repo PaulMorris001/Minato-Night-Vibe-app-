@@ -9,26 +9,16 @@ import { scaleFontSize } from "@/utils/responsive";
 import type { ExternalEvent } from "@/services/externalEvent.service";
 
 /**
- * Card for events ingested from third-party providers (Ticketmaster etc).
+ * Card for events ingested from third-party providers.
  *
  * Visual language mirrors PublicEventCard so external events sit naturally
- * in a mixed feed — but with two key differences:
- *
- *   1. A provider badge in the top-left so users know what they're tapping.
- *   2. The CTA opens the provider's checkout in an in-app browser instead
- *      of the Stripe sheet. Tapping anywhere on the card does the same.
+ * in a mixed feed — the only functional difference is that the CTA opens the
+ * provider's checkout in an in-app browser instead of the Stripe sheet, and
+ * tapping anywhere on the card does the same.
  *
  * No favorites / RSVP / "Your Event" states — we're a referrer here, not
  * the merchant of record, so the in-app actions don't apply.
  */
-
-const SOURCE_META: Record<
-  ExternalEvent["source"],
-  { label: string; bg: string }
-> = {
-  ticketmaster: { label: "Ticketmaster", bg: "#026CDF" },
-  bandsintown: { label: "Bandsintown", bg: "#00CEC8" },
-};
 
 interface ExternalEventCardProps {
   event: ExternalEvent;
@@ -47,11 +37,10 @@ function formatPriceLine(event: ExternalEvent): string | null {
 
 export default function ExternalEventCard({ event, style }: ExternalEventCardProps) {
   const router = useRouter();
-  const sourceMeta = SOURCE_META[event.source] ?? { label: event.source, bg: "#374151" };
   const priceLine = formatPriceLine(event);
 
   // Card tap → detail screen (NOT the provider URL). Only the explicit
-  // "Get Tickets" button in the detail screen sends users out to Ticketmaster.
+  // "Get Tickets" button in the detail screen sends users out to the provider.
   const openDetail = () => router.push(`/external-event/${event._id}` as any);
 
   return (
@@ -77,11 +66,6 @@ export default function ExternalEventCard({ event, style }: ExternalEventCardPro
             <Ionicons name="calendar" size={48} color="rgba(255,255,255,0.5)" />
           </LinearGradient>
         )}
-
-        {/* Source badge — top-left */}
-        <View style={[styles.sourceBadge, { backgroundColor: sourceMeta.bg }]}>
-          <Text style={styles.sourceBadgeText}>{sourceMeta.label}</Text>
-        </View>
 
         {/* External-link indicator — top-right (mirrors heart position in PublicEventCard) */}
         <View style={styles.externalIndicator}>
@@ -189,24 +173,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  sourceBadge: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    zIndex: 10,
-    // Subtle white border so the pill stays legible on busy images
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: "rgba(255,255,255,0.35)",
-  },
-  sourceBadgeText: {
-    fontSize: scaleFontSize(11),
-    fontFamily: Fonts.bold,
-    color: "#fff",
-    letterSpacing: 0.5,
-  },
   externalIndicator: {
     position: "absolute",
     top: 12,
@@ -224,7 +190,9 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    height: "60%",
+    // Tall enough that the bottom-anchored content (incl. the 2-line title)
+    // stays over the dark zone on narrow screens where the title wraps more.
+    height: "72%",
     justifyContent: "flex-end",
   },
   eventCardContent: { padding: 20 },
