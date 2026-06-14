@@ -63,6 +63,12 @@ export default function MessagesScreen() {
   const [currentUserId, setCurrentUserId] = useState<string>("");
   const [typingByChat, setTypingByChat] = useState<Record<string, Set<string>>>({});
 
+  // ── New group chat (not linked to any event) ──────────────────────────────
+  const [groupModalVisible, setGroupModalVisible] = useState(false);
+  const [groupName, setGroupName] = useState("");
+  const [selectedUsers, setSelectedUsers] = useState<FollowUser[]>([]);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchChats = async (silent = false) => {
@@ -261,6 +267,58 @@ export default function MessagesScreen() {
     }
   }, [userSearchQuery]);
 
+  // ── Group creation helpers ────────────────────────────────────────────────
+  const openGroupModal = () => {
+    setGroupName("");
+    setSelectedUsers([]);
+    setUserSearchQuery("");
+    setSearchedUsers([]);
+    setGroupModalVisible(true);
+  };
+
+  const closeGroupModal = () => {
+    setGroupModalVisible(false);
+    setGroupName("");
+    setSelectedUsers([]);
+    setUserSearchQuery("");
+    setSearchedUsers([]);
+  };
+
+  const toggleSelectUser = (user: FollowUser) => {
+    setSelectedUsers((prev) =>
+      prev.some((u) => u._id === user._id)
+        ? prev.filter((u) => u._id !== user._id)
+        : [...prev, user]
+    );
+  };
+
+  const handleCreateGroup = async () => {
+    const name = groupName.trim();
+    if (!name) {
+      Alert.alert("Name required", "Give your group a name.");
+      return;
+    }
+    // The server needs at least 2 other members (the creator is added as admin).
+    if (selectedUsers.length < 2) {
+      Alert.alert("Add members", "Pick at least 2 people to start a group.");
+      return;
+    }
+    setCreatingGroup(true);
+    try {
+      const chat = await chatService.createGroupChat(
+        name,
+        selectedUsers.map((u) => u._id)
+      );
+      closeGroupModal();
+      router.push({ pathname: "/chat/[id]", params: { id: chat._id } });
+    } catch (error: any) {
+      console.error("Error creating group:", error);
+      Alert.alert("Error", error.message || "Failed to create group.");
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
+
   const renderChatItem = ({ item }: { item: Chat }) => {
     const typingSet = typingByChat[item._id];
     const isTyping = !!(typingSet && typingSet.size > 0);
@@ -302,19 +360,32 @@ export default function MessagesScreen() {
             </View>
           </View>
 
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={() => setNewChatModalVisible(true)}
-          >
-            <LinearGradient
-              colors={["#A855F7", "#7C3AED"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.composeBtn}
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={openGroupModal}
+              accessibilityLabel="New group chat"
             >
-              <Ionicons name="create-outline" size={18} color="#fff" />
-            </LinearGradient>
-          </TouchableOpacity>
+              <View style={styles.groupBtn}>
+                <Ionicons name="people" size={18} color={CH_PURPLE_SOFT} />
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => setNewChatModalVisible(true)}
+              accessibilityLabel="New message"
+            >
+              <LinearGradient
+                colors={["#A855F7", "#7C3AED"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.composeBtn}
+              >
+                <Ionicons name="create-outline" size={18} color="#fff" />
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Search */}
@@ -455,6 +526,147 @@ export default function MessagesScreen() {
           </View>
         </View>
       </Modal>
+
+      {/* New Group Modal — standalone group chat, not tied to any event */}
+      <Modal
+        visible={groupModalVisible}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={closeGroupModal}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>New Group</Text>
+              <TouchableOpacity onPress={closeGroupModal}>
+                <Ionicons name="close" size={22} color={CH_TEXT} />
+              </TouchableOpacity>
+            </View>
+
+            {/* Group name */}
+            <View style={styles.modalSearchContainer}>
+              <Ionicons name="people" size={14} color={CH_TEXT_MUTE} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Group name…"
+                placeholderTextColor={CH_TEXT_MUTE}
+                value={groupName}
+                onChangeText={setGroupName}
+                maxLength={50}
+              />
+            </View>
+
+            {/* Selected members */}
+            {selectedUsers.length > 0 && (
+              <FlatList
+                horizontal
+                data={selectedUsers}
+                keyExtractor={(item) => `sel-${item._id}`}
+                keyboardShouldPersistTaps="handled"
+                showsHorizontalScrollIndicator={false}
+                style={{ maxHeight: 84 }}
+                contentContainerStyle={styles.selectedChipsRow}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={styles.selectedChip}
+                    onPress={() => toggleSelectUser(item)}
+                    activeOpacity={0.8}
+                  >
+                    <Avatar uri={item.profilePicture} name={item.username} size={44} />
+                    <View style={styles.selectedRemove}>
+                      <Ionicons name="close" size={11} color="#fff" />
+                    </View>
+                    <Text style={styles.selectedChipText} numberOfLines={1}>
+                      {capitalize(item.username)}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+
+            {/* Member search */}
+            <View style={styles.modalSearchContainer}>
+              <Ionicons name="search" size={14} color={CH_TEXT_MUTE} style={{ marginRight: 8 }} />
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Add mutual follows…"
+                placeholderTextColor={CH_TEXT_MUTE}
+                value={userSearchQuery}
+                onChangeText={setUserSearchQuery}
+              />
+            </View>
+
+            {searchingUsers && (
+              <View style={styles.searchingContainer}>
+                <ActivityIndicator size="small" color={CH_PURPLE} />
+              </View>
+            )}
+
+            <FlatList
+              style={{ flex: 1 }}
+              data={searchedUsers}
+              keyExtractor={(item) => item._id}
+              keyboardShouldPersistTaps="handled"
+              renderItem={({ item }) => {
+                const selected = selectedUsers.some((u) => u._id === item._id);
+                return (
+                  <TouchableOpacity
+                    style={styles.userItem}
+                    onPress={() => toggleSelectUser(item)}
+                    activeOpacity={0.8}
+                  >
+                    <Avatar uri={item.profilePicture} name={item.username} size={44} />
+                    <View style={styles.userInfo}>
+                      <Text style={styles.userName}>{capitalize(item.username)}</Text>
+                      <Text style={styles.userEmail}>
+                        {item.isVendor && item.businessName ? item.businessName : item.email}
+                      </Text>
+                    </View>
+                    <View style={[styles.checkCircle, selected && styles.checkCircleOn]}>
+                      {selected && <Ionicons name="checkmark" size={14} color="#fff" />}
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+              ListEmptyComponent={
+                !searchingUsers && userSearchQuery.length >= 2 ? (
+                  <View style={styles.emptySearchContainer}>
+                    <Ionicons name="people-outline" size={42} color={CH_TEXT_MUTE} />
+                    <Text style={styles.emptySearchText}>No mutual follows found</Text>
+                  </View>
+                ) : !searchingUsers && userSearchQuery.length < 2 ? (
+                  <View style={styles.emptySearchContainer}>
+                    <Ionicons name="search-outline" size={42} color={CH_TEXT_MUTE} />
+                    <Text style={styles.emptySearchText}>
+                      Search mutual follows to add them.
+                    </Text>
+                  </View>
+                ) : null
+              }
+              contentContainerStyle={styles.userListContent}
+            />
+
+            <TouchableOpacity
+              style={[
+                styles.createGroupBtn,
+                (creatingGroup || !groupName.trim() || selectedUsers.length < 2) &&
+                  styles.createGroupBtnDisabled,
+              ]}
+              activeOpacity={0.85}
+              onPress={handleCreateGroup}
+              disabled={creatingGroup || !groupName.trim() || selectedUsers.length < 2}
+            >
+              {creatingGroup ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.createGroupBtnText}>
+                  Create group{selectedUsers.length > 0 ? ` (${selectedUsers.length})` : ""}
+                </Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -513,6 +725,21 @@ const styles = StyleSheet.create({
     color: CH_TEXT_DIM,
     marginTop: 4,
   },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  groupBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(168,85,247,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,0.3)",
+  },
   composeBtn: {
     width: 40,
     height: 40,
@@ -524,6 +751,69 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.45,
     shadowRadius: 16,
     elevation: 6,
+  },
+  selectedChipsRow: {
+    paddingHorizontal: 22,
+    paddingTop: 4,
+    paddingBottom: 10,
+    gap: 14,
+  },
+  selectedChip: {
+    width: 52,
+    alignItems: "center",
+  },
+  selectedRemove: {
+    position: "absolute",
+    top: -2,
+    right: 2,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#7C3AED",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1.5,
+    borderColor: CH_BG,
+  },
+  selectedChipText: {
+    marginTop: 4,
+    fontFamily: "Outfit_500Medium",
+    fontSize: 11,
+    color: CH_TEXT_DIM,
+    maxWidth: 52,
+    textAlign: "center",
+  },
+  checkCircle: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: CH_STROKE_HI,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  checkCircleOn: {
+    backgroundColor: CH_PURPLE,
+    borderColor: CH_PURPLE,
+  },
+  createGroupBtn: {
+    marginHorizontal: 22,
+    marginTop: 8,
+    marginBottom: 28,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: CH_PURPLE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  createGroupBtnDisabled: {
+    opacity: 0.45,
+  },
+  createGroupBtnText: {
+    fontFamily: "BricolageGrotesque_800ExtraBold",
+    fontSize: 15,
+    color: "#fff",
+    letterSpacing: -0.3,
   },
 
   searchContainer: {

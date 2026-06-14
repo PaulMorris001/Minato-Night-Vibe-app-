@@ -206,6 +206,138 @@ export const createEvent = async (req, res) => {
   }
 };
 
+// Create a private, free event from a standalone (non-event) group chat.
+// The group admin becomes the host; every current group member is auto-added
+// as a confirmed guest, and the event is linked back to the group so the chat
+// shows its event banner. Always private + free — a group hangout, not a
+// ticketed public event (so there's no payment/approval gate to clear).
+export const createEventFromGroup = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { chatId } = req.params;
+    const { title, date, location, address, city, state, country, image, description } = req.body;
+
+    if (!title || !date || !location) {
+      return res.status(400).json({ message: "Title, date, and location are required" });
+    }
+    assertClean([
+      { field: "Title", value: title },
+      { field: "Description", value: description },
+      { field: "Location", value: location },
+      { field: "Address", value: address },
+    ]);
+
+    const chat = await Chat.findById(chatId);
+    if (!chat || chat.isActive === false) {
+      return res.status(404).json({ message: "Group chat not found" });
+    }
+    if (chat.type !== "group") {
+      return res.status(400).json({ message: "Events can only be created from group chats" });
+    }
+    const isAdmin = (chat.admins || []).some((a) => a.toString() === userId);
+    if (!isAdmin) {
+      return res.status(403).json({ message: "Only a group admin can create an event for this group" });
+    }
+
+    // Cover image is optional: accept an inline base64 blob (upload it) or a URL.
+    let eventImageUrl = "";
+    if (image) {
+      if (typeof image === "string" && image.startsWith("data:image")) {
+        try {
+          const result = await uploadBase64Image(image, "events");
+          eventImageUrl = result.url;
+        } catch (uploadErr) {
+          console.error("Error uploading group event image:", uploadErr);
+          return res.status(400).json({ message: "Error uploading event image", details: uploadErr.message });
+        }
+      } else {
+        eventImageUrl = image;
+      }
+    }
+
+    // Everyone in the group except the host is auto-enrolled as a confirmed guest.
+    const memberIds = chat.participants
+      .map((p) => p.toString())
+      .filter((pid) => pid !== userId);
+
+    const event = new Event({
+      title,
+      date: new Date(date),
+      location,
+      address: address || "",
+      city: city || "",
+      state: state || "",
+      country: country || "",
+      image: eventImageUrl,
+      images: eventImageUrl ? [eventImageUrl] : [],
+      description: description || "",
+      createdBy: userId,
+      isPublic: false,
+      isPaid: false,
+      invitedUsers: memberIds,
+      rsvpUsers: memberIds,
+      groupChatId: chat._id,
+      shareToken: new mongoose.Types.ObjectId().toString(),
+      approvalStatus: "approved",
+    });
+    await event.save();
+
+    // Link group → event so the chat renders its event banner. A group can host
+    // successive events; the banner tracks the most recently created one.
+    chat.event = event._id;
+    await chat.save();
+
+    const host = await User.findById(userId).select("username");
+
+    // System message so the whole group sees the event was created.
+    try {
+      await ChatService.sendMessage(chat._id, userId, {
+        type: "system",
+        content: `${host?.username || "An admin"} created an event: ${title}`,
+      });
+    } catch (msgErr) {
+      console.error("System message error on group event create:", msgErr);
+    }
+
+    // Notify the auto-enrolled members (best-effort).
+    try {
+      if (memberIds.length) {
+        await Notification.insertMany(
+          memberIds.map((mid) => ({
+            user: mid,
+            type: "event_invite",
+            title: "New group event",
+            body: `${host?.username || "An admin"} added you to "${title}"`,
+            data: { eventId: event._id.toString() },
+          }))
+        );
+      }
+    } catch (notifErr) {
+      console.error("Notification error on group event create:", notifErr);
+    }
+
+    invalidateCachePattern("user_chats_");
+    invalidateCachePattern("public_events_");
+    invalidateCachePattern("event_highlights_");
+
+    const populatedEvent = await Event.findById(event._id)
+      .populate("createdBy", "username email profilePicture")
+      .populate("invitedUsers", "username email profilePicture")
+      .populate("groupChatId", "_id name groupImage");
+
+    res.status(201).json({
+      message: "Event created for the group",
+      event: populatedEvent,
+    });
+  } catch (error) {
+    if (error.statusCode === 400) {
+      return res.status(400).json({ message: error.message });
+    }
+    console.error("Create event from group error:", error);
+    res.status(500).json({ message: "Error creating event from group", error: error.message });
+  }
+};
+
 // Get all events for a user (created or invited to)
 export const getUserEvents = async (req, res) => {
   try {
@@ -751,6 +883,47 @@ export const requestToJoinEvent = async (req, res) => {
 };
 
 // Respond to an event invite (accept or decline)
+/**
+ * Ensure `userId` is a member of the event's group chat, creating the chat on
+ * the first join. Private events only — public events skip the chat (a massive
+ * group chat is unusable and would melt the push-notification fanout). There is
+ * NO mutual-follow requirement: being on the guest list (via invite-accept or a
+ * share link) is itself the entry grant. Mutates `event.groupChatId`; the caller
+ * is responsible for persisting the event with `event.save()`. Best-effort —
+ * chat failures are logged, never thrown, so they can't break the join itself.
+ */
+async function ensureEventGroupChatMember(event, userId) {
+  if (event.isPublic) return;
+  try {
+    const user = await User.findById(userId).select('username');
+    if (!event.groupChatId) {
+      const groupChat = await ChatService.createGroupChat(
+        event.title,
+        [event.createdBy.toString(), userId],
+        event.createdBy.toString(),
+        event.image || "",
+        event._id
+      );
+      event.groupChatId = groupChat._id;
+    } else {
+      const groupChat = await Chat.findById(event.groupChatId);
+      if (groupChat && !groupChat.participants.some(p => p.toString() === userId)) {
+        groupChat.participants.push(userId);
+        groupChat.unreadCount.set(userId, 0);
+        groupChat.isArchived.set(userId, false);
+        groupChat.isMuted.set(userId, false);
+        await groupChat.save();
+        await ChatService.sendMessage(event.groupChatId, userId, {
+          type: 'system',
+          content: `${user?.username || 'Someone'} joined the group`
+        });
+      }
+    }
+  } catch (chatErr) {
+    console.error("Event group chat membership error:", chatErr);
+  }
+}
+
 export const respondToInvite = async (req, res) => {
   try {
     const { eventId } = req.params;
@@ -782,41 +955,8 @@ export const respondToInvite = async (req, res) => {
         event.rsvpUsers.push(userId);
       }
 
-      // Auto-create / extend the event group chat — only for private events.
-      // Public events can be very large (a 10k-person group chat is unusable
-      // and would melt the push-notification fanout), so we skip it entirely
-      // and rely on the event detail screen as the canonical surface.
-      if (!event.isPublic) {
-        try {
-          const user = await User.findById(userId).select('username');
-          if (!event.groupChatId) {
-            // Create group chat with creator + this user
-            const groupChat = await ChatService.createGroupChat(
-              event.title,
-              [event.createdBy.toString(), userId],
-              event.createdBy.toString(),
-              event.image || "",
-              event._id
-            );
-            event.groupChatId = groupChat._id;
-          } else {
-            const groupChat = await Chat.findById(event.groupChatId);
-            if (groupChat && !groupChat.participants.some(p => p.toString() === userId)) {
-              groupChat.participants.push(userId);
-              groupChat.unreadCount.set(userId, 0);
-              groupChat.isArchived.set(userId, false);
-              groupChat.isMuted.set(userId, false);
-              await groupChat.save();
-              await ChatService.sendMessage(event.groupChatId, userId, {
-                type: 'system',
-                content: `${user?.username || 'Someone'} joined the group`
-              });
-            }
-          }
-        } catch (chatErr) {
-          console.error("Group chat error on invite accept:", chatErr);
-        }
-      }
+      // Auto-create / extend the event group chat (private events only).
+      await ensureEventGroupChatMember(event, userId);
 
       // Notify the event creator
       try {
@@ -872,28 +1012,67 @@ export const joinEventByShareLink = async (req, res) => {
       return res.status(410).json({ message: "This event is no longer available" });
     }
 
-    // Check if user is already invited or is the creator
     if (event.createdBy.toString() === userId) {
       return res.status(400).json({ message: "You are the creator of this event" });
     }
 
-    if (event.invitedUsers.includes(userId)) {
-      return res.status(400).json({ message: "You are already invited to this event" });
+    // Paid events are always public and ticketed — a share link can't grant
+    // free entry. Send them through the purchase flow instead. (Private events
+    // are always free, so this never blocks the private-invite case.)
+    if (event.isPaid) {
+      return res.status(400).json({
+        message: "This is a paid event — get a ticket to join.",
+      });
     }
 
-    event.invitedUsers.push(userId);
+    // Possessing the link IS the access grant — so this works for private,
+    // invite-only events and does NOT require the joiner to mutually follow
+    // (or follow at all) the host. We just need to (a) confirm them on the
+    // guest list and (b) drop any stale pending invite / join request, then
+    // (c) pull them into the group chat below.
+    const alreadyJoined = event.invitedUsers.some(id => id.toString() === userId);
+    if (!alreadyJoined) {
+      event.invitedUsers.push(userId);
+    }
     if (!event.rsvpUsers.some(id => id.toString() === userId)) {
       event.rsvpUsers.push(userId);
     }
+    event.pendingInvites = event.pendingInvites.filter(id => id.toString() !== userId);
+    if (Array.isArray(event.joinRequests)) {
+      event.joinRequests = event.joinRequests.filter(id => id.toString() !== userId);
+    }
+
+    // Pull the joiner into the event's group chat (private events only). The
+    // share link is the access grant, so this works regardless of whether they
+    // follow — or mutually follow — the host.
+    await ensureEventGroupChatMember(event, userId);
+
     await event.save();
 
     invalidateCachePattern(`event_detail_${event._id}_`);
     invalidateCachePattern('public_events_');
     invalidateCachePattern('event_highlights_');
 
+    // Let the host know someone joined via their link (best-effort).
+    if (!alreadyJoined) {
+      try {
+        const user = await User.findById(userId).select('username');
+        await Notification.create({
+          user: event.createdBy,
+          type: 'invite_accepted',
+          title: 'New guest',
+          body: `${user?.username || 'Someone'} joined "${event.title}" via your share link`,
+          data: { eventId: event._id.toString() },
+        });
+      } catch (notifErr) {
+        console.error("Notification error on share-link join:", notifErr);
+      }
+    }
+
     const updatedEvent = await Event.findById(event._id)
       .populate('createdBy', 'username email profilePicture')
-      .populate('invitedUsers', 'username email profilePicture');
+      .populate('invitedUsers', 'username email profilePicture')
+      .populate('groupChatId', '_id name groupImage');
 
     res.status(200).json({
       message: "Successfully joined the event",

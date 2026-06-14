@@ -22,6 +22,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, router } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
+import DateTimePicker from "@react-native-community/datetimepicker";
+import { BASE_URL } from "@/constants/constants";
 import MessageBubble from "@/components/chat/MessageBubble";
 import ChatInput from "@/components/chat/ChatInput";
 import { Avatar } from "@/components/shared/Avatar";
@@ -60,6 +62,16 @@ export default function ChatScreen() {
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
   const highlightTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ── Create-event-from-group (admin only) ──────────────────────────────────
+  const [createEventVisible, setCreateEventVisible] = useState(false);
+  const [evTitle, setEvTitle] = useState("");
+  const [evLocation, setEvLocation] = useState("");
+  const [evDate, setEvDate] = useState<Date>(() => new Date(Date.now() + 24 * 60 * 60 * 1000));
+  const [showEvDate, setShowEvDate] = useState(false);
+  const [showEvTime, setShowEvTime] = useState(false);
+  const [evImage, setEvImage] = useState<string | null>(null);
+  const [creatingEvent, setCreatingEvent] = useState(false);
 
   const loadCurrentUser = async () => {
     try {
@@ -341,6 +353,96 @@ export default function ChatScreen() {
     }
   };
 
+  const pickEventImage = async () => {
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [16, 9],
+        quality: 0.7,
+      });
+      if (!result.canceled && result.assets[0]) {
+        setEvImage(result.assets[0].uri);
+      }
+    } catch {
+      Alert.alert("Error", "Failed to pick image");
+    }
+  };
+
+  const openCreateEvent = () => {
+    setSettingsVisible(false);
+    setEvTitle("");
+    setEvLocation("");
+    setEvDate(new Date(Date.now() + 24 * 60 * 60 * 1000));
+    setEvImage(null);
+    // Let the settings sheet finish dismissing before presenting this one.
+    setTimeout(() => setCreateEventVisible(true), 320);
+  };
+
+  // Admin creates a private, free event for the whole group. Every member is
+  // auto-enrolled server-side and the event is linked back to this chat.
+  const handleCreateGroupEvent = async () => {
+    if (!chat) return;
+    if (!evTitle.trim()) {
+      Alert.alert("Title required", "Give your event a name.");
+      return;
+    }
+    if (!evLocation.trim()) {
+      Alert.alert("Location required", "Add where it's happening.");
+      return;
+    }
+    if (evDate.getTime() < Date.now()) {
+      Alert.alert("Pick a future date", "The event date can't be in the past.");
+      return;
+    }
+    setCreatingEvent(true);
+    try {
+      const token = await SecureStore.getItemAsync("token");
+      if (!token) throw new Error("No auth token");
+
+      // Upload the optional cover first so we send a URL, not a base64 blob.
+      let imageUrl: string | undefined;
+      if (evImage) {
+        const uploadResult = await uploadImage(evImage, "events", token);
+        imageUrl = uploadResult.url;
+      }
+
+      const res = await fetch(`${BASE_URL}/events/from-group/${chat._id}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title: evTitle.trim(),
+          date: evDate.toISOString(),
+          location: evLocation.trim(),
+          image: imageUrl,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        Alert.alert("Couldn't create event", data?.message || "Please try again.");
+        return;
+      }
+      setCreateEventVisible(false);
+      // Reload so the chat's event banner appears.
+      await loadChatAndMessages();
+      const newEventId = data.event?._id;
+      Alert.alert("Event created", "Everyone in the group has been added.", [
+        { text: "OK" },
+        ...(newEventId
+          ? [{ text: "View Event", onPress: () => router.push(`/event/${newEventId}` as any) }]
+          : []),
+      ]);
+    } catch (error: any) {
+      console.error("Create group event error:", error);
+      Alert.alert("Error", error.message || "Failed to create event.");
+    } finally {
+      setCreatingEvent(false);
+    }
+  };
+
   const togglePinned = async () => {
     if (!chat) return;
     const isPinned = (chat.pinnedBy || []).some((p) => p === currentUserId);
@@ -410,6 +512,9 @@ export default function ChatScreen() {
 
   const messageSections = buildMessageSections(messages);
   const isGroup = chat?.type === "group";
+  // Group admins can spin up an event for the whole group (the server
+  // auto-enrolls every member). Available whenever the viewer is an admin.
+  const isGroupAdmin = !!(isGroup && chat?.admins?.some((a) => a._id === currentUserId));
 
   // Lookup of loaded messages by id, used to "hydrate" a reply preview whose
   // replyTo.sender wasn't populated by the server (the original is almost
@@ -816,6 +921,25 @@ export default function ChatScreen() {
                 />
               </View>
 
+              {isGroupAdmin && (
+                <TouchableOpacity
+                  style={styles.createEventRow}
+                  onPress={openCreateEvent}
+                  activeOpacity={0.85}
+                >
+                  <View style={styles.createEventIcon}>
+                    <Ionicons name="calendar" size={18} color={CH_PURPLE_SOFT} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.createEventTitle}>Create an event</Text>
+                    <Text style={styles.createEventHint}>
+                      Everyone in this group is added automatically.
+                    </Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={CH_TEXT_MUTE} />
+                </TouchableOpacity>
+              )}
+
               {isGroup && (
                 <>
                   <Text style={[styles.settingsLabel, { marginTop: 24 }]}>
@@ -834,6 +958,121 @@ export default function ChatScreen() {
                   ))}
                 </>
               )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Create event from group (admin) */}
+      <Modal
+        visible={createEventVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setCreateEventVisible(false)}
+      >
+        <View style={styles.settingsOverlay}>
+          <View style={styles.settingsSheet}>
+            <View style={styles.settingsHeader}>
+              <Text style={styles.settingsTitle}>New group event</Text>
+              <TouchableOpacity onPress={() => setCreateEventVisible(false)}>
+                <Ionicons name="close" size={22} color={CH_TEXT} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+              <TouchableOpacity style={styles.evImagePicker} onPress={pickEventImage} activeOpacity={0.85}>
+                {evImage ? (
+                  <Image source={{ uri: evImage }} style={styles.evImagePreview} contentFit="cover" />
+                ) : (
+                  <View style={styles.evImagePlaceholder}>
+                    <Ionicons name="image-outline" size={26} color={CH_TEXT_MUTE} />
+                    <Text style={styles.evImagePlaceholderText}>Add a cover photo (optional)</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <Text style={styles.settingsLabel}>Event name</Text>
+              <TextInput
+                style={styles.evInput}
+                placeholder="e.g. Saturday rooftop hang"
+                placeholderTextColor={CH_TEXT_MUTE}
+                value={evTitle}
+                onChangeText={setEvTitle}
+                maxLength={80}
+              />
+
+              <Text style={[styles.settingsLabel, { marginTop: 16 }]}>Location</Text>
+              <TextInput
+                style={styles.evInput}
+                placeholder="Where is it?"
+                placeholderTextColor={CH_TEXT_MUTE}
+                value={evLocation}
+                onChangeText={setEvLocation}
+                maxLength={120}
+              />
+
+              <Text style={[styles.settingsLabel, { marginTop: 16 }]}>When</Text>
+              <View style={styles.evDateRow}>
+                <TouchableOpacity style={styles.evDateBtn} onPress={() => setShowEvDate(true)} activeOpacity={0.8}>
+                  <Ionicons name="calendar-outline" size={16} color={CH_PURPLE_SOFT} />
+                  <Text style={styles.evDateText}>
+                    {evDate.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.evDateBtn} onPress={() => setShowEvTime(true)} activeOpacity={0.8}>
+                  <Ionicons name="time-outline" size={16} color={CH_PURPLE_SOFT} />
+                  <Text style={styles.evDateText}>
+                    {evDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {showEvDate && (
+                <DateTimePicker
+                  value={evDate}
+                  mode="date"
+                  display={Platform.OS === "ios" ? "inline" : "default"}
+                  minimumDate={new Date()}
+                  onChange={(_e, d) => {
+                    setShowEvDate(Platform.OS === "ios");
+                    if (d) {
+                      const next = new Date(evDate);
+                      next.setFullYear(d.getFullYear(), d.getMonth(), d.getDate());
+                      setEvDate(next);
+                    }
+                  }}
+                />
+              )}
+              {showEvTime && (
+                <DateTimePicker
+                  value={evDate}
+                  mode="time"
+                  display={Platform.OS === "ios" ? "spinner" : "default"}
+                  onChange={(_e, d) => {
+                    setShowEvTime(Platform.OS === "ios");
+                    if (d) {
+                      const next = new Date(evDate);
+                      next.setHours(d.getHours(), d.getMinutes());
+                      setEvDate(next);
+                    }
+                  }}
+                />
+              )}
+
+              <TouchableOpacity
+                style={[styles.evCreateBtn, creatingEvent && { opacity: 0.6 }]}
+                onPress={handleCreateGroupEvent}
+                disabled={creatingEvent}
+                activeOpacity={0.85}
+              >
+                {creatingEvent ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.evCreateBtnText}>
+                    Create event · adds {chat?.participants.length ?? 0} people
+                  </Text>
+                )}
+              </TouchableOpacity>
             </ScrollView>
           </View>
         </View>
@@ -1134,6 +1373,97 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: CH_STROKE,
     marginBottom: 16,
+  },
+  // Create-event entry (settings) + quick-create form
+  createEventRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginTop: 20,
+    padding: 14,
+    borderRadius: 16,
+    backgroundColor: "rgba(168,85,247,0.10)",
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,0.28)",
+  },
+  createEventIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "rgba(168,85,247,0.16)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  createEventTitle: {
+    fontFamily: "Outfit_600SemiBold",
+    fontSize: 14,
+    color: CH_TEXT,
+  },
+  createEventHint: {
+    fontFamily: "Outfit_400Regular",
+    fontSize: 11.5,
+    color: CH_TEXT_DIM,
+    marginTop: 2,
+  },
+  evImagePicker: {
+    width: "100%",
+    height: 150,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginBottom: 18,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: CH_STROKE,
+  },
+  evImagePreview: { width: "100%", height: "100%" },
+  evImagePlaceholder: { flex: 1, alignItems: "center", justifyContent: "center", gap: 8 },
+  evImagePlaceholderText: {
+    fontFamily: "Outfit_500Medium",
+    fontSize: 12.5,
+    color: CH_TEXT_MUTE,
+  },
+  evInput: {
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontFamily: "Outfit_500Medium",
+    fontSize: 14,
+    color: CH_TEXT,
+    borderWidth: 1,
+    borderColor: CH_STROKE,
+  },
+  evDateRow: { flexDirection: "row", gap: 10 },
+  evDateBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(255,255,255,0.05)",
+    borderWidth: 1,
+    borderColor: CH_STROKE,
+  },
+  evDateText: {
+    fontFamily: "Outfit_600SemiBold",
+    fontSize: 13.5,
+    color: CH_TEXT,
+  },
+  evCreateBtn: {
+    marginTop: 22,
+    marginBottom: 28,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: CH_PURPLE,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  evCreateBtnText: {
+    fontFamily: "Outfit_700Bold",
+    fontSize: 14.5,
+    color: "#fff",
   },
   saveButton: {
     backgroundColor: CH_PURPLE,

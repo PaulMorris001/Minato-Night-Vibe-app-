@@ -1,6 +1,7 @@
 import express from "express";
 import {
   createEvent,
+  createEventFromGroup,
   getUserEvents,
   getEventById,
   getEventByShareToken,
@@ -26,6 +27,10 @@ const router = express.Router();
 
 // Create a new event
 router.post("/events", authenticate, createEvent);
+
+// Create a private, free event from a standalone group chat (admin only) —
+// auto-enrolls every group member and links the event to the group.
+router.post("/events/from-group/:chatId", authenticate, createEventFromGroup);
 
 // Get all events for the authenticated user
 router.get("/events", authenticate, getUserEvents);

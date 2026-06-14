@@ -231,6 +231,50 @@ function SmallEventCard({
   );
 }
 
+// Compact card for third-party (Ticketmaster etc) events, sized to match
+// SmallEventCard so they sit naturally in the same horizontal "this week" row.
+// Tapping anywhere opens the external-event detail screen.
+function SmallExternalEventCard({
+  event,
+  onPress,
+}: {
+  event: ExternalEvent;
+  onPress: () => void;
+}) {
+  const sym = event.currency === "USD" ? "$" : `${event.currency} `;
+  const priceLabel =
+    event.priceMin != null ? `${sym}${Math.round(event.priceMin)}` : "TICKETS";
+
+  return (
+    <TouchableOpacity style={styles.smallCard} onPress={onPress} activeOpacity={0.8}>
+      <LinearGradient colors={["#2D1B69", "#1A1030"]} style={styles.smallCardInner}>
+        <View style={styles.smallCardImageWrap}>
+          {event.image ? (
+            <Image source={{ uri: event.image }} style={styles.smallCardImage} contentFit="cover" />
+          ) : (
+            <View style={[styles.smallCardImage, { backgroundColor: C.surfaceHi, justifyContent: "center", alignItems: "center" }]}>
+              <Ionicons name="calendar" size={24} color={C.purple} />
+            </View>
+          )}
+          <View style={[styles.smallCardBadge, styles.smallCardBadgePaid]}>
+            <Text style={styles.smallCardBadgeText}>{priceLabel}</Text>
+          </View>
+        </View>
+
+        <View style={styles.smallCardContent}>
+          <Text style={styles.smallCardTitle} numberOfLines={2}>{event.title}</Text>
+          <Text style={styles.smallCardDate} numberOfLines={1}>
+            {new Date(event.date).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+          </Text>
+          <View style={[styles.smallCardAction, styles.smallCardActionPaid]}>
+            <Text style={styles.smallCardActionText}>View Tickets</Text>
+          </View>
+        </View>
+      </LinearGradient>
+    </TouchableOpacity>
+  );
+}
+
 function VendorCard({ vendor, onPress }: { vendor: Vendor; onPress: () => void }) {
   const name = vendor.vendorName || vendor.businessName || vendor.username || "Vendor";
   const type = vendor.category || vendor.vendorType || "";
@@ -561,14 +605,6 @@ export default function Home() {
               {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
             </Text>
           </View>
-          <TouchableOpacity
-            style={styles.scanButton}
-            onPress={() => router.push("/scan" as any)}
-            activeOpacity={0.8}
-            accessibilityLabel="Scan a QR code"
-          >
-            <Ionicons name="qr-code-outline" size={22} color={C.purple} />
-          </TouchableOpacity>
         </View>
 
         {/* Hero Card */}
@@ -703,7 +739,7 @@ export default function Home() {
               renderItem={() => <SmallCardSkeleton />}
             />
           </View>
-        ) : afterThat.length > 0 && (
+        ) : (afterThat.length > 0 || externalEvents.length > 0) && (
           <View style={styles.section}>
             <SectionHeader
               title="After that →"
@@ -713,18 +749,30 @@ export default function Home() {
             />
             <FlatList
               horizontal
-              data={afterThat}
-              keyExtractor={(item) => item._id}
+              data={[
+                // Mixed feed: native events + external (Ticketmaster) events,
+                // tagged with `_kind` so the render branches to the right card.
+                ...afterThat.map((e) => ({ _kind: "native" as const, data: e, sort: new Date(e.date).getTime() })),
+                ...externalEvents.map((e) => ({ _kind: "external" as const, data: e, sort: new Date(e.date).getTime() })),
+              ].sort((a, b) => a.sort - b.sort)}
+              keyExtractor={(item) => `${item._kind}-${item.data._id}`}
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.horizontalList}
-              renderItem={({ item }) => (
-                <SmallEventCard
-                  event={item}
-                  onPress={() => router.push(`/event/${item._id}` as any)}
-                  onPurchase={handlePurchaseTicket}
-                  onJoin={handleJoinFreeEvent}
-                />
-              )}
+              renderItem={({ item }) =>
+                item._kind === "native" ? (
+                  <SmallEventCard
+                    event={item.data}
+                    onPress={() => router.push(`/event/${item.data._id}` as any)}
+                    onPurchase={handlePurchaseTicket}
+                    onJoin={handleJoinFreeEvent}
+                  />
+                ) : (
+                  <SmallExternalEventCard
+                    event={item.data}
+                    onPress={() => router.push(`/external-event/${item.data._id}` as any)}
+                  />
+                )
+              }
             />
           </View>
         )}
@@ -918,16 +966,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
     paddingBottom: 20,
-  },
-  scanButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(168,85,247,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(168,85,247,0.3)",
   },
   greetingText: {
     fontFamily: "BricolageGrotesque_800ExtraBold",

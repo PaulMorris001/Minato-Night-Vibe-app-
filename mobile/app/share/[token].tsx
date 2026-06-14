@@ -38,6 +38,7 @@ interface Event {
     profilePicture?: string;
   };
   invitedUsers: { _id: string }[];
+  groupChatId?: { _id: string } | string | null;
 }
 
 export default function ShareEventScreen() {
@@ -130,9 +131,22 @@ export default function ShareEventScreen() {
       });
       const data = await response.json();
       if (response.ok) {
-        Alert.alert("Joined!", "You've been added to the event.", [
-          { text: "View Event", onPress: () => router.replace(`/event/${event?._id}` as any) },
-        ]);
+        // The server adds private-event joiners to the event group chat and
+        // returns it populated — offer a one-tap jump straight into the chat.
+        const joinedChat = data.event?.groupChatId;
+        const chatId =
+          typeof joinedChat === "string" ? joinedChat : joinedChat?._id;
+        const eventId = data.event?._id || event?._id;
+        const buttons: any[] = [
+          { text: "View Event", onPress: () => router.replace(`/event/${eventId}` as any) },
+        ];
+        if (chatId) {
+          buttons.unshift({
+            text: "Open Group Chat",
+            onPress: () => router.replace(`/chat/${chatId}` as any),
+          });
+        }
+        Alert.alert("Joined!", "You've been added to the event.", buttons);
       } else {
         Alert.alert("Info", data.message || "Could not join event.");
       }

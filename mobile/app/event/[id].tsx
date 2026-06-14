@@ -264,8 +264,15 @@ export default function EventDetailsPage() {
         setEvent(data.event);
         setNeedsLogin(false);
         trackEvent("event_viewed", { eventId: data.event._id, isPublic: data.event.isPublic });
-      } else if (res.status === 401 || res.status === 403) {
-        // Not-public event the viewer can't see → prompt login (we render a
+      } else if (res.status === 403) {
+        // Logged in, but not on the guest list of a private/invite-only event.
+        // Possessing the link IS the access grant, so send them to the
+        // share/join screen where they can add themselves to the event and its
+        // group chat — instead of a dead-end "log in to view" wall.
+        router.replace(`/share/${id}` as any);
+        return;
+      } else if (res.status === 401) {
+        // Anonymous viewer on a non-public event → prompt login (we render a
         // dedicated panel instead of redirecting, so the deep link doesn't
         // get lost if the user backs out of /login).
         setNeedsLogin(true);
@@ -1372,6 +1379,17 @@ export default function EventDetailsPage() {
               }}
             />
             <SheetAction
+              icon="qr-code-outline"
+              label="Scan a CityVibe code"
+              onPress={() => {
+                setActionSheetVisible(false);
+                // The scanner reads CityVibe event/guide QR codes and opens
+                // them in the app. Lives here (in the event action sheet) so its
+                // purpose is clear, rather than as a stray button on Home.
+                setTimeout(() => router.push("/scan" as any), 320);
+              }}
+            />
+            <SheetAction
               icon="calendar-outline"
               label="Add to calendar"
               onPress={() => {
@@ -1544,6 +1562,7 @@ export default function EventDetailsPage() {
                 <ActivityIndicator size="small" color={AU.purpleSoft} style={{ marginTop: 16 }} />
               )}
               <FlatList
+                style={{ flex: 1 }}
                 data={searchedUsers}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item }) => (
@@ -1644,6 +1663,7 @@ export default function EventDetailsPage() {
                 <ActivityIndicator size="small" color={AU.purpleSoft} style={{ marginTop: 16 }} />
               )}
               <FlatList
+                style={{ flex: 1 }}
                 data={vendorResults}
                 keyExtractor={(item) => item._id}
                 renderItem={({ item }) => {
@@ -2516,7 +2536,11 @@ const styles = StyleSheet.create({
     backgroundColor: AU.surface,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
-    maxHeight: "80%",
+    // Definite height (not just maxHeight) so the results FlatList inside
+    // modalBody gets a bounded viewport and can actually render rows. With
+    // only maxHeight the sheet collapses to its content height and the list
+    // ends up 0px tall — fetched users never appear.
+    height: "80%",
   },
   modalHeader: {
     flexDirection: "row",
@@ -2528,7 +2552,7 @@ const styles = StyleSheet.create({
   },
   modalTitle: { color: "#fff", fontFamily: Fonts.bold, fontSize: 20 },
   closeButton: { padding: 4 },
-  modalBody: { paddingHorizontal: 18, paddingBottom: 18, paddingTop: 12 },
+  modalBody: { flex: 1, paddingHorizontal: 18, paddingBottom: 18, paddingTop: 12 },
   searchContainer: {
     flexDirection: "row",
     alignItems: "center",
