@@ -225,14 +225,7 @@ function Header({
                 {user?.username || (loading ? "" : "—")}
               </Text>
               {user?.verified && (
-                <LinearGradient
-                  colors={[AU.purple, AU.pink]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.verifiedBadge}
-                >
-                  <Text style={styles.verifiedGlyph}>✦</Text>
-                </LinearGradient>
+                <Ionicons name="checkmark-circle" size={20} color="#3b82f6" />
               )}
             </View>
             <Text style={styles.handle} numberOfLines={1}>
@@ -636,19 +629,6 @@ const styles = StyleSheet.create({
     color: AU.text,
     lineHeight: 26 * 1.05,
   },
-  verifiedBadge: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: AU.purple,
-    shadowOpacity: 0.45,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
-  },
-  verifiedGlyph: { color: "#fff", fontSize: 11, lineHeight: 11 },
   handle: {
     color: AU.textDim,
     fontFamily: Fonts.medium,

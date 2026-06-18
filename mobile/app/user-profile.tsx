@@ -444,6 +444,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: Fonts.bold,
     color: "#fff",
+    flexShrink: 1,
   },
   vendorBadge: {
     flexDirection: "row",
