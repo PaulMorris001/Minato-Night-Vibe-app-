@@ -99,5 +99,5 @@ const html = `
 `;
 
 export default function Privacy() {
-  return <StaticHtml title="Privacy Policy – CityVibe" html={html} />;
+  return <StaticHtml title="Privacy Policy – CityVibe" html={html} back />;
 }

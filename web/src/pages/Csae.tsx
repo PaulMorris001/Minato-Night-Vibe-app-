@@ -94,5 +94,5 @@ const html = `
 `;
 
 export default function Csae() {
-  return <StaticHtml title="Child Safety Policy – CityVibe" html={html} />;
+  return <StaticHtml title="Child Safety Policy – CityVibe" html={html} back />;
 }
