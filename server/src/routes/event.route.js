@@ -21,6 +21,8 @@ import {
   removeVendorFromEvent,
   respondToVendorInvite,
   getMyVendorEventInvites,
+  addCohost,
+  removeCohost,
 } from "../controllers/event.controller.js";
 import { authenticate, optionalAuth } from "../middleware/auth.middleware.js";
 
@@ -83,6 +85,10 @@ router.post("/events/share/:shareToken/join", authenticate, joinEventByShareLink
 // Vendor management for events (creator only)
 router.post("/events/:eventId/vendors/:vendorId", authenticate, addVendorToEvent);
 router.delete("/events/:eventId/vendors/:vendorId", authenticate, removeVendorFromEvent);
+
+// Co-host management (creator only)
+router.post("/events/:eventId/cohosts", authenticate, addCohost);
+router.delete("/events/:eventId/cohosts/:cohostId", authenticate, removeCohost);
 
 // Pending event invites for the logged-in user's vendor(s)
 router.get("/vendor/event-invites", authenticate, getMyVendorEventInvites);

@@ -18,6 +18,7 @@ import * as SecureStore from "expo-secure-store";
 import axios from "axios";
 import { Colors } from "@/constants/colors";
 import { BASE_URL } from "@/constants/constants";
+import { showError, showSuccess, showInfo } from "@/utils/toast";
 import { ImagePickerButton } from "@/components/shared";
 import { Fonts } from "@/constants/fonts";
 import { useAccount } from "@/contexts/AccountContext";
@@ -82,7 +83,7 @@ export default function SettingsScreen() {
       setVerificationNotes(verifData.reviewNotes || "");
     } catch (error: any) {
       console.error("Error fetching profile:", error);
-      Alert.alert("Error", "Failed to load profile");
+      showError("Failed to load profile");
     } finally {
       setLoading(false);
     }
@@ -90,7 +91,7 @@ export default function SettingsScreen() {
 
   const handleSubmitVerification = async () => {
     if (!licenseImage) {
-      Alert.alert("Required", "Please select an image of your driver's license.");
+      showInfo("Please select an image of your driver's license.", "Required");
       return;
     }
     setSubmittingVerification(true);
@@ -112,9 +113,9 @@ export default function SettingsScreen() {
 
       setVerificationStatus("pending");
       setLicenseImage("");
-      Alert.alert("Submitted", "Your verification request has been submitted. We'll review it shortly.");
+      showSuccess("Your verification request has been submitted. We'll review it shortly.", "Submitted");
     } catch (error: any) {
-      Alert.alert("Error", error.response?.data?.message || "Failed to submit verification");
+      showError(error.response?.data?.message || "Failed to submit verification");
     } finally {
       setSubmittingVerification(false);
     }
@@ -188,7 +189,7 @@ export default function SettingsScreen() {
             setProfilePicture(result.url);
           } catch (uploadError: any) {
             console.error("Upload error:", uploadError);
-            Alert.alert("Upload Error", "Failed to upload image to Cloudinary");
+            showError("Failed to upload image. Please try again.");
             setSaving(false);
             return;
           }
@@ -200,11 +201,11 @@ export default function SettingsScreen() {
       await axios.put(`${BASE_URL}/profile/picture`, payload, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      Alert.alert("Success", "Profile updated successfully");
+      showSuccess("Profile updated successfully");
     } catch (error: any) {
       const errorMessage =
         error.response?.data?.message || "Failed to update profile";
-      Alert.alert("Error", errorMessage);
+      showError(errorMessage);
     } finally {
       setSaving(false);
     }

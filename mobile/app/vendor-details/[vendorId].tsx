@@ -12,12 +12,12 @@ import {
   ScrollView,
   Modal,
   TextInput,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   ActivityIndicator,
   Linking,
 } from "react-native";
+import { showError, showSuccess, showInfo } from "@/utils/toast";
 import DateTimePicker, { DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { Service } from "@/libs/interfaces";
 import { Ionicons } from "@expo/vector-icons";
@@ -71,10 +71,12 @@ export default function VendorDetails() {
 
   // Vendor (contact links, description, images)
   const [vendor, setVendor] = useState<any>(null);
+  const [vendorLoadError, setVendorLoadError] = useState(false);
 
   // Services
   const [services, setServices] = useState<Service[]>([]);
   const [loading, setLoading] = useState(true);
+  const [servicesLoadError, setServicesLoadError] = useState(false);
 
   // Booking
   const [bookingService, setBookingService] = useState<Service | null>(null);
@@ -128,26 +130,63 @@ export default function VendorDetails() {
   const renderVendorHeader = () => {
     const contact = vendor?.contact || {};
     const links = SOCIALS.map((s) => ({ ...s, url: socialUrl(s.key, contact[s.key]) })).filter((s) => s.url);
-    if (!vendor?.description && links.length === 0) return null;
+    const hasContent = !!vendor?.description || links.length > 0;
     return (
-      <View style={styles.vendorHeaderCard}>
-        {!!vendor?.description && <Text style={styles.vendorDescription}>{vendor.description}</Text>}
-        {links.length > 0 && (
-          <View style={styles.socialRow}>
-            {links.map((s) => (
-              <TouchableOpacity
-                key={s.key}
-                style={styles.socialButton}
-                onPress={() => Linking.openURL(s.url as string).catch(() => {})}
-                activeOpacity={0.8}
-              >
-                <Ionicons name={s.icon} size={20} color={s.color} />
-              </TouchableOpacity>
-            ))}
+      <View>
+        {vendor && !vendor.verified && (
+          <View style={styles.unverifiedBanner}>
+            <Ionicons name="warning-outline" size={16} color="#f59e0b" />
+            <Text style={styles.unverifiedText}>
+              This vendor is not yet verified by CityVibe. Proceed with caution.
+            </Text>
+          </View>
+        )}
+        {vendorLoadError && (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>Couldn't load vendor info.</Text>
+            <TouchableOpacity onPress={reloadVendorAndServices} style={styles.retryBtn}>
+              <Text style={styles.retryBtnText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {hasContent && (
+          <View style={styles.vendorHeaderCard}>
+            {!!vendor?.description && <Text style={styles.vendorDescription}>{vendor.description}</Text>}
+            {links.length > 0 && (
+              <View style={styles.socialRow}>
+                {links.map((s) => (
+                  <TouchableOpacity
+                    key={s.key}
+                    style={styles.socialButton}
+                    onPress={() => Linking.openURL(s.url as string).catch(() => {})}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name={s.icon} size={20} color={s.color} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
           </View>
         )}
       </View>
     );
+  };
+
+  const reloadVendorAndServices = () => {
+    setVendorLoadError(false);
+    setServicesLoadError(false);
+    setLoading(true);
+    fetchVendorServices(vendorId as string)
+      .then((data) => setServices(data))
+      .catch(() => setServicesLoadError(true))
+      .finally(() => setLoading(false));
+    fetch(`${BASE_URL}/vendors/${vendorId}`)
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data._id) setVendor(data);
+        else setVendorLoadError(true);
+      })
+      .catch(() => setVendorLoadError(true));
   };
 
   useEffect(() => {
@@ -155,8 +194,8 @@ export default function VendorDetails() {
       try {
         const data = await fetchVendorServices(vendorId as string);
         setServices(data);
-      } catch (error) {
-        console.error("Error loading services:", error);
+      } catch {
+        setServicesLoadError(true);
       } finally {
         setLoading(false);
       }
@@ -164,8 +203,8 @@ export default function VendorDetails() {
     loadServices();
     fetch(`${BASE_URL}/vendors/${vendorId}`)
       .then((r) => r.json())
-      .then((data) => { if (data && data._id) setVendor(data); })
-      .catch(() => {});
+      .then((data) => { if (data && data._id) setVendor(data); else setVendorLoadError(true); })
+      .catch(() => setVendorLoadError(true));
     fetchReviews();
   }, [vendorId]);
 
@@ -195,7 +234,7 @@ export default function VendorDetails() {
 
   const handleSubmitRating = async () => {
     if (selectedRating === 0) {
-      Alert.alert("Error", "Please select a star rating");
+      showInfo("Please select a star rating.");
       return;
     }
     setSubmittingRating(true);
@@ -211,14 +250,14 @@ export default function VendorDetails() {
       });
       const data = await res.json();
       if (res.ok) {
-        Alert.alert("Thanks!", "Your rating has been saved.");
+        showSuccess("Your rating has been saved.", "Thanks!");
         setRatingModalVisible(false);
         fetchReviews();
       } else {
-        Alert.alert("Error", data.message || "Failed to submit rating");
+        showError(data.message || "Failed to submit rating");
       }
     } catch {
-      Alert.alert("Error", "Failed to submit rating");
+      showError("Failed to submit rating");
     } finally {
       setSubmittingRating(false);
     }
@@ -255,7 +294,7 @@ export default function VendorDetails() {
 
   const handleBookService = async () => {
     if (selectedDate <= new Date()) {
-      Alert.alert("Error", "Please select a future date and time");
+      showInfo("Please select a future date and time.");
       return;
     }
     setSubmitting(true);
@@ -276,15 +315,15 @@ export default function VendorDetails() {
       });
       const data = await res.json();
       if (res.ok) {
-        Alert.alert("Booking Sent!", "The vendor will get back to you soon.");
+        showSuccess("The vendor will get back to you soon.", "Booking Sent!");
         setBookingService(null);
         setBookingMessage("");
         setSelectedDate(new Date());
       } else {
-        Alert.alert("Error", data.message || "Failed to send booking request");
+        showError(data.message || "Failed to send booking request");
       }
     } catch {
-      Alert.alert("Error", "Failed to send booking request");
+      showError("Failed to send booking request");
     } finally {
       setSubmitting(false);
     }
@@ -486,7 +525,12 @@ export default function VendorDetails() {
             <Ionicons name="arrow-back" size={24} color="#fff" />
           </TouchableOpacity>
           <View style={styles.titleContainer}>
-            <Text style={styles.title}>{vendorName || "Vendor Services"}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+              <Text style={styles.title}>{vendorName || "Vendor Services"}</Text>
+              {vendor?.verified && (
+                <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
+              )}
+            </View>
             <Text style={styles.subtitle}>
               {services.length} {services.length === 1 ? "Service" : "Services"} Available
             </Text>
@@ -921,6 +965,51 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: Fonts.semiBold,
     color: "#fff",
+  },
+  unverifiedBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(245,158,11,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(245,158,11,0.3)",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  unverifiedText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: "#f59e0b",
+    lineHeight: 18,
+  },
+  errorBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "rgba(239,68,68,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(239,68,68,0.3)",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 12,
+  },
+  errorBannerText: {
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: "#ef4444",
+  },
+  retryBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "rgba(239,68,68,0.2)",
+    borderRadius: 8,
+  },
+  retryBtnText: {
+    fontSize: 13,
+    fontFamily: Fonts.semiBold,
+    color: "#ef4444",
   },
   vendorHeaderCard: {
     backgroundColor: "#1a1a2e",

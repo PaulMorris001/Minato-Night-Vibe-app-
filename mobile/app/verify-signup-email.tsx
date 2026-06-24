@@ -119,7 +119,7 @@ export default function VerifySignupEmail() {
           u.emailVerifiedAt = res.data.emailVerifiedAt;
           await SecureStore.setItemAsync("user", JSON.stringify(u));
         }
-        router.replace("/(tabs)/home");
+        router.replace("/interests" as any);
       }
     } catch (error: any) {
       let msg = "Could not verify code. Try again.";

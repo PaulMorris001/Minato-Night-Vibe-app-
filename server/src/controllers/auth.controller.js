@@ -521,7 +521,7 @@ export async function getProfile(req, res) {
 
 // Update profile picture and/or bio (for both clients and vendors)
 export async function updateProfilePicture(req, res) {
-  const { profilePicture, bio } = req.body;
+  const { profilePicture, bio, preferences } = req.body;
 
   try {
     const user = await User.findById(req.user.id);
@@ -555,6 +555,10 @@ export async function updateProfilePicture(req, res) {
     if (bio !== undefined) {
       assertClean([{ field: "Bio", value: bio }]);
       user.bio = bio;
+    }
+
+    if (Array.isArray(preferences)) {
+      user.preferences = preferences;
     }
 
     await user.save();

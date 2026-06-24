@@ -430,6 +430,7 @@ export const getEventById = async (req, res) => {
     // user through a 404 alert.
     const POPULATIONS = [
       ['createdBy', 'username email profilePicture verified stripeAccountId stripeOnboardingComplete'],
+      ['cohosts', 'username email profilePicture'],
       ['invitedUsers', 'username email profilePicture'],
       ['pendingInvites', 'username email profilePicture'],
       ['joinRequests', 'username email profilePicture'],
@@ -635,8 +636,9 @@ export const updateEvent = async (req, res) => {
       return res.status(404).json({ message: "Event not found" });
     }
 
-    // Only the creator can update the event
-    if (event.createdBy.toString() !== userId) {
+    // Creator or co-host can update the event
+    const isCohost = (event.cohosts || []).some(c => c.toString() === userId);
+    if (event.createdBy.toString() !== userId && !isCohost) {
       return res.status(403).json({ message: "You don't have permission to update this event" });
     }
 
@@ -783,8 +785,9 @@ export const inviteUserByUsername = async (req, res) => {
       return res.status(404).json({ message: "Event not found" });
     }
 
-    // Only the creator can invite users
-    if (event.createdBy.toString() !== userId) {
+    // Creator or co-host can invite users
+    const isCohost = (event.cohosts || []).some(c => c.toString() === userId);
+    if (event.createdBy.toString() !== userId && !isCohost) {
       return res.status(403).json({ message: "You don't have permission to invite users to this event" });
     }
 
@@ -1512,8 +1515,9 @@ export const addVendorToEvent = async (req, res) => {
 
     const event = await Event.findById(eventId);
     if (!event) return res.status(404).json({ message: "Event not found" });
-    if (event.createdBy.toString() !== userId) {
-      return res.status(403).json({ message: "Only the event creator can add vendors" });
+    const isCohost = (event.cohosts || []).some(c => c.toString() === userId);
+    if (event.createdBy.toString() !== userId && !isCohost) {
+      return res.status(403).json({ message: "Only the event creator or co-hosts can add vendors" });
     }
 
     const vendor = await Vendor.findById(vendorId);
@@ -1690,5 +1694,62 @@ export const removeVendorFromEvent = async (req, res) => {
   } catch (error) {
     console.error("Remove vendor from event error:", error);
     res.status(500).json({ message: "Failed to remove vendor" });
+  }
+};
+
+// Add a co-host to an event (creator only)
+export const addCohost = async (req, res) => {
+  try {
+    const { eventId } = req.params;
+    const { username } = req.body;
+    const userId = req.user.id;
+
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.createdBy.toString() !== userId) {
+      return res.status(403).json({ message: "Only the event creator can add co-hosts" });
+    }
+
+    const target = await User.findOne({ username: exactCaseInsensitive(username) }).select('_id username profilePicture');
+    if (!target) return res.status(404).json({ message: "User not found" });
+    if (target._id.toString() === userId) {
+      return res.status(400).json({ message: "You are already the creator" });
+    }
+    if ((event.cohosts || []).some(c => c.toString() === target._id.toString())) {
+      return res.status(400).json({ message: "User is already a co-host" });
+    }
+
+    event.cohosts = event.cohosts || [];
+    event.cohosts.push(target._id);
+    await event.save();
+
+    invalidateCachePattern(`event_detail_${eventId}_`);
+    res.status(200).json({ message: "Co-host added", cohost: target });
+  } catch (error) {
+    console.error("Add cohost error:", error);
+    res.status(500).json({ message: "Failed to add co-host" });
+  }
+};
+
+// Remove a co-host from an event (creator only)
+export const removeCohost = async (req, res) => {
+  try {
+    const { eventId, cohostId } = req.params;
+    const userId = req.user.id;
+
+    const event = await Event.findById(eventId);
+    if (!event) return res.status(404).json({ message: "Event not found" });
+    if (event.createdBy.toString() !== userId) {
+      return res.status(403).json({ message: "Only the event creator can remove co-hosts" });
+    }
+
+    event.cohosts = (event.cohosts || []).filter(c => c.toString() !== cohostId);
+    await event.save();
+
+    invalidateCachePattern(`event_detail_${eventId}_`);
+    res.status(200).json({ message: "Co-host removed" });
+  } catch (error) {
+    console.error("Remove cohost error:", error);
+    res.status(500).json({ message: "Failed to remove co-host" });
   }
 };

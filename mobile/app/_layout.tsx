@@ -1,4 +1,5 @@
 import { Stack, router } from "expo-router";
+import Toast from "react-native-toast-message";
 import React, { useEffect, useCallback, useState } from "react";
 import { Platform, Linking } from "react-native";
 import { BASE_URL } from "@/constants/constants";
@@ -362,6 +363,7 @@ export default Sentry.wrap(function RootLayout() {
                   },
                 }}
               />
+              <Toast />
             </PortalProvider>
             </UnreadProvider>
           </AccountProvider>

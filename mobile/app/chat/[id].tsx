@@ -667,10 +667,11 @@ export default function ChatScreen() {
   const isGroup = chat?.type === "group";
   // Usernames in this chat, used so multi-word @mentions ("@setemi Loye") get
   // tagged and highlighted in full rather than just the first word.
-  const participantUsernames = useMemo(
-    () => (chat?.participants || []).map((p) => p.username).filter(Boolean) as string[],
-    [chat?.participants]
-  );
+  const participantUsernames = useMemo(() => {
+    const names = (chat?.participants || []).map((p) => p.username).filter(Boolean) as string[];
+    if (isGroup) names.unshift("all");
+    return names;
+  }, [chat?.participants, isGroup]);
   // Group admins can spin up an event for the whole group (the server
   // auto-enrolls every member). Available whenever the viewer is an admin.
   const isGroupAdmin = !!(isGroup && chat?.admins?.some((a) => a._id === currentUserId));
@@ -1180,9 +1181,12 @@ export default function ChatScreen() {
               editingMessage={editingMessage}
               onCancelEdit={() => setEditingMessage(null)}
               currentUserId={currentUserId}
-              mentionCandidates={(chat?.participants || [])
-                .filter((p) => p._id !== currentUserId && p.username)
-                .map((p) => ({ _id: p._id, username: p.username }))}
+              mentionCandidates={[
+                ...(isGroup ? [{ _id: "all", username: "all" }] : []),
+                ...(chat?.participants || [])
+                  .filter((p) => p._id !== currentUserId && p.username)
+                  .map((p) => ({ _id: p._id, username: p.username })),
+              ]}
             />
           )}
         </KeyboardAvoidingView>

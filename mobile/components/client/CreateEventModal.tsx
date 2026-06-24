@@ -17,6 +17,7 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import * as SecureStore from "expo-secure-store";
 import axios from "axios";
 import { BASE_URL } from "@/constants/constants";
@@ -39,6 +40,7 @@ export default function CreateEventModal({
   onClose,
   onEventCreated,
 }: CreateEventModalProps) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [eventLocation, setEventLocation] = useState<LocationSelection | null>(null);
   const [isVerified, setIsVerified] = useState(false);
@@ -440,7 +442,17 @@ export default function CreateEventModal({
                     if (!isVerified) {
                       Alert.alert(
                         "Verification required",
-                        "Only verified users can create public events. Submit a verification request to unlock this."
+                        "Only verified users can create public events.",
+                        [
+                          { text: "Cancel", style: "cancel" },
+                          {
+                            text: "Get Verified",
+                            onPress: () => {
+                              onClose();
+                              router.push("/settings" as any);
+                            },
+                          },
+                        ]
                       );
                       return;
                     }

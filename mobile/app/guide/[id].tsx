@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
+import { showError, showSuccess } from "@/utils/toast";
 import { Image } from "expo-image";
 import { createGuideShareLink } from "@/utils/shareLinks";
 import { formatLocation } from "@/utils/location";
@@ -164,7 +165,7 @@ export default function GuideDetailPage() {
     try {
       const result = await payForGuide(id);
       if (!result.success) {
-        if (result.error) Alert.alert("Payment Failed", result.error);
+        if (result.error) showError(result.error, "Payment Failed");
         return;
       }
 
@@ -179,7 +180,7 @@ export default function GuideDetailPage() {
       });
 
       if (confirmRes.ok) {
-        Alert.alert("Success", "Guide unlocked! Enjoy reading.");
+        showSuccess("Guide unlocked! Enjoy reading.");
         // Notify guide author that their guide was sold
         fetch(`${BASE_URL}/notifications/sold`, {
           method: "POST",
@@ -190,7 +191,7 @@ export default function GuideDetailPage() {
         fetchGuide();
       } else {
         const d = await confirmRes.json();
-        Alert.alert("Error", d.message || "Payment succeeded but access could not be granted. Please contact Support@nvibez.com.");
+        showError(d.message || "Payment succeeded but access could not be granted. Please contact Support@nvibez.com.");
       }
     } finally {
       setPurchasing(false);
@@ -316,10 +317,20 @@ export default function GuideDetailPage() {
 
         <View style={styles.priceSection}>
           <View style={styles.priceContent}>
-            <Text style={styles.priceLabel}>Price</Text>
-            <Text style={styles.priceValue}>
-              {guide.price === 0 ? "FREE" : `$${formatPrice(guide.price)}`}
-            </Text>
+            <View>
+              <Text style={styles.priceLabel}>Price</Text>
+              {guide.price === 0 ? (
+                <View style={styles.freeBadge}>
+                  <Text style={styles.freeBadgeText}>FREE</Text>
+                </View>
+              ) : (
+                <Text style={styles.priceValue}>${formatPrice(guide.price)}</Text>
+              )}
+            </View>
+            <View style={styles.sectionCountChip}>
+              <Ionicons name="list" size={14} color="#a855f7" />
+              <Text style={styles.sectionCountText}>{guide.sections.length} section{guide.sections.length !== 1 ? "s" : ""}</Text>
+            </View>
           </View>
           {!canViewContent && (
             <TouchableOpacity
@@ -331,8 +342,8 @@ export default function GuideDetailPage() {
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <>
-                  <Ionicons name="cart" size={20} color="#fff" />
-                  <Text style={styles.purchaseButtonText}>Purchase Guide</Text>
+                  <Ionicons name="lock-open-outline" size={20} color="#fff" />
+                  <Text style={styles.purchaseButtonText}>Unlock Guide · ${formatPrice(guide.price)}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -389,11 +400,27 @@ export default function GuideDetailPage() {
           </View>
         ) : (
           <View style={styles.lockedSection}>
-            <Ionicons name="lock-closed" size={48} color="#6b7280" />
-            <Text style={styles.lockedTitle}>Content Locked</Text>
+            <View style={styles.lockedIconWrap}>
+              <Ionicons name="lock-closed" size={28} color="#a855f7" />
+            </View>
+            <Text style={styles.lockedTitle}>Unlock Full Guide</Text>
             <Text style={styles.lockedText}>
-              Purchase this guide to unlock all {guide.sections.length} sections
+              Get access to all {guide.sections.length} section{guide.sections.length !== 1 ? "s" : ""} with insider tips, photos, and recommendations.
             </Text>
+            <TouchableOpacity
+              style={[styles.purchaseButton, { marginTop: 20, alignSelf: "stretch" }]}
+              onPress={handlePurchase}
+              disabled={purchasing}
+            >
+              {purchasing ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <>
+                  <Ionicons name="lock-open-outline" size={18} color="#fff" />
+                  <Text style={styles.purchaseButtonText}>Unlock Guide · ${formatPrice(guide.price)}</Text>
+                </>
+              )}
+            </TouchableOpacity>
           </View>
         )}
       </ScrollView>
@@ -526,13 +553,47 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   priceLabel: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: Fonts.regular,
     color: "#9ca3af",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 4,
   },
   priceValue: {
     fontSize: 32,
     fontFamily: Fonts.bold,
+    color: "#a855f7",
+  },
+  freeBadge: {
+    backgroundColor: "rgba(34,197,94,0.15)",
+    borderWidth: 1,
+    borderColor: "rgba(34,197,94,0.4)",
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    alignSelf: "flex-start",
+  },
+  freeBadgeText: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    color: "#22c55e",
+    letterSpacing: 1,
+  },
+  sectionCountChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    backgroundColor: "rgba(168,85,247,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,0.25)",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  sectionCountText: {
+    fontSize: 13,
+    fontFamily: Fonts.medium,
     color: "#a855f7",
   },
   purchaseButton: {
@@ -628,20 +689,36 @@ const styles = StyleSheet.create({
   },
   lockedSection: {
     alignItems: "center",
-    paddingVertical: 60,
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(168,85,247,0.05)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,0.15)",
+    marginTop: 8,
+  },
+  lockedIconWrap: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "rgba(168,85,247,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,0.3)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   lockedTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontFamily: Fonts.bold,
     color: "#fff",
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 14,
+    marginBottom: 6,
   },
   lockedText: {
     fontSize: 14,
     fontFamily: Fonts.regular,
     color: "#9ca3af",
     textAlign: "center",
-    paddingHorizontal: 40,
+    lineHeight: 20,
   },
 });

@@ -158,6 +158,7 @@ class ChatService {
     // Resolve @mentions in text messages against the chat's participants so we
     // only ever store real members (an @ typed against a stranger is ignored).
     let mentions = [];
+    const mentionsAll = (type || 'text') === 'text' && !!content && /\@all\b/i.test(content);
     if ((type || 'text') === 'text' && content && content.includes('@')) {
       const lower = content.toLowerCase();
       const participantUsers = await User.find({
@@ -226,19 +227,33 @@ class ChatService {
     }
 
     // Push notification to each recipient (fires even when app is in background)
-    const notificationBody = message.type === "image" ? "📷 Photo" : message.content;
+    const senderName = message.sender.username;
+    const isGroup = chat.type === 'group';
+    const notificationTitle = isGroup && chat.name ? chat.name : senderName;
+    const rawContent = message.type === "image" ? "📷 Photo" : (message.content || "");
+
+    const mentionedIds = new Set(mentions.map((id) => id.toString()));
+
     for (const participantId of chat.participants) {
       if (participantId.toString() === senderId.toString()) continue;
       const recipient = await User.findById(participantId).select("fcmToken");
-      console.log(`[Chat Push] Recipient ${participantId} push token: ${recipient?.fcmToken ? "present" : "MISSING"}`);
-      if (recipient?.fcmToken) {
-        await sendPushNotification(
-          recipient.fcmToken,
-          message.sender.username,
-          notificationBody,
-          { type: "new_message", chatId: chatId.toString() }
-        );
+      if (!recipient?.fcmToken) continue;
+
+      let body;
+      if (mentionsAll) {
+        body = `${senderName} mentioned all: ${rawContent}`;
+      } else if (mentionedIds.has(participantId.toString())) {
+        body = `${senderName} mentioned you: ${rawContent}`;
+      } else {
+        body = isGroup ? `${senderName}: ${rawContent}` : rawContent;
       }
+
+      await sendPushNotification(
+        recipient.fcmToken,
+        notificationTitle,
+        body,
+        { type: "new_message", chatId: chatId.toString() }
+      );
     }
 
     return message;

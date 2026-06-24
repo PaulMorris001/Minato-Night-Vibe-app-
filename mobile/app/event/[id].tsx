@@ -28,6 +28,7 @@ import { BASE_URL } from "@/constants/constants";
 import { Fonts } from "@/constants/fonts";
 import { trackEvent } from "@/utils/analytics";
 import { createEventShareLink } from "@/utils/shareLinks";
+import { showError, showSuccess, showInfo } from "@/utils/toast";
 import { useStripePayment } from "@/hooks/useStripePayment";
 import EventCardSkeleton from "@/components/skeletons/EventCardSkeleton";
 import ReportBlockSheet from "@/components/shared/ReportBlockSheet";
@@ -99,6 +100,7 @@ interface Event {
   payoutReleasedAt?: string;
   userStatus: "creator" | "accepted" | "pending" | "requested" | "none";
   createdBy: User;
+  cohosts?: User[];
   invitedUsers: User[];
   pendingInvites: User[];
   joinRequests?: User[];
@@ -216,6 +218,7 @@ export default function EventDetailsPage() {
   const [viewerVisible, setViewerVisible] = useState(false);
   const [viewerIndex, setViewerIndex] = useState(0);
   const [isInviteModalVisible, setIsInviteModalVisible] = useState(false);
+  const [inviteMode, setInviteMode] = useState<"invite" | "cohost">("invite");
   const [userSearchQuery, setUserSearchQuery] = useState("");
   const [searchedUsers, setSearchedUsers] = useState<SearchedUser[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
@@ -235,6 +238,9 @@ export default function EventDetailsPage() {
   const [isFollowingHost, setIsFollowingHost] = useState(false);
   const [followBusy, setFollowBusy] = useState(false);
   const [requestingJoin, setRequestingJoin] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [savingTitle, setSavingTitle] = useState(false);
   const { payForTicket } = useStripePayment();
 
   // ─── Data fetching ────────────────────────────────────────────────────────
@@ -432,16 +438,16 @@ export default function EventDetailsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        Alert.alert("Success", "User invited successfully");
+        showSuccess("User invited successfully");
         setIsInviteModalVisible(false);
         setUserSearchQuery("");
         setSearchedUsers([]);
         fetchEventDetails();
       } else {
-        Alert.alert("Error", data.message || "Failed to invite user");
+        showError(data.message || "Failed to invite user");
       }
     } catch {
-      Alert.alert("Error", "Failed to invite user");
+      showError("Failed to invite user");
     }
   };
 
@@ -463,10 +469,10 @@ export default function EventDetailsPage() {
         );
         trackEvent("event_rsvp", { eventId: event._id, status });
       } else {
-        Alert.alert("Error", data.message || "Could not update RSVP");
+        showError(data.message || "Could not update RSVP");
       }
     } catch {
-      Alert.alert("Error", "Failed to update RSVP");
+      showError("Failed to update RSVP");
     } finally {
       setRsvpLoading(false);
     }
@@ -486,15 +492,16 @@ export default function EventDetailsPage() {
       const data = await res.json();
       if (res.ok) {
         setEvent(data.event);
-        Alert.alert(
-          status === "accepted" ? "Joined!" : "Declined",
-          status === "accepted" ? "You've joined the event." : "You've declined the invite."
-        );
+        if (status === "accepted") {
+          showSuccess("You've joined the event.");
+        } else {
+          showInfo("You've declined the invite.");
+        }
       } else {
-        Alert.alert("Error", data.message || "Could not respond to invite");
+        showError(data.message || "Could not respond to invite");
       }
     } catch {
-      Alert.alert("Error", "Failed to respond to invite");
+      showError("Failed to respond to invite");
     } finally {
       setInviteResponding(false);
     }
@@ -512,13 +519,13 @@ export default function EventDetailsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        Alert.alert("Sent", "We'll let you know when the organizer responds.");
+        showInfo("We'll let you know when the organizer responds.");
         setEvent((prev) => (prev ? { ...prev, userStatus: "requested" } : prev));
       } else {
-        Alert.alert("Couldn't send request", data.message || "Try again in a moment.");
+        showError(data.message || "Try again in a moment.");
       }
     } catch {
-      Alert.alert("Error", "Couldn't send your request. Try again.");
+      showError("Couldn't send your request. Try again.");
     } finally {
       setRequestingJoin(false);
     }
@@ -537,13 +544,15 @@ export default function EventDetailsPage() {
       });
       if (res.ok) setIsFollowingHost((v) => !v);
     } catch {
-      Alert.alert("Error", "Couldn't update follow.");
+      showError("Couldn't update follow.");
     } finally {
       setFollowBusy(false);
     }
   };
 
   const isCreator = event?.createdBy._id === currentUserId;
+  const isCohost = !isCreator && !!event?.cohosts?.some(c => c._id === currentUserId);
+  const isCreatorOrCohost = isCreator || isCohost;
 
   const handleRefundOwnTicket = async () => {
     if (!event) return;
@@ -569,7 +578,7 @@ export default function EventDetailsPage() {
                 (t: any) => t.event?._id === event._id && t.isValid
               );
               if (!myTicket) {
-                Alert.alert("Not found", "Could not locate your ticket for this event.");
+                showError("Could not locate your ticket for this event.");
                 return;
               }
               const res = await fetch(`${BASE_URL}/tickets/${myTicket._id}/refund`, {
@@ -578,13 +587,13 @@ export default function EventDetailsPage() {
               });
               const data = await res.json();
               if (res.ok) {
-                Alert.alert("Refunded", "Your ticket has been cancelled and refunded.");
+                showSuccess("Your ticket has been cancelled and refunded.");
                 fetchEventDetails();
               } else {
-                Alert.alert("Cannot refund", data.message || "Refund failed");
+                showError(data.message || "Refund failed");
               }
             } catch (e: any) {
-              Alert.alert("Error", e?.message || "Refund failed");
+              showError(e?.message || "Refund failed");
             } finally {
               setRefunding(false);
             }
@@ -601,7 +610,7 @@ export default function EventDetailsPage() {
     try {
       const result = await payForTicket(event._id);
       if (!result.success) {
-        if (result.error) Alert.alert("Payment Failed", result.error);
+        if (result.error) showError(result.error, "Payment Failed");
         return;
       }
       const token = await authToken();
@@ -611,12 +620,11 @@ export default function EventDetailsPage() {
         body: JSON.stringify({ paymentIntentId: result.paymentIntentId }),
       });
       if (confirmRes.ok) {
-        Alert.alert("You're in! 🎉", `Your ticket to "${event.title}" is ready.`);
+        showSuccess(`Your ticket to "${event.title}" is ready.`, "You're in! 🎉");
         fetchEventDetails();
       } else {
         const d = await confirmRes.json();
-        Alert.alert(
-          "Error",
+        showError(
           d.message ||
             "Payment succeeded but the ticket could not be issued. Please contact Support@nvibez.com."
         );
@@ -634,6 +642,78 @@ export default function EventDetailsPage() {
         externalUrl: createEventShareLink(event.shareToken || event._id),
       }
     : null;
+
+  const handleAddCohost = async (user: SearchedUser) => {
+    if (!event) return;
+    try {
+      const token = await authToken();
+      const res = await fetch(`${BASE_URL}/events/${event._id}/cohosts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ username: user.username }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        showSuccess(`${user.username} added as co-host.`);
+        setIsInviteModalVisible(false);
+        setUserSearchQuery("");
+        setSearchedUsers([]);
+        fetchEventDetails();
+      } else {
+        showError(data.message || "Failed to add co-host");
+      }
+    } catch {
+      showError("Failed to add co-host");
+    }
+  };
+
+  const handleRemoveCohost = async (cohostId: string) => {
+    if (!event) return;
+    try {
+      const token = await authToken();
+      const res = await fetch(`${BASE_URL}/events/${event._id}/cohosts/${cohostId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (res.ok) {
+        showSuccess("Co-host removed.");
+        fetchEventDetails();
+      } else {
+        const d = await res.json();
+        showError(d.message || "Failed to remove co-host");
+      }
+    } catch {
+      showError("Failed to remove co-host");
+    }
+  };
+
+  const handleSaveTitle = async () => {
+    if (!event || !titleDraft.trim() || titleDraft.trim() === event.title) {
+      setEditingTitle(false);
+      return;
+    }
+    setSavingTitle(true);
+    try {
+      const token = await authToken();
+      const res = await fetch(`${BASE_URL}/events/${event._id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ title: titleDraft.trim() }),
+      });
+      if (res.ok) {
+        setEvent((prev) => prev ? { ...prev, title: titleDraft.trim() } : prev);
+        showSuccess("Title updated.");
+      } else {
+        const d = await res.json();
+        showError(d.message || "Failed to update title");
+      }
+    } catch {
+      showError("Failed to update title");
+    } finally {
+      setSavingTitle(false);
+      setEditingTitle(false);
+    }
+  };
 
   const handleVendorSearch = async (query: string) => {
     setVendorQuery(query);
@@ -668,16 +748,16 @@ export default function EventDetailsPage() {
       });
       const data = await res.json();
       if (res.ok) {
-        Alert.alert("Added", "Vendor added to event.");
+        showSuccess("Vendor added to event.");
         setVendorSearchVisible(false);
         setVendorQuery("");
         setVendorResults([]);
         fetchEventDetails();
       } else {
-        Alert.alert("Error", data.message || "Failed to add vendor");
+        showError(data.message || "Failed to add vendor");
       }
     } catch {
-      Alert.alert("Error", "Failed to add vendor");
+      showError("Failed to add vendor");
     } finally {
       setAddingVendor(null);
     }
@@ -901,7 +981,37 @@ export default function EventDetailsPage() {
 
           {/* Title + meta */}
           <View style={styles.heroBottom}>
-            <Text style={styles.heroTitle} numberOfLines={3}>{event.title}</Text>
+            {isCreator && editingTitle ? (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <TextInput
+                  style={[styles.heroTitle, { flex: 1, borderBottomWidth: 1, borderBottomColor: "rgba(168,85,247,0.6)", paddingBottom: 2 }]}
+                  value={titleDraft}
+                  onChangeText={setTitleDraft}
+                  autoFocus
+                  multiline
+                  returnKeyType="done"
+                  blurOnSubmit
+                  onBlur={handleSaveTitle}
+                  editable={!savingTitle}
+                />
+                {savingTitle ? (
+                  <ActivityIndicator size="small" color="#a855f7" />
+                ) : (
+                  <TouchableOpacity onPress={handleSaveTitle} hitSlop={8}>
+                    <Ionicons name="checkmark-circle" size={24} color="#a855f7" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <TouchableOpacity
+                onPress={isCreator ? () => { setTitleDraft(event.title); setEditingTitle(true); } : undefined}
+                activeOpacity={isCreator ? 0.7 : 1}
+                style={{ flexDirection: "row", alignItems: "flex-start", gap: 6 }}
+              >
+                <Text style={[styles.heroTitle, { flex: 1 }]} numberOfLines={3}>{event.title}</Text>
+                {isCreator && <Ionicons name="pencil-outline" size={16} color="rgba(255,255,255,0.5)" style={{ marginTop: 4 }} />}
+              </TouchableOpacity>
+            )}
             <View style={styles.heroMetaRow}>
               <Ionicons name="calendar-outline" size={14} color={AU.purpleSoft} />
               <Text style={styles.heroMetaText}>{dateLine}</Text>
@@ -1324,6 +1434,51 @@ export default function EventDetailsPage() {
             </GlassCard>
           )}
 
+          {/* Co-hosts — creator can view, add, and remove */}
+          {isCreator && (
+            <GlassCard style={styles.pendingCard}>
+              <Text style={styles.microLabel}>CO-HOSTS</Text>
+              {(event.cohosts || []).map((u) => (
+                <View key={u._id} style={styles.pendingRow}>
+                  <TouchableOpacity
+                    style={{ flexDirection: "row", alignItems: "center", flex: 1, gap: 10 }}
+                    activeOpacity={0.7}
+                    onPress={() => openUserProfile(u._id)}
+                  >
+                    <View style={styles.pendingAvatarWrap}>
+                      {u.profilePicture ? (
+                        <Image source={{ uri: u.profilePicture }} style={styles.attendeeAvatar} />
+                      ) : (
+                        <View style={styles.attendeeAvatarFallback}>
+                          <Text style={styles.attendeeInitials}>{initialsOf(u.username)}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <Text style={styles.pendingName} numberOfLines={1}>{u.username}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleRemoveCohost(u._id)}
+                    hitSlop={8}
+                    style={{ padding: 4 }}
+                  >
+                    <Ionicons name="close-circle-outline" size={18} color="rgba(239,68,68,0.8)" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {(event.cohosts || []).length === 0 && (
+                <Text style={[styles.pendingStatus, { marginBottom: 8 }]}>No co-hosts yet</Text>
+              )}
+              <TouchableOpacity
+                style={styles.addCohostBtn}
+                onPress={() => { setInviteMode("cohost"); setIsInviteModalVisible(true); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="person-add-outline" size={14} color="#a855f7" />
+                <Text style={styles.addCohostBtnText}>Add co-host</Text>
+              </TouchableOpacity>
+            </GlassCard>
+          )}
+
           {/* Pending invites + pending vendors — organizer view */}
           {isCreator &&
             ((event.pendingInvites && event.pendingInvites.length > 0) ||
@@ -1478,24 +1633,15 @@ export default function EventDetailsPage() {
                 setTimeout(async () => {
                   const res = await addEventToCalendar(event);
                   if (res.ok) {
-                    Alert.alert(
-                      "Added to calendar",
-                      "We added this event with a 1-hour reminder and a link that opens it in CityVibe."
-                    );
+                    showSuccess("Added with a 1-hour reminder.", "Added to calendar");
                   } else if (res.error === "permission") {
-                    Alert.alert(
-                      "Calendar access needed",
-                      "Enable calendar access for CityVibe in Settings to add this event."
-                    );
+                    showInfo("Enable calendar access for CityVibe in Settings.", "Calendar access needed");
                   } else if (res.error === "no_calendar") {
-                    Alert.alert("No calendar found", "This device doesn't have a calendar we can write to.");
+                    showError("This device doesn't have a calendar we can write to.");
                   } else if (res.error === "unavailable") {
-                    Alert.alert(
-                      "Update required",
-                      "Adding to calendar will be available in the next app update. Please update CityVibe from the store."
-                    );
+                    showInfo("Adding to calendar will be available in the next app update.");
                   } else {
-                    Alert.alert("Couldn't add", "Something went wrong adding this event to your calendar.");
+                    showError("Something went wrong adding this event to your calendar.");
                   }
                 }, 320);
               }}
@@ -1515,6 +1661,7 @@ export default function EventDetailsPage() {
                   label="Invite people"
                   onPress={() => {
                     setActionSheetVisible(false);
+                    setInviteMode("invite");
                     setIsInviteModalVisible(true);
                   }}
                 />
@@ -1619,7 +1766,7 @@ export default function EventDetailsPage() {
           />
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Invite User</Text>
+              <Text style={styles.modalTitle}>{inviteMode === "cohost" ? "Add Co-host" : "Invite User"}</Text>
               <TouchableOpacity
                 onPress={() => {
                   setIsInviteModalVisible(false);
@@ -1654,7 +1801,7 @@ export default function EventDetailsPage() {
                 renderItem={({ item }) => (
                   <TouchableOpacity
                     style={styles.searchRow}
-                    onPress={() => handleInviteUser(item)}
+                    onPress={() => inviteMode === "cohost" ? handleAddCohost(item) : handleInviteUser(item)}
                   >
                     {item.profilePicture ? (
                       <Image
@@ -2483,6 +2630,23 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   pendingVendorEmoji: { color: AU.purpleSoft, fontSize: 14 },
+  addCohostBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,0.3)",
+    alignSelf: "flex-start",
+    marginTop: 4,
+  },
+  addCohostBtnText: {
+    color: "#a855f7",
+    fontFamily: Fonts.semiBold,
+    fontSize: 13,
+  },
   attendeesHeadline: {
     color: AU.text,
     fontFamily: "BricolageGrotesque_700Bold",

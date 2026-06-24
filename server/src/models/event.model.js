@@ -21,6 +21,12 @@ const eventSchema = mongoose.Schema({
     required: true
   },
 
+  // Co-hosts who can manage the event (invite, manage vendors, edit) alongside the creator
+  cohosts: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "user"
+  }],
+
   // Unique users (excluding the creator) who opened the event detail — drives
   // the "N seen" count shown to the organizer.
   viewedBy: [{

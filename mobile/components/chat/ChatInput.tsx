@@ -169,19 +169,27 @@ export default function ChatInput({
           nestedScrollEnabled
           showsVerticalScrollIndicator
         >
-          {mentionMatches.map((c) => (
-            <TouchableOpacity
-              key={c._id}
-              style={styles.mentionRow}
-              onPress={() => applyMention(c.username)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.mentionAvatar}>
-                <Ionicons name="at" size={14} color={CH_PURPLE_SOFT} />
-              </View>
-              <Text style={styles.mentionUsername}>{capitalize(c.username)}</Text>
-            </TouchableOpacity>
-          ))}
+          {mentionMatches.map((c) => {
+            const isAll = c._id === "all";
+            return (
+              <TouchableOpacity
+                key={c._id}
+                style={[styles.mentionRow, isAll && styles.mentionRowAll]}
+                onPress={() => applyMention(c.username)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.mentionAvatar, isAll && styles.mentionAvatarAll]}>
+                  <Ionicons name={isAll ? "people" : "at"} size={14} color={isAll ? "#f59e0b" : CH_PURPLE_SOFT} />
+                </View>
+                <View>
+                  <Text style={[styles.mentionUsername, isAll && styles.mentionUsernameAll]}>
+                    {isAll ? "@all" : capitalize(c.username)}
+                  </Text>
+                  {isAll && <Text style={styles.mentionSubtext}>Notify everyone</Text>}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       )}
       <View style={styles.container}>
@@ -304,6 +312,20 @@ const styles = StyleSheet.create({
     fontFamily: "Outfit_600SemiBold",
     fontSize: 13.5,
     color: CH_TEXT,
+  },
+  mentionRowAll: {
+    backgroundColor: "rgba(245,158,11,0.06)",
+  },
+  mentionAvatarAll: {
+    backgroundColor: "rgba(245,158,11,0.15)",
+  },
+  mentionUsernameAll: {
+    color: "#f59e0b",
+  },
+  mentionSubtext: {
+    fontFamily: "Outfit_400Regular",
+    fontSize: 11,
+    color: "rgba(245,158,11,0.65)",
   },
   container: {
     flexDirection: "row",
