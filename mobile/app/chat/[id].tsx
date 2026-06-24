@@ -15,6 +15,7 @@ import {
   Pressable,
   Switch,
   BackHandler,
+  Keyboard,
 } from "react-native";
 import { Image } from "expo-image";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -733,8 +734,17 @@ export default function ChatScreen() {
     setSelectedToAdd([]);
     setMemberSearch("");
     setMutualResults([]);
-    setAddMembersVisible(true);
-    loadMutuals("");
+    // Close settings first — iOS can't stack two Modals simultaneously.
+    setSettingsVisible(false);
+    setTimeout(() => {
+      setAddMembersVisible(true);
+      loadMutuals("");
+    }, 350);
+  };
+
+  const closeAddMembers = () => {
+    Keyboard.dismiss();
+    setAddMembersVisible(false);
   };
 
   // Debounced search inside the add-members modal.
@@ -771,7 +781,7 @@ export default function ChatScreen() {
         selectedToAdd.map((u) => u._id)
       );
       setChat(updated);
-      setAddMembersVisible(false);
+      closeAddMembers();
       setSelectedToAdd([]);
       Alert.alert("Invites sent", message);
     } catch (e: any) {
@@ -1423,13 +1433,18 @@ export default function ChatScreen() {
         visible={addMembersVisible}
         animationType="slide"
         transparent
-        onRequestClose={() => setAddMembersVisible(false)}
+        onRequestClose={closeAddMembers}
       >
         <View style={styles.settingsOverlay}>
+          <TouchableOpacity
+            style={styles.settingsBackdrop}
+            activeOpacity={1}
+            onPress={closeAddMembers}
+          />
           <View style={styles.settingsSheet}>
             <View style={styles.settingsHeader}>
               <Text style={styles.settingsTitle}>Add members</Text>
-              <TouchableOpacity onPress={() => setAddMembersVisible(false)}>
+              <TouchableOpacity onPress={closeAddMembers}>
                 <Ionicons name="close" size={22} color={CH_TEXT} />
               </TouchableOpacity>
             </View>
