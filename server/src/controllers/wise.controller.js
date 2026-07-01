@@ -131,15 +131,21 @@ function verifyWiseSignature(rawBody, signature) {
 export const wiseWebhook = async (req, res) => {
   const raw = req.body; // Buffer (express.raw)
   const signature = req.headers["x-signature-sha256"] || req.headers["x-signature"];
+
+  // Always ACK with 200 so Wise's URL validation (and normal deliveries) succeed
+  // and Wise doesn't disable the webhook. We only ACT on an event when its
+  // signature verifies against Wise's public key; unsigned/unverified pings —
+  // including the setup validation ping — are acknowledged and ignored.
   if (!verifyWiseSignature(raw, signature)) {
-    return res.status(401).json({ message: "Invalid signature" });
+    console.warn("[Wise] webhook received without a valid signature — acked, not processed");
+    return res.status(200).json({ received: true, processed: false });
   }
 
   let payload;
   try {
     payload = JSON.parse(raw.toString("utf8"));
   } catch {
-    return res.status(400).json({ message: "Invalid payload" });
+    return res.status(200).json({ received: true, processed: false });
   }
 
   try {
