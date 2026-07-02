@@ -55,9 +55,14 @@ class SocketService {
 
       this.socket = io(config.socketUrl, {
         auth: { token },
-        transports: ["websocket"],
+        // Allow the HTTP long-polling fallback (Socket.IO default: connect via
+        // polling, then upgrade to WebSocket). WebSocket-only meant that on any
+        // network that blocks/drops the WS upgrade — common on mobile carriers —
+        // the socket never connected at all, so users got push notifications but
+        // no in-app real-time messages until they reloaded the chat.
+        transports: ["polling", "websocket"],
         reconnection: true,
-        reconnectionAttempts: 10,
+        reconnectionAttempts: Infinity,
         reconnectionDelay: 1000,
       });
 
